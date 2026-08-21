@@ -1,0 +1,46 @@
+﻿# Environment / Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials
+config.ini
+
+# AWS
+.aws/
+*.tfstate
+*.tfstate.*
+.terraform/
+cdk.out/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+.kiro/
+
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Logs / DB
+*.log
+logs/
+*.sqlite3
+*.db
