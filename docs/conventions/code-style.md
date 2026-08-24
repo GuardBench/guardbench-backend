@@ -15,4 +15,4 @@
 - 폐기된 `TestCaseRevision`, `ComparisonResult`, `RegressionResult`를 사용하지 않는다. 변화 결과는 `ChangeResult`다.
 - 미래 확장을 이유로 MVP를 과도하게 일반화하지 않는다. 예: 두 번째 provider가 없는데 공통 provider hierarchy를 만들지 않는다.
 
-Formatter, line length, import 정렬, Lombok, `record`, fixture/mocking 스타일은 아직 강제하지 않는다.
+Formatter, line length, import 정렬, Lombok, `record`는 아직 강제하지 않는다. 테스트 fixture와 test double 스타일은 [테스트 코드 작성 지침](test-code.md)을 따른다.
