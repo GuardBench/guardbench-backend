@@ -66,6 +66,7 @@ GuardBench는 PostgreSQL에 TestSuite, TestCase, TestRun, Snapshot, 실행 결�
 - 현재 계약의 식별자, 문자열, Enum, target, 실행 결과와 Quality Gate metrics는 **정규 컬럼**으로 저장한다.
 - 확장 가능성만을 이유로 JSONB를 선제 도입하지 않는다. Provider 원문, effects, outputs, Stack Trace와 임의 configuration은 현재 저장 범위가 아니다.
 - 공개 API에 최대 길이가 없는 `name`, `input`, `category`, Guardrail ID는 `TEXT`로 저장해 숨은 길이 제한을 만들지 않는다.
+- nonblank 문자열의 DB 방어 검증은 POSIX 문자 클래스의 `[:space:]`를 사용해 일반 공백뿐 아니라 탭과 개행으로만 구성된 값도 거부한다. Unicode 전체의 공백 의미는 Application의 Domain 검증을 최종 기준으로 유지한다.
 - Enum은 PostgreSQL enum type 대신 `VARCHAR`와 `CHECK`를 사용한다. 값 추가 시 새 Migration으로 CHECK를 변경한다.
 - TestCase 논리 삭제는 nullable `deleted_at`으로 표현한다. 활성 행은 `deleted_at IS NULL`이며 일반 조회, 수정과 Snapshot 생성은 이 조건을 반드시 적용한다.
 - boolean 삭제 상태는 삭제 시각과 감사 정보를 잃고 별도 시각 컬럼을 다시 요구하므로 사용하지 않는다.
@@ -135,7 +136,7 @@ Presentation은 외부 `page`, `size`, `sort`를 검증해 프로젝트 자체 �
 
 ### 참고 SQL DDL
 
-다음 SQL은 결정 내용을 사람이 검토하기 위한 **참고 DDL**이다. Flyway Migration이 아니며 이 Issue에서 실행하지 않는다. 후속 구현 Issue는 이 계약을 기준으로 실제 Migration을 만들고 PostgreSQL 통합 테스트로 검증해야 한다.
+다음 SQL은 결정 내용을 사람이 검토하기 위한 **참고 DDL**이다. Flyway Migration은 아니지만 문서에 포함된 전체 DDL과 대표 CHECK 위반 예시는 PostgreSQL에서 직접 실행해 문법과 제약 동작을 검증한다. 후속 구현 Issue는 이 계약을 기준으로 실제 Migration을 만들고 애플리케이션 통합 테스트를 추가해야 한다.
 
 ```sql
 CREATE SEQUENCE test_suite_id_seq AS BIGINT START WITH 1 INCREMENT BY 50;
@@ -150,7 +151,7 @@ CREATE TABLE test_suite (
     created_at  TIMESTAMPTZ(6) NOT NULL,
     updated_at  TIMESTAMPTZ(6) NOT NULL,
 
-    CONSTRAINT ck_test_suite_name_nonblank CHECK (btrim(name) <> ''),
+    CONSTRAINT ck_test_suite_name_nonblank CHECK (name ~ '[^[:space:]]'),
     CONSTRAINT ck_test_suite_time_order CHECK (updated_at >= created_at)
 );
 
@@ -173,9 +174,9 @@ CREATE TABLE test_case (
 
     CONSTRAINT fk_test_case_suite
         FOREIGN KEY (test_suite_id) REFERENCES test_suite(id) ON DELETE RESTRICT,
-    CONSTRAINT ck_test_case_name_nonblank CHECK (btrim(name) <> ''),
-    CONSTRAINT ck_test_case_input_nonblank CHECK (btrim(input) <> ''),
-    CONSTRAINT ck_test_case_category_nonblank CHECK (btrim(category) <> ''),
+    CONSTRAINT ck_test_case_name_nonblank CHECK (name ~ '[^[:space:]]'),
+    CONSTRAINT ck_test_case_input_nonblank CHECK (input ~ '[^[:space:]]'),
+    CONSTRAINT ck_test_case_category_nonblank CHECK (category ~ '[^[:space:]]'),
     CONSTRAINT ck_test_case_expected_action CHECK (expected_action IN ('ALLOW', 'BLOCK')),
     CONSTRAINT ck_test_case_severity
         CHECK (severity IN ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')),
@@ -232,8 +233,8 @@ CREATE TABLE test_run (
         ),
     CONSTRAINT ck_test_run_guardrail_ids
         CHECK (
-            btrim(baseline_guardrail_id) <> ''
-            AND btrim(candidate_guardrail_id) <> ''
+            baseline_guardrail_id ~ '[^[:space:]]'
+            AND candidate_guardrail_id ~ '[^[:space:]]'
             AND baseline_guardrail_id = candidate_guardrail_id
         ),
     CONSTRAINT ck_test_run_versions
@@ -326,9 +327,9 @@ CREATE TABLE test_case_snapshot (
         FOREIGN KEY (source_test_case_id) REFERENCES test_case(id) ON DELETE RESTRICT,
     CONSTRAINT uk_snapshot_run_source_test_case
         UNIQUE (test_run_id, source_test_case_id),
-    CONSTRAINT ck_snapshot_name_nonblank CHECK (btrim(name) <> ''),
-    CONSTRAINT ck_snapshot_input_nonblank CHECK (btrim(input) <> ''),
-    CONSTRAINT ck_snapshot_category_nonblank CHECK (btrim(category) <> ''),
+    CONSTRAINT ck_snapshot_name_nonblank CHECK (name ~ '[^[:space:]]'),
+    CONSTRAINT ck_snapshot_input_nonblank CHECK (input ~ '[^[:space:]]'),
+    CONSTRAINT ck_snapshot_category_nonblank CHECK (category ~ '[^[:space:]]'),
     CONSTRAINT ck_snapshot_expected_action
         CHECK (expected_action IN ('ALLOW', 'BLOCK')),
     CONSTRAINT ck_snapshot_severity
@@ -565,4 +566,7 @@ JPA는 Infrastructure 구현 도구일 뿐 Domain 모델과 Aggregate 경계를 
 5. `QUEUED`, Candidate materialization 실패, 정상 `RUNNING`, `FINISHED / INCOMPLETE`, `NOT_EVALUATED` 예시 행이 CHECK를 만족하는지 검토한다.
 6. 승인된 목록 filter·sort와 기본 정렬마다 실행 가능한 query와 주요 인덱스 경로가 있는지 검토한다.
 7. PlantUML 원본, PNG 관계와 참고 DDL의 PK·FK·cardinality가 일치하는지 확인한다.
-8. 문서와 다이어그램 외 production/test dependency, datasource, Migration, Entity, Repository Adapter가 변경되지 않았는지 확인한다.
+8. 참고 DDL 전체를 PostgreSQL에 적용하고 일반 공백·탭·개행만 포함한 nonblank 대상 값이 CHECK 위반으로 거부되는지 확인한다.
+9. 문서와 다이어그램 외 production/test dependency, datasource, Migration, Entity, Repository Adapter가 변경되지 않았는지 확인한다.
+
+검증 기록(2026-08-24): PostgreSQL 16.15에 참고 DDL 전체를 적용해 8개 테이블과 모든 제약·인덱스가 생성됨을 확인했다. TestSuite, TestCase, TestRun Guardrail ID와 Snapshot의 모든 nonblank 대상 컬럼은 일반 공백·탭·개행만 포함한 대표 입력을 CHECK 위반으로 거부했고, 유효한 문자열은 저장됐다.
