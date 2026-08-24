@@ -15,8 +15,8 @@
 | 모든 작업 | `AGENTS.md`, 현재 Issue | [작업 워크플로](ai-development/workflow.md) |
 | 코드 리뷰 | 현재 Issue, PR diff, 관련 APPROVED 계약 | [에이전트 코드 리뷰](ai-development/review.md) |
 | API 구현 | [API 안내](api/README.md), [OpenAPI](api/openapi.yaml) | 오류·응답·DTO 컨벤션 |
-| 도메인 구현 | [핵심 모델](domain/core-model.md), [평가 계약](domain/evaluation-contract.md) | ADR 0001, 패키지 구조 |
-| 영속성·인프라 | 관련 승인 Issue와 ADR | 시스템 개요, DRAFT 인프라는 참고만 사용 |
+| 도메인 구현 | [핵심 모델](domain/core-model.md), [평가 계약](domain/evaluation-contract.md) | 경계 변경 시 [ADR 안내](decisions/README.md), 패키지 구조 |
+| 영속성·인프라 | 관련 승인 Issue와 [ADR 안내](decisions/README.md) | 시스템 개요, DRAFT 인프라는 참고만 사용 |
 | 문서·결정 | 관련 계약과 [ADR 안내](decisions/README.md) | [ADR 템플릿](decisions/template.md) |
 
 ## 상태 정의
