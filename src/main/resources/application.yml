@@ -1,6 +1,24 @@
 spring:
   application:
     name: guardbench-backend
+  docker:
+    compose:
+      file: compose.yaml
+      lifecycle-management: start-and-stop
+      skip:
+        in-tests: true
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    clean-disabled: true
+    fail-on-missing-locations: true
+    validate-migration-naming: true
+  sql:
+    init:
+      mode: never
   jackson:
     deserialization:
       # 알 수 없는 Request Body 필드는 무시하지 않고 VALIDATION_ERROR로 거부한다.

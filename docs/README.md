@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: KOSA AWS 3팀
-> Last reviewed: 2026-08-24
+> Last reviewed: 2026-08-25
 > Canonical source: GitHub
 > Origin: [Notion Dashboard](https://app.notion.com/p/3c0eeed6b62d80fbb64eec69796cc56d)
 
@@ -40,6 +40,7 @@
 | 결정 | [ADR 0002: PostgreSQL 영속성 계약과 물리 ERD](decisions/0002-postgresql-persistence-contract.md) | APPROVED | Backend | 2026-08-24 | 없음 |
 | 결정 | [ADR 0003: 실행·평가 결과 Aggregate와 write-side Port 경계](decisions/0003-result-aggregate-and-write-port-boundaries.md) | APPROVED | Backend | 2026-08-24 | 없음 |
 | 결정 | [ADR 0004: TestRun 최종 평가와 종료의 원자성](decisions/0004-testrun-finalization-atomicity.md) | APPROVED | Backend | 2026-08-24 | 없음 |
+| 결정 | [ADR 0005: 비동기 TestRun 실행 계약](decisions/0005-async-test-run-execution-contract.md) | APPROVED | Backend | 2026-08-25 | 없음 |
 | AI 개발 | [작업 워크플로](ai-development/workflow.md) | APPROVED | Team | 2026-08-24 | 현재 대화에서 승격 |
 | AI 개발 | [코드 리뷰](ai-development/review.md) | APPROVED | Team | 2026-08-24 | PR #20·#23 사례와 Issue #33 |
 
@@ -49,6 +50,7 @@
 | --- | --- | --- |
 | [커밋](conventions/commits.md) | APPROVED | [커밋 컨벤션](https://app.notion.com/p/3c0eeed6b62d813382bdd56fd910c66e) |
 | [코드 스타일](conventions/code-style.md) | APPROVED | [코드 컨벤션](https://app.notion.com/p/3c0eeed6b62d816a8028cc3261c3edf3) |
+| [테스트 코드](conventions/test-code.md) | APPROVED | 없음 |
 | [DTO 네이밍](conventions/dto-naming.md) | APPROVED | [DTO 네이밍](https://app.notion.com/p/3c0eeed6b62d8153b1f4fdffc39e328e) |
 | [패키지 구조](conventions/package-structure.md) | APPROVED | [패키지 네이밍](https://app.notion.com/p/3c0eeed6b62d81d59ec3cb3beb995c68) |
 | [API 공통 응답](conventions/api-response.md) | APPROVED | [API 공통 응답 DTO](https://app.notion.com/p/3c1eeed6b62d81e7abe2eea3d730c611) |
