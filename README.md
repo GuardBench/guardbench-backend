@@ -10,7 +10,27 @@ Amazon Bedrock Guardrails의 Baseline과 Candidate를 같은 테스트 자산으
 - 실행 신뢰도와 Quality Gate 분리
 - Amazon Bedrock Guardrails를 MVP SUT로 사용
 
-백엔드 애플리케이션은 아직 생성되지 않았습니다. Java·Spring Boot 프로젝트 생성과 실행 방법은 별도 Issue에서 추가합니다.
+## 로컬 개발
+
+JDK 21이 필요합니다. Gradle은 별도로 설치하지 않고 저장소의 Gradle Wrapper를 사용합니다.
+
+애플리케이션 실행:
+
+```bash
+./gradlew bootRun
+```
+
+테스트:
+
+```bash
+./gradlew clean test
+```
+
+실행 가능한 JAR 빌드:
+
+```bash
+./gradlew bootJar
+```
 
 ## 기술 방향
 
