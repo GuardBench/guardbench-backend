@@ -46,6 +46,20 @@ GuardBench를 도메인별로 병렬 구현할 때 타입 소유자와 Aggregate
 
 TestCaseSnapshot은 `name`, `input`, `ExpectedResult`, `severity`, `category`를 값으로 복제한다. 원본 TestCase를 객체로 참조하거나 원본의 수정·삭제를 Snapshot에 전파하지 않는다. 한 TestRun에서 원본 TestCase당 Snapshot이 하나라는 불변식은 접수 유스케이스가 중복 없는 활성 TestCase 집합으로 Snapshot을 만들도록 보장해야 한다. 구체적인 DB 강제 방식은 후속 Persistence 결정의 범위다.
 
+### 도메인 객체 소유권 지도
+
+아래 표는 APPROVED 핵심 모델과 평가 계약에 이미 이름이 있는 객체와 상태 타입을 소유 패키지별로 모은 것이다. 이 표는 새로운 타입을 도입하거나 `명시적으로 결정한 Aggregate Root` 열에 없는 객체의 세부 Aggregate 경계를 확정하지 않는다.
+
+| 소유 패키지 | 명시적으로 결정한 Aggregate Root | 그 밖의 소유 Domain 타입 | 경계와 미결정 사항 |
+| --- | --- | --- | --- |
+| `testdefinition` | `TestSuite`, `TestCase` | `ExpectedResult` | TestCase의 현재 `name`, `input`, `severity`, `category` 정의를 함께 소유한다. TestSuite와 TestCase는 별도 Aggregate이며 각 식별자도 `testdefinition`이 소유한다. |
+| `testrun` | `TestRun`, `TestCaseSnapshot` | `TestExecution`, `ActualResult`, `TestRunExecutionOutcome` | 실행 수명주기와 실행 상태를 소유한다. `TestExecution`의 세부 Aggregate·저장 경계는 이 ADR에서 확정하지 않는다. |
+| `evaluation` | 이 ADR에서 확정하지 않음 | `AssertionResult`, `ChangeResult`, `QualityGateResult`, `AssertionStatus`, `ComparabilityStatus`, `ChangeType`, `QualityGateStatus` | 평가 결과의 세부 Aggregate·저장 경계는 실제 저장 구현 전에 별도 확인한다. |
+| `guardrail` | 없음 | MVP에서 소유하는 Core Domain 타입 없음 | Bedrock Guardrails 대상 준비·실행 Adapter와 AWS 응답 Normalizer를 제공한다. |
+| `common` | 없음 | MVP에서 소유하는 Domain 타입 없음 | 패키지는 비어 있어도 된다. 검증된 횡단 관심사가 생기기 전에는 타입을 선제 도입하지 않는다. |
+
+객체의 소유 패키지가 정해졌다는 사실만으로 그 객체를 Aggregate Root나 독립 저장 대상으로 간주하지 않는다. 각 Aggregate 식별자는 해당 Aggregate의 소유 패키지에 두며 공통 식별자 계층을 만들지 않는다.
+
 ### 패키지 의존 방향
 
 아래에서 `A -> B`는 A가 B의 공개 Domain 타입에 의존할 수 있음을 뜻한다.
@@ -59,7 +73,7 @@ guardrail  -> testrun          (실행 Port 구현과 ActualResult 정규화)
 
 역방향 의존은 허용하지 않는다. 특히 `testdefinition`은 `testrun`이나 `evaluation`을 모르고, `testrun`은 `evaluation`이나 구체 Guardrail Adapter를 모른다. TestRun 실행에 필요한 외부 호출 계약은 소비자인 `testrun` 쪽에 두고 `guardrail/infrastructure`가 구현한다. 평가를 시작하고 TestRun 완료 상태를 반영하는 오케스트레이션은 `evaluation/application`이 `testrun`의 공개 Domain/Application 계약을 사용한다.
 
-`common`은 위 도메인 의존을 우회하는 허브로 사용하지 않는다. `ExpectedResult`, `ActualResult`, 식별자, Repository Port 또는 평가 Enum을 `common/domain`에 두지 않는다. 실제로 여러 도메인에 동일한 의미와 변경 이유를 가진 횡단 관심사가 확인될 때만 별도 승인 후 `common`을 사용한다.
+MVP에서 `common`이 소유하는 Domain 타입은 없다. `common`은 비어 있어도 되며 도메인 의존을 우회하는 허브로 사용하지 않는다. `ExpectedResult`, `ActualResult`, 식별자, Repository Port 또는 평가 Enum을 `common/domain`에 두지 않는다. `ApiResponse`, 오류 Envelope, Pagination처럼 여러 경계에서 사용할 수 있는 기술 계약도 Domain 타입이 아니며 이 ADR의 소유권 결정 대상이 아니다. 실제 횡단 관심사가 확인되면 변경 이유와 사용 경계를 검토하고 별도 승인 후 `common` 사용 여부를 결정한다.
 
 ### Repository Port 위치
 
@@ -77,8 +91,8 @@ guardrail  -> testrun          (실행 Port 구현과 ActualResult 정규화)
 | `testdefinition` | 현재 TestSuite·TestCase 자산, ExpectedResult와 편집 불변식 | Snapshot, 실행 결과, 평가 결과 |
 | `testrun` | TestRun 수명주기, 고정 Target, Snapshot, TestExecution, ActualResult, 실행에 필요한 Port | 현재 TestCase 편집, Assertion·Change·Quality Gate 규칙, AWS SDK 타입 |
 | `evaluation` | Assertion, 비교 가능성, 변화 분류, Metric과 Quality Gate | 실행 호출, 현재 TestCase 편집, ExpectedResult·ActualResult의 중복 타입 |
-| `guardrail` | Bedrock Guardrails 대상 준비·실행 Adapter와 AWS 응답 정규화 | Core 평가 규칙, TestRun 수명주기, provider 공통 계층 |
-| `common` | 검증된 횡단 관심사만 수용 | 도메인 모델, Repository, 범용 util/helper/service 모음 |
+| `guardrail` | Bedrock Guardrails 대상 준비·실행 Adapter와 AWS 응답 정규화. MVP에서 소유 Core Domain 타입은 없음 | Core 평가 규칙, TestRun 수명주기, provider 공통 계층 |
+| `common` | MVP에서 소유 Domain 타입 없음. 검증·승인된 횡단 관심사가 생길 때만 사용 | 도메인 모델, Repository, 범용 util/helper/service 모음 |
 
 ## Alternatives
 
@@ -122,7 +136,7 @@ Evaluation이 `ActualResult`를 소유하는 대안은 evaluator 입력을 한 �
 
 문서 승인 전에는 다음을 확인한다.
 
-1. Issue #3의 결정 범위 6개 항목과 다섯 최상위 패키지 책임이 모두 명시되어 있는지 검토한다.
+1. Issue #3의 결정 범위 6개 항목, APPROVED 핵심 객체의 소유 패키지와 다섯 최상위 패키지 책임이 모두 명시되어 있는지 검토한다.
 2. `docs/domain/core-model.md`, `docs/domain/evaluation-contract.md`, `docs/architecture/system-overview.md`, `docs/conventions/package-structure.md`, `docs/api/README.md`와 충돌하지 않는지 검토한다.
 3. 의존 허용 목록을 그래프로 따라갔을 때 순환 경로가 없는지 검토한다.
 4. `ExpectedResult`, `ActualResult`, 각 Repository Port의 소유 위치가 하나인지 검토한다.
