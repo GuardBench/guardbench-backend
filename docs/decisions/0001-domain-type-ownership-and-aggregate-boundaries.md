@@ -5,7 +5,8 @@
 > Last reviewed: 2026-08-24
 > Canonical source: GitHub
 > Origin: [GitHub Issue #3](https://github.com/GuardBench/guardbench-backend/issues/3)
-> AI assistance: 이 문서는 LLM의 도움으로 작성되었으며 PR #20에서 팀 검토를 완료했습니다.
+> Approval: [PR #20 정식 승인 리뷰](https://github.com/GuardBench/guardbench-backend/pull/20#pullrequestreview-5005535163)
+> AI assistance: 이 문서는 LLM의 도움으로 작성되었으며 PR #20에서 팀 검토와 정식 Approve를 완료했습니다.
 
 - ADR Status: ACCEPTED
 - Decision date: 2026-08-24
@@ -27,6 +28,8 @@ GuardBench를 도메인별로 병렬 구현할 때 타입 소유자와 Aggregate
 - MVP를 위해 불필요한 범용 provider 추상화나 중복 Entity를 선제 도입하지 않는다.
 
 이 ADR은 타입과 패키지의 논리적 소유권, Aggregate의 일관성 경계, 컴파일 타임 의존 방향을 다룬다. 승인된 API를 의존 방향에 맞게 구현할 수 있도록 Presentation 소유 경계도 정하지만, 구체적인 Controller·DTO 설계와 JPA 매핑, DB 스키마·FK·인덱스, 트랜잭션 구현 방식, AWS SDK 구현은 다루지 않는다.
+
+Issue #3의 원래 결정 범위는 타입 소유권·Aggregate 관계·의존 방향·Repository Port·최상위 책임의 6개 항목이다. PR 검토에서 중복 타입과 의존 공백을 없애려면 전용 식별자 VO, `Action`, Presentation 조회 소유 경계까지 함께 정해야 함이 확인되었다. 이 범위 확장은 PR #20의 정식 승인에 포함되었으며 이 ADR에 결정 근거를 기록한다.
 
 ## Decision
 
@@ -108,7 +111,7 @@ src/main/java/com/guardbench/
 │   │       └── TestCaseSnapshotRepository.java    [Port]
 │   ├── application/                               [두 AR과 실행 흐름 조정]
 │   │   └── query/                                 [testrun 소유 실행 조회 계약]
-│   ├── presentation/controller/                   [TestRun 접수 등 실행 소유 API]
+│   ├── presentation/controller/                   [모든 TestRun API]
 │   ├── presentation/dto/
 │   └── infrastructure/persistence/                [Repository Port 구현]
 ├── evaluation/
@@ -120,10 +123,10 @@ src/main/java/com/guardbench/
 │   │   ├── ComparabilityStatus.java
 │   │   ├── ChangeType.java
 │   │   └── QualityGateStatus.java
-│   ├── application/                               [평가와 TestRun 조회 조립]
-│   │   └── query/                                 [실행·평가 조합 조회 계약]
-│   ├── presentation/controller/                   [평가 값을 포함하는 TestRun 조회 API]
-│   └── presentation/dto/                          [실행·평가 조합 응답]
+│   ├── application/                               [평가 유스케이스]
+│   └── infrastructure/
+│       ├── query/                                 [testrun 조회 Port 구현과 실행·평가 조합]
+│       └── persistence/                           [평가 저장 경계 확정 후 Repository 구현]
 ├── guardrail/
 │   └── infrastructure/bedrock/                    [testrun Port의 Bedrock 구현]
 └── common/                                        [MVP Domain 타입 없음]
@@ -139,9 +142,10 @@ src/main/java/com/guardbench/
 - Evaluation 타입에는 이 ADR만을 근거로 Repository를 추가하지 않는다. 세부 Aggregate와 저장 경계를 정한 뒤 `evaluation/domain/repository` 사용 여부를 결정한다.
 - `guardrail`에는 AR이 없다. `common/domain` 패키지도 만들지 않으며 식별자나 Repository Port를 `common`으로 이동하지 않는다.
 - 위 트리의 디렉터리를 미리 빈 상태로 만들 필요는 없다. 해당 구현 작업에서 필요한 파일만 생성한다.
-- `POST /api/v1/test-runs`처럼 실행 접수만 다루는 API는 `testrun/presentation`이 소유한다.
-- `GET /api/v1/test-runs`, `GET /api/v1/test-runs/{id}`, `GET /api/v1/test-runs/{id}/results`는 `QualityGateStatus`, `AssertionStatus`, `ComparabilityStatus`, `ChangeType` 등 Evaluation 소유 값을 응답·필터에 포함하므로 `evaluation/presentation`이 소유한다.
-- `testrun/application/query`는 실행 소유 타입만 반환하는 조회 계약을 제공하고 `evaluation/application/query`가 허용된 `evaluation -> testrun` 방향으로 이 계약과 평가 결과를 조합한다. URL의 `/test-runs` 접두어는 Java 패키지 소유권을 뜻하지 않으며 `testrun`은 Evaluation 타입을 참조하지 않는다.
+- `POST`와 모든 `GET`을 포함한 `/api/v1/test-runs` API는 TestRun 수명주기의 공개 표현을 담당하는 `testrun/presentation`이 소유한다.
+- `testrun/application/query`는 실행·평가 조합 조회를 위한 소비자 소유 Projection Port와 읽기 모델을 정의한다. 평가 필드는 `QualityGateStatus` 같은 Evaluation Domain Enum이 아니라 OpenAPI와 호환되는 nullable scalar code로 표현해 `testrun -> evaluation` 의존과 중복 Domain Enum을 만들지 않는다.
+- `evaluation/infrastructure/query`가 이 Port를 구현해 TestRun 실행 정보와 평가 결과를 조합하고 Evaluation Enum을 Projection의 scalar code로 변환한다. `qualityGateStatus` 같은 조회 조건도 scalar code로 받아 Evaluation 타입으로 변환하므로 의존 방향은 `evaluation -> testrun`이다.
+- 이 Projection Port는 공개 조회 전용이며 Aggregate 저장 Repository가 아니다. Evaluation의 세부 Aggregate·저장 경계가 확정되기 전에도 위치와 의존 방향을 정할 수 있다.
 - `presentation` 내부는 APPROVED 패키지 계약에 따라 `controller`와 `dto`로 나눈다. 구체적인 클래스 이름과 DTO 필드는 후속 API 구현 범위다.
 
 ### Aggregate별 구현 규칙
@@ -161,11 +165,12 @@ src/main/java/com/guardbench/
 ```text
 testrun    -> testdefinition   (TestSuiteId, TestCaseId, ExpectedResult, Action, Severity를 사용)
 evaluation -> testdefinition   (ExpectedResult와 Action을 평가 입력으로 사용)
-evaluation -> testrun          (Snapshot, TestExecution, ActualResult를 평가 입력으로 사용)
+evaluation -> testrun          (Snapshot, TestExecution, ActualResult를 사용하고 조회 Port를 구현)
+guardrail  -> testdefinition   (ActualResult 정규화 시 Action을 사용)
 guardrail  -> testrun          (실행 Port 구현과 ActualResult 정규화)
 ```
 
-역방향 의존은 허용하지 않는다. 특히 `testdefinition`은 `testrun`이나 `evaluation`을 모르고, `testrun`은 `evaluation`이나 구체 Guardrail Adapter를 모른다. TestRun 실행에 필요한 외부 호출 계약은 소비자인 `testrun` 쪽에 두고 `guardrail/infrastructure`가 구현한다. 평가를 시작하고 TestRun 완료 상태를 반영하는 오케스트레이션은 `evaluation/application`이 `testrun`의 공개 Domain/Application 계약을 사용한다.
+역방향 의존은 허용하지 않는다. 특히 `testdefinition`은 `testrun`, `evaluation`, `guardrail`을 모르고 `testrun`은 `evaluation`이나 구체 Guardrail Adapter를 모른다. TestRun 실행에 필요한 외부 호출 계약은 소비자인 `testrun` 쪽에 두고 `guardrail/infrastructure`가 구현한다. Guardrail Adapter는 `ActualResult`를 만들 때 `testdefinition`의 `Action`을 사용한다. 평가를 시작하고 TestRun 완료 상태를 반영하는 오케스트레이션은 `evaluation/application`이 `testrun`의 공개 Domain/Application 계약을 사용한다.
 
 MVP에서 `common`이 소유하는 Domain 타입은 없다. `common`은 비어 있어도 되며 도메인 의존을 우회하는 허브로 사용하지 않는다. `Action`, `ExpectedResult`, `ActualResult`, 식별자, Repository Port 또는 평가 Enum을 `common/domain`에 두지 않는다. `ApiResponse`, 오류 Envelope, Pagination처럼 여러 경계에서 사용할 수 있는 기술 계약도 Domain 타입이 아니며 이 ADR의 소유권 결정 대상이 아니다. 실제 횡단 관심사가 확인되면 변경 이유와 사용 경계를 검토하고 별도 승인 후 `common` 사용 여부를 결정한다.
 
@@ -177,14 +182,15 @@ MVP에서 `common`이 소유하는 Domain 타입은 없다. `common`은 비어 �
 - Repository 구현은 각 소유 도메인의 `infrastructure/persistence`에 둔다.
 - 페이지 조회나 화면용 Projection처럼 Aggregate 저장 계약이 아닌 읽기 Port는 소유 도메인의 Application 경계에 둘 수 있으며 Repository로 위장하지 않는다.
 - Value Object와 Aggregate 내부 Entity에는 Repository를 만들지 않는다.
+- 실행·평가 조합 조회 Port 구현은 `evaluation/infrastructure/query`에 두며 Aggregate Repository로 취급하지 않는다.
 
 ### 최상위 패키지 책임
 
 | 패키지 | 책임 | 소유하지 않는 것 |
 | --- | --- | --- |
 | `testdefinition` | 현재 TestSuite·TestCase 자산, ExpectedResult, Action과 편집 불변식 | Snapshot, 실행 결과, 평가 결과 |
-| `testrun` | TestRun 수명주기, 고정 Target, Snapshot, TestExecution, ActualResult, 실행에 필요한 Port | 현재 TestCase 편집, Assertion·Change·Quality Gate 규칙, AWS SDK 타입 |
-| `evaluation` | Assertion, 비교 가능성, 변화 분류, Metric, Quality Gate와 평가 값을 포함하는 TestRun 조회 조립 | 실행 호출, 현재 TestCase 편집, ExpectedResult·ActualResult·Action의 중복 타입 |
+| `testrun` | TestRun 수명주기, 고정 Target, Snapshot, TestExecution, ActualResult, 실행에 필요한 Port와 모든 TestRun API의 조회 Projection | 현재 TestCase 편집, Assertion·Change·Quality Gate 규칙, AWS SDK 타입 |
+| `evaluation` | Assertion, 비교 가능성, 변화 분류, Metric, Quality Gate와 TestRun 조회 Port 구현 | 실행 호출, TestRun 수명주기·Presentation, ExpectedResult·ActualResult·Action의 중복 타입 |
 | `guardrail` | Bedrock Guardrails 대상 준비·실행 Adapter와 AWS 응답 정규화. MVP에서 소유 Core Domain 타입은 없음 | Core 평가 규칙, TestRun 수명주기, provider 공통 계층 |
 | `common` | MVP에서 소유 Domain 타입 없음. 검증·승인된 횡단 관심사가 생길 때만 사용 | 도메인 모델, Repository, 범용 util/helper/service 모음 |
 
@@ -207,7 +213,7 @@ MVP에서 `common`이 소유하는 Domain 타입은 없다. `common`은 비어 �
 | `TestSuite`가 `List<TestCase>`를 자식 Entity로 소유 | 소속 관계와 생성 시점의 일관성을 한 객체에서 표현하기 쉽다. | TestCase의 독립 수정·논리 삭제·페이지 조회와 맞지 않고 TestCase 수가 늘수록 큰 Aggregate와 동시 수정 충돌을 만든다. |
 | `TestRun`이 `List<TestCaseSnapshot>`을 자식 Entity로 소유 | 접수 시점의 TestRun과 전체 Snapshot 일관성을 한 Aggregate로 표현하기 쉽다. | Snapshot은 생성 후 불변이고 원본 TestCase와 수명주기가 분리된다. Snapshot별 비동기 실행과 페이지 조회에서도 TestRun 전체가 경합 지점이 된다. |
 | Evaluation이 `ActualResult`를 소유 | evaluator 입력을 한 패키지에 모을 수 있다. | 실행 실패와 평가 실패의 경계가 흐려지고 실행 결과가 Evaluation에 종속되며 동일 개념이 중복된다. |
-| `testrun/presentation`이 모든 `/test-runs` 조회 응답을 조립 | URL 경로와 Java 패키지 소유권을 일치시킬 수 있다. | 평가 타입을 포함하는 응답과 필터 때문에 금지한 `testrun -> evaluation` 의존이 생긴다. 별도 최상위 조회 패키지는 승인된 최상위 패키지 구조를 늘리므로 채택하지 않았다. |
+| `evaluation/presentation`이 평가 값을 포함하는 TestRun 조회 API를 소유 | Evaluation Enum을 직접 사용해 응답을 조립하기 쉽다. | TestRun 수명주기 표현과 목록·상세·페이지네이션 책임 대부분이 Evaluation으로 번진다. 소비자 소유 Projection Port로 의존을 역전하면 `testrun/presentation` 소유를 유지할 수 있다. |
 | `Action`을 도메인마다 중복하거나 `common/domain`에 배치 | 각 도메인의 로컬 사용 또는 공유 접근이 단순하다. | 중복 Enum은 값 집합 불일치 위험이 있고 `common/domain`은 APPROVED 패키지 계약이 금지한다. 기존 단방향 의존의 상류인 `testdefinition`이 단일 소유하는 편이 낫다. |
 
 ## Consequences
@@ -217,15 +223,16 @@ MVP에서 `common`이 소유하는 Domain 타입은 없다. `common`은 비어 �
 - 핵심 타입과 `Action`의 정의 위치가 하나여서 후속 작업자가 같은 개념을 중복 생성하지 않는다.
 - `testdefinition -> testrun` 또는 `testrun -> evaluation` 같은 역방향 의존을 금지해 순환 경로를 정적으로 차단할 수 있다.
 - TestCase와 Snapshot을 작은 Aggregate로 유지해 페이지 조회와 병렬 실행에서 큰 객체 그래프나 단일 경합 지점을 피한다.
-- Evaluation 값이 포함된 TestRun 조회 응답은 `evaluation/presentation`에서 조립하므로 Domain 의존 방향과 공개 API를 동시에 만족한다.
+- 모든 TestRun API는 `testrun/presentation`이 소유하고 `evaluation/infrastructure/query`가 소비자 소유 Projection Port를 구현하므로 수명주기 책임과 Domain 의존 방향을 동시에 유지한다.
 - AWS SDK 변경이 Guardrail Adapter 밖으로 전파되지 않고 평가 규칙도 실행 Adapter와 분리된다.
 
 비용과 위험은 다음과 같다.
 
 - 여러 Aggregate를 함께 생성해야 하는 유스케이스는 Application 트랜잭션 조정이 필요하다.
 - `testrun`은 `TestSuiteId`, `TestCaseId`, `ExpectedResult`, `Action`, `Severity`를 그대로 사용하므로 `testdefinition`의 이 타입들이 바뀌면 영향을 받는다. 원시 ID 중복을 피하고 타입 안전성을 얻는 대신 감수하는 컴파일 타임 결합이다.
+- `guardrail`도 `ActualResult` 정규화를 위해 `testdefinition.Action`에 컴파일 타임으로 의존한다.
 - TestCase 소속과 Snapshot 유일성처럼 Aggregate 사이의 불변식은 단일 객체만으로 보장할 수 없으므로 Application 검증과 후속 Persistence 제약을 함께 설계해야 한다.
-- TestRun URL 묶음이 `testrun/presentation`의 접수 API와 `evaluation/presentation`의 조회 API로 나뉘므로 URL만으로 Java 패키지 소유권을 추론하면 안 된다.
+- 조회 Projection에서 Evaluation 값을 scalar code로 매핑하므로 Port 구현과 API 계약 테스트로 값 누락·오타를 방지해야 한다.
 - Evaluation 결과의 세부 Aggregate와 저장 단위는 이 ADR에서 확정하지 않으므로 실제 저장 구현 전에 별도 확인이 필요하다.
 
 승인 후 경계를 바꾸려면 기존 ADR을 조용히 수정하지 않고 새 ADR로 supersede한다.
@@ -238,6 +245,6 @@ MVP에서 `common`이 소유하는 Domain 타입은 없다. `common`은 비어 �
 2. `docs/domain/core-model.md`, `docs/domain/evaluation-contract.md`, `docs/architecture/system-overview.md`, `docs/conventions/package-structure.md`, `docs/api/README.md`와 충돌하지 않는지 검토한다.
 3. 의존 허용 목록을 그래프로 따라갔을 때 순환 경로가 없는지 검토한다.
 4. `ExpectedResult`, `ActualResult`, `Action`, 각 Repository Port의 소유 위치가 하나인지 검토한다.
-5. 평가 값을 포함하는 TestRun 조회 API가 `testrun -> evaluation` 의존 없이 구현 가능한지 검토한다.
+5. 평가 값을 포함하는 TestRun 조회 API가 소비자 소유 Projection Port를 통해 `testrun -> evaluation` 의존 없이 구현 가능한지 검토한다.
 6. 문서 diff 외에 코드, API, DB, 의존성 변경이 없는지 확인한다.
 7. 구현 단계에서 패키지 의존 규칙을 정적 검사나 아키텍처 테스트로 검증한다.
