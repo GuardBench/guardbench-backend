@@ -1,0 +1,142 @@
+@startuml
+!pragma layout smetana
+title GuardBench MVP PostgreSQL Physical ERD
+
+hide methods
+hide stereotypes
+skinparam linetype ortho
+skinparam shadowing false
+skinparam entity {
+  BackgroundColor White
+  BorderColor #374151
+  HeaderBackgroundColor #E5E7EB
+}
+
+entity "test_suite" as test_suite {
+  * id : BIGINT <<PK, sequence>>
+  --
+  * name : TEXT
+    description : TEXT
+  * created_at : TIMESTAMPTZ(6)
+  * updated_at : TIMESTAMPTZ(6)
+}
+
+entity "test_case" as test_case {
+  * id : BIGINT <<PK, sequence>>
+  --
+  * test_suite_id : BIGINT <<FK>>
+  * name : TEXT
+  * input : TEXT
+  * expected_action : VARCHAR(16)
+  * severity : VARCHAR(16)
+  * category : TEXT
+  * created_at : TIMESTAMPTZ(6)
+  * updated_at : TIMESTAMPTZ(6)
+    deleted_at : TIMESTAMPTZ(6)
+}
+
+entity "test_run" as test_run {
+  * id : BIGINT <<PK, sequence>>
+  --
+  * test_suite_id : BIGINT <<FK>>
+  * status : VARCHAR(16)
+  * test_case_count : INTEGER
+  * processed_test_case_count : INTEGER
+  * baseline_guardrail_id : TEXT
+  * baseline_version : TEXT
+  * candidate_guardrail_id : TEXT
+  * candidate_requested_source : VARCHAR(16)
+    candidate_resolved_version : TEXT
+    execution_outcome : VARCHAR(16)
+  * created_at : TIMESTAMPTZ(6)
+    started_at : TIMESTAMPTZ(6)
+    completed_at : TIMESTAMPTZ(6)
+  * updated_at : TIMESTAMPTZ(6)
+}
+
+entity "test_case_snapshot" as snapshot {
+  * id : BIGINT <<PK, sequence>>
+  --
+  * test_run_id : BIGINT <<FK>>
+  * source_test_case_id : BIGINT <<FK>>
+  * name : TEXT
+  * input : TEXT
+  * expected_action : VARCHAR(16)
+  * severity : VARCHAR(16)
+  * category : TEXT
+  * created_at : TIMESTAMPTZ(6)
+  --
+  UK (test_run_id, source_test_case_id)
+}
+
+entity "test_execution" as execution {
+  * snapshot_id : BIGINT <<PK, FK>>
+  * target_type : VARCHAR(16) <<PK>>
+  --
+  * result_status : VARCHAR(16)
+    actual_action : VARCHAR(16)
+    error_code : TEXT
+    error_message : TEXT
+    started_at : TIMESTAMPTZ(6)
+    completed_at : TIMESTAMPTZ(6)
+}
+
+entity "assertion_result" as assertion {
+  * snapshot_id : BIGINT <<PK, FK>>
+  --
+  * assertion_status : VARCHAR(16)
+  * created_at : TIMESTAMPTZ(6)
+}
+
+entity "change_result" as change_result {
+  * snapshot_id : BIGINT <<PK, FK>>
+  --
+  * comparability_status : VARCHAR(32)
+    change_type : VARCHAR(64)
+  * created_at : TIMESTAMPTZ(6)
+}
+
+entity "quality_gate_result" as quality_gate {
+  * test_run_id : BIGINT <<PK, FK>>
+  --
+  * gate_status : VARCHAR(32)
+    candidate_assertion_pass_rate : DOUBLE PRECISION
+    security_regression_count : INTEGER
+    security_regression_rate : DOUBLE PRECISION
+    usability_regression_rate : DOUBLE PRECISION
+    test_execution_success_rate : DOUBLE PRECISION
+  * created_at : TIMESTAMPTZ(6)
+}
+
+test_suite ||--o{ test_case : contains
+test_suite ||--o{ test_run : selected by
+test_run ||--|{ snapshot : fixes
+test_case ||--o{ snapshot : source of
+snapshot ||--o{ execution : BASELINE / CANDIDATE
+snapshot ||--o| assertion : candidate assertion
+snapshot ||--o| change_result : baseline comparison
+test_run ||--o| quality_gate : final evaluation
+
+note right of test_case
+  Active row: deleted_at IS NULL
+  Public DELETE is logical only.
+end note
+
+note bottom of execution
+  PK limits each Snapshot to one row
+  per BASELINE/CANDIDATE target.
+  Only terminal result states are stored.
+end note
+
+note bottom of quality_gate
+  No row = not evaluated yet.
+  NOT_EVALUATED = every metric is NULL.
+end note
+
+legend left
+  Every FK uses ON DELETE RESTRICT.
+  Outbox and Idempotency tables are reserved for Issue #5.
+  This diagram does not create new Domain IDs or Repository Ports.
+endlegend
+
+@enduml
