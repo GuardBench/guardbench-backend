@@ -15,7 +15,7 @@
 | 모든 작업 | `AGENTS.md`, 현재 Issue | [작업 워크플로](ai-development/workflow.md) |
 | 코드 리뷰 | 현재 Issue, PR diff, 관련 APPROVED 계약 | [에이전트 코드 리뷰](ai-development/review.md) |
 | API 구현 | [API 안내](api/README.md), [OpenAPI](api/openapi.yaml) | 오류·응답·DTO 컨벤션 |
-| 도메인 구현 | [핵심 모델](domain/core-model.md), [평가 계약](domain/evaluation-contract.md) | 경계 변경 시 [ADR 안내](decisions/README.md), 패키지 구조 |
+| 도메인 구현 | [핵심 모델](domain/core-model.md), [평가 계약](domain/evaluation-contract.md), [ADR 0006](decisions/0006-independent-domain-contract-boundaries.md) | 경계 변경 시 [ADR 안내](decisions/README.md), 패키지 구조 |
 | 영속성·인프라 | 관련 승인 Issue와 [ADR 안내](decisions/README.md) | 시스템 개요, DRAFT 인프라는 참고만 사용 |
 | 문서·결정 | 관련 계약과 [ADR 안내](decisions/README.md) | [ADR 템플릿](decisions/template.md) |
 
@@ -41,6 +41,7 @@
 | 결정 | [ADR 0003: 실행·평가 결과 Aggregate와 write-side Port 경계](decisions/0003-result-aggregate-and-write-port-boundaries.md) | APPROVED | Backend | 2026-08-24 | 없음 |
 | 결정 | [ADR 0004: TestRun 최종 평가와 종료의 원자성](decisions/0004-testrun-finalization-atomicity.md) | APPROVED | Backend | 2026-08-24 | 없음 |
 | 결정 | [ADR 0005: 비동기 TestRun 실행 계약](decisions/0005-async-test-run-execution-contract.md) | APPROVED | Backend | 2026-08-25 | 없음 |
+| 결정 | [ADR 0006: 독립 도메인 개발을 위한 경계 계약과 Java 타입 격리](decisions/0006-independent-domain-contract-boundaries.md) | APPROVED | Backend | 2026-08-25 | 없음 |
 | AI 개발 | [작업 워크플로](ai-development/workflow.md) | APPROVED | Team | 2026-08-24 | 현재 대화에서 승격 |
 | AI 개발 | [코드 리뷰](ai-development/review.md) | APPROVED | Team | 2026-08-24 | PR #20·#23 사례와 Issue #33 |
 

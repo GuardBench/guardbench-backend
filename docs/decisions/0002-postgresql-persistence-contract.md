@@ -2,13 +2,14 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Last reviewed: 2026-08-24
+> Last reviewed: 2026-08-25
 > Canonical source: GitHub
 > Origin: [GitHub Issue #4](https://github.com/GuardBench/guardbench-backend/issues/4)
 
 - ADR Status: ACCEPTED
 - Decision date: 2026-08-24
 - Related Issue: #4
+- Superseded in part by: [ADR 0006](0006-independent-domain-contract-boundaries.md) — Context 밖 Java ID VO 재사용과 직접 Repository 호출 해석
 
 ## Context
 

@@ -2,13 +2,14 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Last reviewed: 2026-08-24
+> Last reviewed: 2026-08-25
 > Canonical source: GitHub
 > Origin: [GitHub Issue #27](https://github.com/GuardBench/guardbench-backend/issues/27)
 
 - ADR Status: ACCEPTED
 - Decision date: 2026-08-24
 - Related Issue: #27
+- Superseded in part by: [ADR 0006](0006-independent-domain-contract-boundaries.md) — Evaluation의 TestRun Java ID VO 재사용과 직접 Domain/Application 의존
 
 ## Context
 
