@@ -24,7 +24,7 @@ GuardBench는 PostgreSQL에 TestSuite, TestCase, TestRun, Snapshot, 실행 결�
 - 평가 전 `qualityGate = null`과 종료 후 `NOT_EVALUATED`를 구분하며, `NOT_EVALUATED`의 metrics는 `null`이다.
 - Offset Pagination, 필터와 안정적인 다중 정렬을 Spring 타입의 Domain 유출 없이 지원한다.
 
-선행 [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md)은 타입 소유권, Aggregate와 Repository Port 경계를 확정했다. 이 ADR은 그 경계를 바꾸지 않고 Infrastructure의 영속화 표현만 결정한다. 물리 테이블이 존재한다는 사실만으로 `TestExecution` 또는 Evaluation 결과를 Aggregate Root로 승격하거나 새 Repository Port와 Domain ID를 도입하지 않는다.
+선행 [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md)은 타입 소유권과 기본 Aggregate 경계를 확정했다. 후속 [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md)은 실행·평가 결과 Aggregate와 write-side Repository Port를 제안한다. 이 ADR은 그 Domain 경계를 물리 테이블에 매핑하며, 물리 테이블 하나가 곧 Aggregate 하나라는 뜻은 아니다.
 
 기존 [Notion ERD](https://app.notion.com/p/3c0eeed6b62d81c78d3bd38dc386a97f)는 2026-08-21의 과거 초안이다. 핵심 관계는 참고할 수 있지만 `updated_at`, TestCase 논리 삭제, Snapshot의 `name`, TestRun lifecycle, Candidate materialization 시점, `NOT_EVALUATED`의 nullable metrics가 현재 계약과 다르므로 물리 계약이나 Migration으로 사용하지 않는다.
 
@@ -35,7 +35,8 @@ GuardBench는 PostgreSQL에 TestSuite, TestCase, TestRun, Snapshot, 실행 결�
 - Aggregate 저장 Adapter는 **Spring Data JPA**를 사용한다.
 - Domain 객체와 분리된 Persistence Entity/Model을 각 소유 도메인의 `infrastructure/persistence`에 둔다.
 - Infrastructure Mapper가 Domain 객체와 Persistence Model을 명시적으로 변환한다. Domain 클래스에는 JPA annotation을 붙이지 않는다.
-- 저장용 Domain Repository Port는 ADR 0001의 네 Port만 유지한다. `TestExecution`과 Evaluation 결과용 Repository Port를 이 결정만으로 추가하지 않는다.
+- 저장용 Domain Repository Port는 ADR 0001의 네 Port와 ADR 0003의 `TestExecutionRepository`, `SnapshotEvaluationRepository`, `QualityGateResultRepository`를 사용한다.
+- `AssertionResult`와 `ChangeResult`는 `SnapshotEvaluation`의 내부 결과로 저장하며 별도 Repository Port를 만들지 않는다. 여러 Root를 감추는 범용 `EvaluationResultStore`도 도입하지 않는다.
 - 실행·평가 조합 조회는 ADR 0001의 `testrun/application/query` 소비자 소유 Projection Port를 `evaluation/infrastructure/query`가 구현한다.
 - 복잡한 조회는 custom JPA repository, JPQL 또는 PostgreSQL native query로 구현할 수 있지만 Spring `Page`, `Pageable`, `Sort`, JPA Entity를 Application과 Domain에 노출하지 않는다.
 - 스키마 변경은 **Flyway SQL versioned migration**만 사용한다. Hibernate `ddl-auto`는 개발·운영 스키마 생성에 사용하지 않고 실제 구현 시 `validate`를 기본값으로 사용한다.
@@ -45,7 +46,10 @@ GuardBench는 PostgreSQL에 TestSuite, TestCase, TestRun, Snapshot, 실행 결�
 
 - 공개 `int64` 계약과 일치하도록 Aggregate 식별자는 PostgreSQL `BIGINT`와 테이블별 sequence를 사용한다.
 - JPA sequence allocation과 DB sequence `INCREMENT BY`는 같은 값으로 맞춘다. MVP 권고값은 50이며 ID 연속성을 비즈니스 의미로 사용하지 않는다.
-- `TestExecution`, `AssertionResult`, `ChangeResult`, `QualityGateResult`에는 승인되지 않은 Domain ID를 추가하지 않는다.
+- 결과 저장에는 다음 식별자를 사용하며 별도 scalar DB ID나 sequence를 추가하지 않는다.
+  - TestExecution Domain ID: `TestExecutionId(TestCaseSnapshotId, TargetType)`
+  - SnapshotEvaluation Domain ID: 기존 `TestCaseSnapshotId`
+  - QualityGateResult Domain ID: 기존 `TestRunId`
   - TestExecution PK: `(snapshot_id, target_type)`
   - AssertionResult PK: `snapshot_id`
   - ChangeResult PK: `snapshot_id`
@@ -90,8 +94,8 @@ GuardBench는 PostgreSQL에 TestSuite, TestCase, TestRun, Snapshot, 실행 결�
 | `test_run` | `id` | 수명주기, 요청·고정 target, 고정 Snapshot 수와 진행률, 종료 결과를 저장한다. |
 | `test_case_snapshot` | `id` | Run 시점의 TestCase 다섯 필드를 복제하며 `(test_run_id, source_test_case_id)`가 유일하다. |
 | `test_execution` | `(snapshot_id, target_type)` | Snapshot별 BASELINE/CANDIDATE 터미널 실행 결과를 최대 한 행씩 저장한다. |
-| `assertion_result` | `snapshot_id` | Candidate ActualResult가 있을 때만 Snapshot당 최대 한 행을 저장한다. |
-| `change_result` | `snapshot_id` | 양쪽 ActualResult가 있을 때만 Snapshot당 최대 한 행을 저장한다. |
+| `assertion_result` | `snapshot_id` | `SnapshotEvaluation`의 필수 부분이다. Candidate ActualResult가 있을 때만 Snapshot당 한 행을 저장한다. |
+| `change_result` | `snapshot_id` | `SnapshotEvaluation`의 선택적 부분이다. 양쪽 ActualResult가 있을 때만 Snapshot당 한 행을 저장한다. |
 | `quality_gate_result` | `test_run_id` | 평가가 끝났을 때 Run당 최대 한 행을 저장한다. |
 
 FK 삭제 정책은 모두 `ON DELETE RESTRICT`다. 공개 TestCase 삭제는 물리 DELETE가 아니며 Snapshot에서 원본 TestCase로 향하는 FK를 유지한다. 일반 사용자 동작으로 TestSuite, TestRun, Snapshot과 결과를 물리 삭제하지 않는다. 운영 보존 기간과 물리 삭제 순서는 후속 운영 정책에서 정한다.
@@ -554,7 +558,7 @@ JPA는 Infrastructure 구현 도구일 뿐 Domain 모델과 Aggregate 경계를 
 
 ## Validation
 
-1. ADR 0001의 네 Aggregate Root와 Repository Port 경계를 유지하고 새 Domain ID나 Repository를 선제 도입하지 않았는지 확인한다.
+1. ADR 0001과 ADR 0003의 Aggregate Root, 식별자와 Repository Port 경계를 유지하고 결과 내부 객체별 Repository를 선제 도입하지 않았는지 확인한다.
 2. `docs/domain/core-model.md`, `docs/domain/evaluation-contract.md`, `docs/api/README.md`, `docs/api/openapi.yaml`의 필드, Enum, nullable 규칙을 테이블·CHECK와 대조한다.
 3. TestCase를 논리 삭제해도 Snapshot의 원본 FK와 실행·평가 결과가 유지되는지 검토한다.
 4. Snapshot이 `name`, `input`, `expectedAction`, `severity`, `category`를 모두 보존하며 Run 안에서 원본 TestCase당 하나인지 확인한다.
