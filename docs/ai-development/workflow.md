@@ -31,10 +31,10 @@ Feature, Bug 또는 Engineering Task 템플릿을 사용한다. 목적, 관련 �
 
 ## 2. worktree와 branch 준비
 
-Issue 하나당 별도 worktree와 `codex/{issue-number}-{slug}` branch를 사용한다. 기준 branch는 기본적으로 `dev`다.
+Issue 하나당 별도 worktree와 `agent/{issue-number}-{slug}` branch를 사용한다. 기준 branch는 기본적으로 `dev`다.
 
 ```bash
-git worktree add ../guardbench-issue-42 -b codex/42-create-test-suite dev
+git worktree add ../guardbench-issue-42 -b agent/42-create-test-suite dev
 cd ../guardbench-issue-42
 git status
 ```
