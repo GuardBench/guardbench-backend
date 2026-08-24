@@ -1,14 +1,14 @@
 # 0001. 도메인 타입 소유권과 Aggregate 경계
 
-> Status: DRAFT
+> Status: APPROVED
 > Owner: Backend
 > Last reviewed: 2026-08-24
 > Canonical source: GitHub
 > Origin: [GitHub Issue #3](https://github.com/GuardBench/guardbench-backend/issues/3)
-> AI assistance: 이 문서의 초안은 LLM의 도움으로 작성되었으며 사람의 검토가 필요합니다.
+> AI assistance: 이 문서는 LLM의 도움으로 작성되었으며 PR #20에서 팀 검토를 완료했습니다.
 
-- ADR Status: PROPOSED
-- Decision date: 미정 (팀 승인 시 기록)
+- ADR Status: ACCEPTED
+- Decision date: 2026-08-24
 - Related Issue: #3
 
 ## Context
@@ -232,7 +232,7 @@ MVP에서 `common`이 소유하는 Domain 타입은 없다. `common`은 비어 �
 
 ## Validation
 
-다음을 검토하고 승인한다.
+다음을 검토했으며 구현 단계에서도 유지한다.
 
 1. Issue #3의 결정 범위 6개 항목, 전용 식별자 VO와 `Action`, APPROVED 핵심 객체의 소유 패키지와 다섯 최상위 패키지 책임이 모두 명시되어 있는지 검토한다.
 2. `docs/domain/core-model.md`, `docs/domain/evaluation-contract.md`, `docs/architecture/system-overview.md`, `docs/conventions/package-structure.md`, `docs/api/README.md`와 충돌하지 않는지 검토한다.
