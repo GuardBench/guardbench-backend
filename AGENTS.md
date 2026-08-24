@@ -17,6 +17,12 @@
 - 공개 API, DB, 의존성 또는 아키텍처 변경은 사전 확인한다.
 - 기존 미커밋 변경을 보존한다. 출처가 불명확한 변경을 되돌리지 않는다.
 
+## DDD Aggregate 경계
+
+- Aggregate 사이에는 객체 참조 대신 소유 도메인의 전용 ID VO를 사용한다. 다른 Aggregate의 객체나 가변 컬렉션을 보유하지 않는다.
+- 다른 Aggregate의 실행 시점 값이 필요하면 불변 값으로 복제한다. Aggregate 간 생성·저장·상태 전이 조율은 해당 Domain의 Application Service가 담당한다.
+- ID VO와 Domain 타입을 `common` 또는 소비 도메인에 복제하지 않고, 승인된 소유 패키지의 타입을 사용한다.
+
 ## Git과 검증
 
 - Issue 하나당 별도 worktree와 `agent/{issue-number}-{slug}` 브랜치를 사용한다.
