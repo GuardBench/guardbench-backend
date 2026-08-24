@@ -1,6 +1,6 @@
 # 에이전트 코드 리뷰
 
-> Status: DRAFT
+> Status: APPROVED
 > Owner: Team
 > Last reviewed: 2026-08-24
 > Canonical source: GitHub
