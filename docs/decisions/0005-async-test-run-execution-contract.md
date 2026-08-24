@@ -27,7 +27,7 @@ TestRun 접수 뒤 Candidate DRAFT를 고정하고, Snapshot별 Baseline/Candida
 결정에는 다음 제약을 적용한다.
 
 - SQS Standard의 중복 전달과 순서 뒤바뀜을 정상 상황으로 취급한다.
-- 동일한 TestExecution을 여러 Executor가 동시에 받아도 외부 호출과 터미널 결과는 하나로 수렴해야 한다.
+- 동일한 TestExecution을 여러 Executor가 동시에 받아도 터미널 결과는 하나로 수렴해야 한다. lease 만료 경계의 중복 Provider 호출은 허용하되 claim으로 빈도와 저장 영향을 제한한다.
 - Bedrock 호출 중 DB 트랜잭션, row lock 또는 connection을 유지하지 않는다.
 - 메시지는 실행 입력이나 결과를 복제하지 않고 불변 식별자만 전달한다.
 - PostgreSQL의 TestRun, TestExecution과 Evaluation 결과를 현재 상태의 Source of Truth로 사용한다.
@@ -160,13 +160,20 @@ PK: (snapshot_id, target_type)
 
 - Application 계약은 `testrun/application`의 `TestExecutionClaimPort`에 둔다.
 - JPA Entity와 조건부 INSERT/UPDATE Adapter는 `testrun/infrastructure/persistence`에 둔다.
-- claim 테이블과 Port는 Aggregate Repository가 아니라 중복 외부 호출을 제한하는 기술 계약이다.
+- claim 테이블과 Port는 Aggregate Repository가 아니라 정상적인 lease 기간의 중복 외부 호출을 줄이고 stale 결과 저장을 차단하는 기술 계약이다.
 - 동일 실행 ID에 claim이 없거나 lease가 만료됐을 때만 새 token으로 선점한다.
 - Bedrock 호출 전 짧은 트랜잭션에서 선점하고 DB connection을 반환한다.
 - 결과 저장 시 현재 token과 같은지 다시 확인해 만료된 Worker의 늦은 결과를 거부한다.
 - terminal TestExecution과 `TestExecutionCompleted` Outbox를 하나의 트랜잭션으로 최초 저장한다.
 - 같은 ID의 terminal 결과를 다른 의미의 결과로 덮어쓰지 않는다.
 - 이미 terminal 결과가 있으면 기존 결과를 인정하고 원본 메시지를 삭제한다.
+
+[`ApplyGuardrail`](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ApplyGuardrail.html)은 idempotency 또는 fencing token을 받지 않는다. Worker A가 호출 도중 멈추고 lease가 만료된 뒤 Worker B가 새 claim으로 호출하면 A와 B의 Provider 호출이 겹칠 수 있다. 따라서 Provider 호출의 exactly-once는 보장하지 않으며, MVP의 보장 경계는 다음과 같다.
+
+- Provider 호출은 lease 만료 경계에서 at-least-once가 될 수 있다.
+- Provider timeout보다 긴 claim lease로 정상 흐름의 중복 호출 가능성을 낮춘다.
+- 현재 claim token을 가진 Worker의 terminal TestExecution만 최초 저장한다.
+- 만료된 Worker가 늦게 반환한 결과는 저장과 완료 이벤트 생성에 영향을 주지 않는다.
 
 ### 재시도, timeout, visibility와 DLQ
 
@@ -272,6 +279,7 @@ INDEX: (status, created_at)
 - PUBLISHED Outbox 보존 기간과 cleanup
 - stale TestRun과 영구 PENDING 자동 Reconciler
 - DLQ 자동 redrive와 운영 절차 자동화
+- Provider가 지원하는 fencing/idempotency 또는 더 강한 `ApplyGuardrail` 중복 호출 억제
 
 ## Alternatives
 
@@ -289,7 +297,7 @@ DB 조회를 일부 줄일 수 있지만 한 target의 지연·실패와 다른 
 
 ### SQS visibility나 결과 PK만으로 외부 호출 중복 방지
 
-visibility 만료와 Worker 장애 뒤 재전달에서는 동시에 같은 외부 호출을 할 수 있고, 결과 PK는 호출 뒤의 중복 저장만 막는다. DB connection을 오래 점유하지 않는 claim/lease를 선택한다.
+visibility 만료와 Worker 장애 뒤 재전달에서는 활성 Worker의 소유권을 판별할 수 없고, 결과 PK는 호출 뒤의 중복 저장만 막는다. claim/lease로 정상 흐름의 중복 호출을 줄이고 stale 결과를 차단하되 lease 만료 경계의 중복 호출은 허용한다.
 
 ### 실행 중 상태를 TestExecution Aggregate에 저장
 
@@ -316,7 +324,7 @@ visibility 만료와 Worker 장애 뒤 재전달에서는 동시에 같은 외�
 장점은 다음과 같다.
 
 - Snapshot과 target 단위로 Executor를 독립 확장하고 재시도할 수 있다.
-- Standard Queue의 중복·역순·ack 실패가 외부 호출과 저장 결과를 바꾸지 않는다.
+- Standard Queue의 중복·역순·ack 실패가 terminal 저장 결과를 바꾸지 않는다.
 - 장기 Provider 호출 동안 DB lock과 connection을 점유하지 않는다.
 - 메시지는 식별자만 전달하고 DB를 Source of Truth로 유지한다.
 - 기존 Aggregate, Repository 소유권과 `evaluation -> testrun` 의존 방향을 유지한다.
@@ -329,6 +337,7 @@ visibility 만료와 Worker 장애 뒤 재전달에서는 동시에 같은 외�
 - API Task 하나를 항상 유지해야 Outbox Publisher가 진행된다.
 - `FOR UPDATE SKIP LOCKED` Publisher는 SQS batch 발행 동안 짧은 DB 트랜잭션을 유지한다.
 - PENDING Outbox나 DLQ 메시지가 영구적으로 남으면 자동 종결되지 않으므로 운영 경보와 수동 복구가 필요하다.
+- lease 만료 경계에서 `ApplyGuardrail`이 중복 호출되어 비용이 늘 수 있지만 stale 응답은 terminal 결과에 반영되지 않는다.
 - 초기 timeout, lease와 retry 값은 실제 Bedrock 지연과 부하를 관찰해 조정해야 한다.
 
 이 결정을 되돌리려면 새 ADR로 메시지와 처리 의미를 supersede한다. 이미 발행된 v1 메시지의 필드 의미를 조용히 바꾸거나 완료된 TestExecution과 QualityGateResult를 덮어쓰지 않는다.
@@ -340,8 +349,8 @@ visibility 만료와 Worker 장애 뒤 재전달에서는 동시에 같은 외�
 3. materialization 성공 뒤 DB commit 실패 시 동일한 client request token으로 복구되는지 검증한다.
 4. Candidate version, `RUNNING`과 `2 * Snapshot` 실행 Outbox가 전부 함께 commit되는지 검증한다.
 5. 준비 최종 실패에서 모든 실행이 `NOT_STARTED`이고 `FINISHED / ERROR + NOT_EVALUATED`가 원자적으로 저장되는지 검증한다.
-6. 같은 TestExecution을 두 Executor가 받아도 하나만 유효한 claim을 얻는지 검증한다.
-7. lease가 만료된 이전 Worker의 늦은 결과가 저장되지 않는지 검증한다.
+6. 같은 TestExecution을 두 Executor가 받아도 같은 시점에는 하나만 유효한 claim을 얻는지 검증한다.
+7. Provider 호출 중 lease가 만료되어 새 Worker 호출과 겹쳐도 이전 Worker의 늦은 결과가 저장되지 않고 terminal 결과와 완료 이벤트가 하나로 수렴하는지 검증한다.
 8. Provider timeout, retryable 오류와 영구 오류가 승인된 terminal 상태와 안전한 code로 매핑되는지 검증한다.
 9. DB와 SQS 오류가 TestExecution 실패로 저장되지 않는지 검증한다.
 10. 결과 commit 후 ack 전 장애에서 재전달이 외부 호출과 결과를 중복시키지 않는지 검증한다.
