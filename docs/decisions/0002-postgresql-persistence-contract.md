@@ -1,13 +1,12 @@
 # 0002. PostgreSQL 영속성 계약과 물리 ERD
 
-> Status: DRAFT
+> Status: APPROVED
 > Owner: Backend
 > Last reviewed: 2026-08-24
 > Canonical source: GitHub
 > Origin: [GitHub Issue #4](https://github.com/GuardBench/guardbench-backend/issues/4)
-> AI assistance: 이 문서는 LLM의 도움으로 작성되었으며 팀의 검토와 승인이 필요합니다.
 
-- ADR Status: PROPOSED
+- ADR Status: ACCEPTED
 - Decision date: 2026-08-24
 - Related Issue: #4
 
