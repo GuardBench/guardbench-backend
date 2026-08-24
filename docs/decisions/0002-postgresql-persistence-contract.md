@@ -25,7 +25,7 @@ GuardBench는 PostgreSQL에 TestSuite, TestCase, TestRun, Snapshot, 실행 결�
 - 평가 전 `qualityGate = null`과 종료 후 `NOT_EVALUATED`를 구분하며, `NOT_EVALUATED`의 metrics는 `null`이다.
 - Offset Pagination, 필터와 안정적인 다중 정렬을 Spring 타입의 Domain 유출 없이 지원한다.
 
-선행 [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md)은 타입 소유권과 기본 Aggregate 경계를 확정했다. 후속 [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md)은 실행·평가 결과 Aggregate와 write-side Repository Port를 제안한다. 이 ADR은 그 Domain 경계를 물리 테이블에 매핑하며, 물리 테이블 하나가 곧 Aggregate 하나라는 뜻은 아니다.
+선행 [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md)은 타입 소유권과 기본 Aggregate 경계를 확정했다. 후속 [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md)은 실행·평가 결과 Aggregate와 write-side Repository Port를, [ADR 0004](0004-testrun-finalization-atomicity.md)는 TestRun 최종 평가의 원자성과 재호출 의미를 제안한다. 이 ADR은 그 Domain 경계를 물리 테이블에 매핑하며, 물리 테이블 하나가 곧 Aggregate 하나라는 뜻은 아니다.
 
 기존 [Notion ERD](https://app.notion.com/p/3c0eeed6b62d81c78d3bd38dc386a97f)는 2026-08-21의 과거 초안이다. 핵심 관계는 참고할 수 있지만 `updated_at`, TestCase 논리 삭제, Snapshot의 `name`, TestRun lifecycle, Candidate materialization 시점, `NOT_EVALUATED`의 nullable metrics가 현재 계약과 다르므로 물리 계약이나 Migration으로 사용하지 않는다.
 
@@ -38,6 +38,7 @@ GuardBench는 PostgreSQL에 TestSuite, TestCase, TestRun, Snapshot, 실행 결�
 - Infrastructure Mapper가 Domain 객체와 Persistence Model을 명시적으로 변환한다. Domain 클래스에는 JPA annotation을 붙이지 않는다.
 - 저장용 Domain Repository Port는 ADR 0001의 네 Port와 ADR 0003의 `TestExecutionRepository`, `SnapshotEvaluationRepository`, `QualityGateResultRepository`를 사용한다.
 - `AssertionResult`와 `ChangeResult`는 `SnapshotEvaluation`의 내부 결과로 저장하며 별도 Repository Port를 만들지 않는다. 여러 Root를 감추는 범용 `EvaluationResultStore`도 도입하지 않는다.
+- `evaluation/application`은 ADR 0004에 따라 `QualityGateResultRepository`와 `TestRunRepository`를 하나의 PostgreSQL 트랜잭션에서 조율한다.
 - 실행·평가 조합 조회는 ADR 0001의 `testrun/application/query` 소비자 소유 Projection Port를 `evaluation/infrastructure/query`가 구현한다.
 - 복잡한 조회는 custom JPA repository, JPQL 또는 PostgreSQL native query로 구현할 수 있지만 Spring `Page`, `Pageable`, `Sort`, JPA Entity를 Application과 Domain에 노출하지 않는다.
 - 스키마 변경은 **Flyway SQL versioned migration**만 사용한다. Hibernate `ddl-auto`는 개발·운영 스키마 생성에 사용하지 않고 실제 구현 시 `validate`를 기본값으로 사용한다.
@@ -96,7 +97,7 @@ GuardBench는 PostgreSQL에 TestSuite, TestCase, TestRun, Snapshot, 실행 결�
 | `test_execution` | `(snapshot_id, target_type)` | Snapshot별 BASELINE/CANDIDATE 터미널 실행 결과를 최대 한 행씩 저장한다. |
 | `assertion_result` | `snapshot_id` | `SnapshotEvaluation`의 필수 부분이다. Candidate ActualResult가 있을 때만 Snapshot당 한 행을 저장한다. |
 | `change_result` | `snapshot_id` | `SnapshotEvaluation`의 선택적 부분이다. 양쪽 ActualResult가 있을 때만 Snapshot당 한 행을 저장한다. |
-| `quality_gate_result` | `test_run_id` | 평가가 끝났을 때 Run당 최대 한 행을 저장한다. |
+| `quality_gate_result` | `test_run_id` | FINISHED TestRun의 최종 평가를 정확히 한 행으로 저장한다. FINISHED 이전에는 행을 두지 않는다. |
 
 FK 삭제 정책은 모두 `ON DELETE RESTRICT`다. 공개 TestCase 삭제는 물리 DELETE가 아니며 Snapshot에서 원본 TestCase로 향하는 FK를 유지한다. 일반 사용자 동작으로 TestSuite, TestRun, Snapshot과 결과를 물리 삭제하지 않는다. 운영 보존 기간과 물리 삭제 순서는 후속 운영 정책에서 정한다.
 
@@ -111,7 +112,15 @@ TestRun 접수 트랜잭션은 현재 결정의 `test_run`과 `test_case_snapsho
 - Candidate materialization 실패로 `FINISHED / ERROR`가 되면 `candidate_resolved_version`은 `null`일 수 있다.
 - `SUCCEEDED` TestExecution은 `actual_action`이 있고 오류가 없다. 그 밖의 상태는 ActualResult가 없다.
 - `FAILED`와 `TIMED_OUT`의 안전한 오류는 code와 message가 함께 있거나 함께 없다. `NOT_STARTED`에는 ActualResult와 오류, 실행 시각이 없다.
-- `quality_gate_result` 행이 없으면 평가 전이다. 행의 status가 `NOT_EVALUATED`이면 모든 metric은 `null`이고 `PASS` 또는 `FAIL`이면 모든 metric이 존재한다.
+- `FINISHED` 이전에는 `quality_gate_result` 행이 없어 평가 전임을 표현한다.
+- `FINISHED`이면 `quality_gate_result` 행이 정확히 하나 존재한다. 행의 status가 `NOT_EVALUATED`이면 모든 metric은 `null`이고 `PASS` 또는 `FAIL`이면 모든 metric이 존재한다.
+
+### TestRun 최종 평가 원자성
+
+- `evaluation/application`이 QualityGateResult 저장과 TestRun의 `FINISHED` 전환을 하나의 PostgreSQL 트랜잭션으로 조율한다.
+- 두 저장 중 하나라도 실패하면 전체를 롤백한다. 일반 FK와 행 단위 CHECK로 강제할 수 없는 `FINISHED -> QualityGateResult 존재` 조건은 Application 트랜잭션과 통합 테스트로 보장한다.
+- 이미 FINISHED이고 QualityGateResult가 있는 TestRun의 최종화 재호출은 기존 결과를 반환하며 재계산하거나 upsert하지 않는다.
+- 계산 예외와 저장·commit 실패를 `NOT_EVALUATED`로 변환하지 않는다. 기술적 실패의 retry와 Worker 동시 실행 제어는 #5 범위다.
 
 ### 인덱스와 Offset Pagination
 
@@ -551,18 +560,18 @@ JPA는 Infrastructure 구현 도구일 뿐 Domain 모델과 Aggregate 경계를 
 - TestSuite `testCaseCount` 집계 정렬은 데이터 규모가 커지면 비용이 증가할 수 있다. 측정 없이 중복 counter를 선제 도입하지 않는다.
 - `ILIKE '%...%'` 검색은 B-tree로 가속되지 않는다. 필요 시 PostgreSQL extension과 운영 권한을 별도로 검토해야 한다.
 - JPA sequence allocation 설정과 DB sequence 증가값이 다르면 식별자 생성 오류가 생길 수 있으므로 통합 테스트가 필요하다.
-- 참고 DDL의 cross-row/cross-table 불변식, 예를 들어 Assertion은 Candidate 성공 시에만 생성되고 Quality Gate는 FINISHED Run에만 생성된다는 규칙은 Application 트랜잭션과 통합 테스트로 보완한다.
+- 참고 DDL의 cross-row/cross-table 불변식, 예를 들어 Assertion은 Candidate 성공 시에만 생성되고 FINISHED와 Quality Gate가 정확히 함께 존재한다는 규칙은 ADR 0004의 Application 트랜잭션과 통합 테스트로 보완한다.
 - Outbox와 Idempotency 테이블이 제외되어 있으므로 후속 #5 결정 없이 비동기 접수 구현을 완료할 수 없다.
 
 이 결정을 되돌리려면 새 ADR로 Persistence 접근이나 스키마 표현을 supersede하고 새 Flyway migration으로 roll-forward한다. 이미 적용된 versioned migration을 수정하거나 운영 DB를 Hibernate 자동 DDL로 역변경하지 않는다.
 
 ## Validation
 
-1. ADR 0001과 ADR 0003의 Aggregate Root, 식별자와 Repository Port 경계를 유지하고 결과 내부 객체별 Repository를 선제 도입하지 않았는지 확인한다.
+1. ADR 0001과 ADR 0003의 Aggregate Root, 식별자와 Repository Port 경계 및 ADR 0004의 최종화 트랜잭션을 유지하고 결과 내부 객체별 Repository를 선제 도입하지 않았는지 확인한다.
 2. `docs/domain/core-model.md`, `docs/domain/evaluation-contract.md`, `docs/api/README.md`, `docs/api/openapi.yaml`의 필드, Enum, nullable 규칙을 테이블·CHECK와 대조한다.
 3. TestCase를 논리 삭제해도 Snapshot의 원본 FK와 실행·평가 결과가 유지되는지 검토한다.
 4. Snapshot이 `name`, `input`, `expectedAction`, `severity`, `category`를 모두 보존하며 Run 안에서 원본 TestCase당 하나인지 확인한다.
-5. `QUEUED`, Candidate materialization 실패, 정상 `RUNNING`, `FINISHED / INCOMPLETE`, `NOT_EVALUATED` 예시 행이 CHECK를 만족하는지 검토한다.
+5. `QUEUED`, Candidate materialization 실패, 정상 `RUNNING`, `FINISHED / INCOMPLETE`, `NOT_EVALUATED` 예시 행이 CHECK를 만족하고 FINISHED와 Quality Gate가 하나의 commit으로 관찰되는지 검토한다.
 6. 승인된 목록 filter·sort와 기본 정렬마다 실행 가능한 query와 주요 인덱스 경로가 있는지 검토한다.
 7. PlantUML 원본, PNG 관계와 참고 DDL의 PK·FK·cardinality가 일치하는지 확인한다.
 8. 문서와 다이어그램 외 production/test dependency, datasource, Migration, Entity, Repository Adapter가 변경되지 않았는지 확인한다.
