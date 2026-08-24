@@ -70,7 +70,7 @@ Baseline과 Candidate는 같은 Snapshot을 사용하지만 서로 독립적으�
 - 식별자는 평가 대상인 `TestRunId`다.
 - `PASS`, `FAIL`, `NOT_EVALUATED`와 metrics shape 불변식을 스스로 보장한다.
 - Snapshot별 결과와 독립된 Repository를 사용하며 TestRun/Snapshot Repository에 저장 책임을 추가하지 않는다.
-- Quality Gate 저장과 TestRun의 `FINISHED` 전환을 원자화하는 Application 트랜잭션, 동시성 및 재진입 규칙은 후속 결정 #28에서 확정한다.
+- Quality Gate 저장과 TestRun의 `FINISHED` 전환을 원자화하는 Application 트랜잭션과 재진입 규칙은 [ADR 0004](0004-testrun-finalization-atomicity.md)에서 제안한다. Worker 선점, 동시 실행 직렬화와 retry는 #5에서 확정한다.
 
 ### Repository Port
 
@@ -103,7 +103,7 @@ public interface QualityGateResultRepository {
 
 각 `save`는 Root 전체를 저장한다. 내부 결과별 `AssertionResultRepository`, `ChangeResultRepository`를 만들지 않는다. 서로 다른 Aggregate를 하나의 저장 단위처럼 감추는 범용 `EvaluationResultStore`도 도입하지 않는다. 여러 Aggregate의 Repository 호출과 트랜잭션 조율은 Application Service의 책임이다.
 
-결과 Aggregate는 이미 확정된 실행·평가 사실을 나타내므로 같은 식별자의 다른 결과를 암묵적 upsert로 덮어쓰지 않는다. 동일 결과 재전달의 멱등 성공, 충돌과 retry의 구체 의미는 #5와 #28에서 확정하되 Repository Adapter는 그 결정을 구현할 수 있도록 DB PK 충돌을 숨겨 의미가 다른 결과를 갱신하지 않는다.
+결과 Aggregate는 이미 확정된 실행·평가 사실을 나타내므로 같은 식별자의 다른 결과를 암묵적 upsert로 덮어쓰지 않는다. 완료된 최종화의 재호출은 ADR 0004에 따라 기존 결과를 반환하고, Worker 중복 처리와 retry는 #5에서 확정한다. Repository Adapter는 DB PK 충돌을 숨겨 의미가 다른 결과를 갱신하지 않는다.
 
 ### Application과 의존 방향
 
@@ -180,7 +180,7 @@ Assertion, Change와 Quality Gate를 하나의 Store가 저장하면 Application
 
 - ADR 0001이 남긴 미결정을 해소하면서 Root 세 개와 Repository Port 세 개가 구현 계약에 추가된다.
 - `SnapshotEvaluationRepository` Adapter는 한 Root를 두 테이블에 매핑하고 선택적 Change 행을 복원해야 한다.
-- 결과 재전달, 동시 최종화와 여러 Aggregate의 트랜잭션 조율은 #5와 #28의 후속 결정이 필요하다.
+- 여러 Aggregate의 최종화 트랜잭션과 재호출 의미는 ADR 0004가 제안하며, Worker 동시 실행과 retry는 #5의 후속 결정이 필요하다.
 - Aggregate 경계가 실제 구현 경험과 맞지 않으면 승인 전 이 제안을 변경할 수 있고, 승인 후에는 새 ADR로 supersede해야 한다.
 
 ## Validation
@@ -190,6 +190,6 @@ Assertion, Change와 Quality Gate를 하나의 Store가 저장하면 Application
 3. Candidate ActualResult가 없으면 `SnapshotEvaluation`이 없고, Candidate만 성공하면 Assertion-only, 두 target에 ActualResult가 있으면 비교 가능 여부와 무관하게 Assertion과 Change가 같은 Root에 존재하는 시나리오를 검토한다.
 4. Baseline과 Candidate가 독립적으로 완료되어도 `TestExecutionId`와 PK가 target별 결과를 하나로 제한하는지 확인한다.
 5. `testrun`이 Evaluation Domain 타입에 의존하지 않고 `evaluation -> testrun` 방향만 유지하는지 후속 ArchUnit 테스트로 검증한다.
-6. ADR 0002의 테이블별 Aggregate 매핑과 Repository 목록이 이 결정과 일치하는지 확인한다.
+6. ADR 0002의 테이블별 Aggregate 매핑과 ADR 0004의 최종화 트랜잭션이 이 결정과 일치하는지 확인한다.
 7. #8, #9, #14가 새 Aggregate 또는 write-side Port를 임의로 결정하지 않고 구현 가능한지 검토한다.
 8. Java, JPA Entity, Repository Adapter, Migration, 공개 API와 기존 Query Projection Port가 변경되지 않았는지 확인한다.
