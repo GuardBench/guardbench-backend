@@ -24,4 +24,10 @@
 - push, PR 생성, 병합, force push는 사람의 명시적 승인 없이 수행하지 않는다.
 - 검증하지 않은 결과를 완료했다고 표현하지 않는다.
 
+## 코드 리뷰
+
+- 리뷰 요청은 [에이전트 코드 리뷰](docs/ai-development/review.md)가 `APPROVED` 상태일 때 해당 지침을 따른다.
+- 리뷰만 요청받았다면 파일 수정, commit, push, 승인 또는 병합을 수행하지 않는다.
+- 발견 사항은 심각도와 차단 여부를 구분하고 결론부터 간결하게 보고한다.
+
 상세 규칙은 [AI 개발 워크플로](docs/ai-development/workflow.md), [개발 컨벤션](docs/README.md#개발-컨벤션), [API 계약](docs/api/README.md)을 따른다.
