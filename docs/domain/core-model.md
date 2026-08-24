@@ -5,7 +5,6 @@
 > Last reviewed: 2026-08-24
 > Canonical source: GitHub
 > Origin: [Notion 도메인 모델 정의](https://app.notion.com/p/3c0eeed6b62d81b48c03ed6034440936)
-> AI assistance: 이 문서의 초안은 LLM의 도움으로 작성되었으며 사람의 검토가 필요합니다.
 
 ## 핵심 객체
 

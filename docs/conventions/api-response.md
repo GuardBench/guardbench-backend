@@ -5,7 +5,6 @@
 > Last reviewed: 2026-08-23
 > Canonical source: GitHub
 > Origin: [Notion API 공통 응답 DTO](https://app.notion.com/p/3c1eeed6b62d81e7abe2eea3d730c611)
-> AI assistance: 이 문서의 초안은 LLM의 도움으로 작성되었으며 사람의 검토가 필요합니다.
 
 응답 Body가 존재하는 성공과 실패는 `ApiResponse<T>`를 사용한다. 최상위 필드는 `httpStatus`, `message`, `data`다. 204 No Content에는 Body가 없다.
 
