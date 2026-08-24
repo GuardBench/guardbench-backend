@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Team
-> Last reviewed: 2026-08-23
+> Last reviewed: 2026-08-25
 > Canonical source: GitHub
 > Origin: 없음
 
