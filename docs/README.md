@@ -14,6 +14,7 @@
 | 작업 | 먼저 읽을 문서 | 필요할 때 추가로 읽을 문서 |
 | --- | --- | --- |
 | 모든 작업 | `AGENTS.md`, 현재 Issue | [작업 워크플로](ai-development/workflow.md) |
+| 코드 리뷰 | 현재 Issue, PR diff, 관련 APPROVED 계약 | [에이전트 코드 리뷰](ai-development/review.md) |
 | API 구현 | [API 안내](api/README.md), [OpenAPI](api/openapi.yaml) | 오류·응답·DTO 컨벤션 |
 | 도메인 구현 | [핵심 모델](domain/core-model.md), [평가 계약](domain/evaluation-contract.md) | ADR 0001, 패키지 구조 |
 | 영속성·인프라 | 관련 승인 Issue와 ADR | 시스템 개요, DRAFT 인프라는 참고만 사용 |
@@ -38,6 +39,7 @@
 | 결정 | [ADR 안내](decisions/README.md) | APPROVED | Team | 2026-08-23 | 없음 |
 | 결정 | [ADR 0001: 도메인 타입 소유권과 Aggregate 경계](decisions/0001-domain-type-ownership-and-aggregate-boundaries.md) | APPROVED | Backend | 2026-08-24 | 없음 |
 | AI 개발 | [작업 워크플로](ai-development/workflow.md) | APPROVED | Team | 2026-08-24 | 현재 대화에서 승격 |
+| AI 개발 | [코드 리뷰](ai-development/review.md) | DRAFT | Team | 2026-08-24 | PR #20·#23 사례와 Issue #33 |
 
 ## 개발 컨벤션
 
