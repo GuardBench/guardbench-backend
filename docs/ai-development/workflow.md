@@ -5,7 +5,6 @@
 > Last reviewed: 2026-08-24
 > Canonical source: GitHub
 > Origin: 현재 팀의 Codex 운영 논의
-> AI assistance: 이 문서의 초안은 LLM의 도움으로 작성되었으며 팀의 검토와 승인을 거쳤습니다.
 
 이 문서는 GitHub Issue를 Codex 작업으로 안전하게 전달하는 절차다. 저장소의 상시 규칙은 `AGENTS.md`, 기능별 요구사항은 Issue, 구현 계약은 `docs/`에 둔다.
 

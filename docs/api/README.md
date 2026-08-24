@@ -5,7 +5,6 @@
 > Last reviewed: 2026-08-24
 > Canonical source: GitHub
 > Origin: [Notion API 명세서](https://app.notion.com/p/3c0eeed6b62d805dac0be8db487b1359)
-> AI assistance: 이 문서의 초안은 LLM의 도움으로 작성되었으며 사람의 검토가 필요합니다.
 
 API의 단일 명세는 [openapi.yaml](openapi.yaml)이다. Endpoint, 필드, Enum, Validation, 응답 예시는 OpenAPI에서 확인한다. 이 문서는 OpenAPI를 읽고 구현할 때 필요한 공통 해석만 설명한다. Notion과 충돌하면 OpenAPI를 우선하고 차이를 보고한다.
 

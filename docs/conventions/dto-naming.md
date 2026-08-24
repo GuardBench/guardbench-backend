@@ -5,7 +5,6 @@
 > Last reviewed: 2026-08-23
 > Canonical source: GitHub
 > Origin: [Notion DTO 네이밍](https://app.notion.com/p/3c0eeed6b62d8153b1f4fdffc39e328e)
-> AI assistance: 이 문서의 초안은 LLM의 도움으로 작성되었으며 사람의 검토가 필요합니다.
 
 기본 형식은 `{Domain}{UseCase}{Req|Res}`다.
 
