@@ -30,16 +30,16 @@ GuardBench를 도메인별로 병렬 구현할 때 타입 소유자와 Aggregate
 
 ## Decision
 
-아래 내용은 **팀 승인을 요청하는 권고안**이다. 현재 ADR Status가 `PROPOSED`이므로 아직 승인된 구현 계약이 아니다.
+이 ADR의 결정 내용은 선택지 1이다. 문서 상단의 Status와 ADR Status가 각각 `APPROVED`, `ACCEPTED`로 변경되기 전에는 승인된 구현 계약이 아니다.
 
 ### 타입 소유권과 Aggregate 경계
 
-| 항목 | 권고안 | 경계와 이유 |
+| 항목 | 선택지 1의 결정 내용 | 경계와 이유 |
 | --- | --- | --- |
 | `ExpectedResult` | `testdefinition/domain`이 소유하는 불변 Value Object | 사용자가 작성하는 현재 TestCase 정의의 일부다. Snapshot은 그 값을 복제해 보존하되 별도 `ExpectedResult` 타입을 만들지 않는다. |
 | `ActualResult` | `testrun/domain`이 소유하는 불변 Value Object | 정규화된 실행 산출물이며 `SUCCEEDED`인 `TestExecution`에만 존재한다. Guardrail Adapter는 AWS 응답을 이 타입으로 변환하고 Evaluation은 읽기 전용 입력으로 사용한다. |
 | `TestSuite`와 `TestCase` | `testdefinition` 안의 별도 Aggregate Root | `TestCase`는 불변 `testSuiteId`로 소속을 가리키며 `TestSuite`는 가변 TestCase 컬렉션을 Aggregate 내부에 보유하지 않는다. 독립 조회·수정·논리 삭제와 페이지 조회를 지원하고 큰 Aggregate의 동시 수정 충돌을 피한다. |
-| `TestRun`과 `TestCaseSnapshot` | `testrun` 안의 별도 Aggregate Root | Snapshot은 `testRunId`와 원본 `testCaseId`를 식별 정보로 보유하고 생성 후 실행 정의를 바꾸지 않는다. TestRun은 Snapshot 객체 컬렉션을 Aggregate 내부에 보유하지 않고 접수 시 고정한 `testCaseCount`를 관리한다. |
+| `TestRun`과 `TestCaseSnapshot` | `testrun` 안의 별도 Aggregate Root | TestRun은 대상 `TestSuiteId`를 보유한다. Snapshot은 `TestRunId`와 원본 `TestCaseId`를 식별 정보로 보유하고 생성 후 실행 정의를 바꾸지 않는다. TestRun은 Snapshot 객체 컬렉션을 Aggregate 내부에 보유하지 않고 접수 시 고정한 `testCaseCount`를 관리한다. |
 | Evaluation 결과 | `evaluation/domain`이 `AssertionResult`, `ChangeResult`, `QualityGateResult`를 소유 | 실행 상태와 정책 판정을 분리한다. Evaluation은 Snapshot의 ExpectedResult와 TestExecution의 ActualResult를 입력으로 사용하지만 두 입력 타입을 다시 정의하지 않는다. |
 
 별도 Aggregate라는 선택은 원자적 저장을 금지하지 않는다. 승인된 API 계약에 따라 TestSuite와 초기 TestCase, TestRun과 Snapshot·OutboxEvent의 생성은 Application Service가 하나의 트랜잭션으로 조정한다. Aggregate 사이에는 객체 참조 대신 식별자를 사용하고, 생성 이후 한 Aggregate의 수정이 다른 Aggregate를 암묵적으로 변경하지 않게 한다.
@@ -52,20 +52,80 @@ TestCaseSnapshot은 `name`, `input`, `ExpectedResult`, `severity`, `category`를
 
 | 소유 패키지 | 명시적으로 결정한 Aggregate Root | 그 밖의 소유 Domain 타입 | 경계와 미결정 사항 |
 | --- | --- | --- | --- |
-| `testdefinition` | `TestSuite`, `TestCase` | `ExpectedResult` | TestCase의 현재 `name`, `input`, `severity`, `category` 정의를 함께 소유한다. TestSuite와 TestCase는 별도 Aggregate이며 각 식별자도 `testdefinition`이 소유한다. |
-| `testrun` | `TestRun`, `TestCaseSnapshot` | `TestExecution`, `ActualResult`, `TestRunExecutionOutcome` | 실행 수명주기와 실행 상태를 소유한다. `TestExecution`의 세부 Aggregate·저장 경계는 이 ADR에서 확정하지 않는다. |
+| `testdefinition` | `TestSuite`, `TestCase` | `TestSuiteId`, `TestCaseId`, `ExpectedResult`, `Severity` | TestCase의 현재 `name`, `input`, `severity`, `category` 정의를 함께 소유한다. TestSuite와 TestCase는 별도 Aggregate이며 각 식별자도 `testdefinition`이 소유한다. `category`는 승인된 API 계약과 같이 문자열 값으로 둔다. |
+| `testrun` | `TestRun`, `TestCaseSnapshot` | `TestRunId`, `TestCaseSnapshotId`, `TestExecution`, `ActualResult`, `TestRunExecutionOutcome` | 실행 수명주기와 실행 상태를 소유한다. `TestExecution`의 세부 Aggregate·저장 경계는 이 ADR에서 확정하지 않는다. |
 | `evaluation` | 이 ADR에서 확정하지 않음 | `AssertionResult`, `ChangeResult`, `QualityGateResult`, `AssertionStatus`, `ComparabilityStatus`, `ChangeType`, `QualityGateStatus` | 평가 결과의 세부 Aggregate·저장 경계는 실제 저장 구현 전에 별도 확인한다. |
 | `guardrail` | 없음 | MVP에서 소유하는 Core Domain 타입 없음 | Bedrock Guardrails 대상 준비·실행 Adapter와 AWS 응답 Normalizer를 제공한다. |
 | `common` | 없음 | MVP에서 소유하는 Domain 타입 없음 | 패키지는 비어 있어도 된다. 검증된 횡단 관심사가 생기기 전에는 타입을 선제 도입하지 않는다. |
 
 객체의 소유 패키지가 정해졌다는 사실만으로 그 객체를 Aggregate Root나 독립 저장 대상으로 간주하지 않는다. 각 Aggregate 식별자는 해당 Aggregate의 소유 패키지에 두며 공통 식별자 계층을 만들지 않는다.
 
+### 규범적 Java 패키지와 파일 위치
+
+이 ADR이 승인되면 아래 경로가 구현 기준이다. 기준 Java 패키지는 `com.guardbench`이며, `[AR]`은 Aggregate Root, `[VO]`는 Value Object, `[Port]`는 Domain Repository Port를 뜻한다. 식별자 타입의 구현 형태를 `class`와 `record` 중 무엇으로 할지는 개발 컨벤션에 따르되 이름과 소유 위치는 아래와 같이 고정한다.
+
+```text
+src/main/java/com/guardbench/
+├── testdefinition/
+│   ├── domain/
+│   │   ├── TestSuite.java                         [AR]
+│   │   ├── TestSuiteId.java                       [VO: TestSuite 식별자]
+│   │   ├── TestCase.java                          [AR]
+│   │   ├── TestCaseId.java                        [VO: TestCase 식별자]
+│   │   ├── ExpectedResult.java                    [VO]
+│   │   ├── Severity.java                          [VO 또는 enum]
+│   │   └── repository/
+│   │       ├── TestSuiteRepository.java           [Port]
+│   │       └── TestCaseRepository.java            [Port]
+│   ├── application/                               [두 AR을 조정하는 유스케이스]
+│   ├── presentation/                              [HTTP DTO와 Controller]
+│   └── infrastructure/persistence/                [Repository Port 구현]
+├── testrun/
+│   ├── domain/
+│   │   ├── TestRun.java                           [AR]
+│   │   ├── TestRunId.java                         [VO: TestRun 식별자]
+│   │   ├── TestCaseSnapshot.java                  [AR]
+│   │   ├── TestCaseSnapshotId.java                [VO: Snapshot 식별자]
+│   │   ├── TestExecution.java                     [Domain 타입: AR 여부 미결정]
+│   │   ├── ActualResult.java                      [VO]
+│   │   ├── TestRunExecutionOutcome.java           [VO 또는 enum]
+│   │   └── repository/
+│   │       ├── TestRunRepository.java             [Port]
+│   │       └── TestCaseSnapshotRepository.java    [Port]
+│   ├── application/                               [두 AR과 실행 흐름을 조정하는 유스케이스]
+│   ├── presentation/                              [HTTP DTO와 Controller]
+│   └── infrastructure/persistence/                [Repository Port 구현]
+├── evaluation/
+│   ├── domain/
+│   │   ├── AssertionResult.java                   [Domain 타입: AR 여부 미결정]
+│   │   ├── ChangeResult.java                      [Domain 타입: AR 여부 미결정]
+│   │   ├── QualityGateResult.java                 [Domain 타입: AR 여부 미결정]
+│   │   ├── AssertionStatus.java
+│   │   ├── ComparabilityStatus.java
+│   │   ├── ChangeType.java
+│   │   └── QualityGateStatus.java
+│   └── application/                               [평가와 TestRun 반영을 조정]
+├── guardrail/
+│   └── infrastructure/                            [testrun Port의 Bedrock 구현]
+└── common/                                        [MVP Domain 타입 없음]
+```
+
+위 지도는 다음 구현 규칙을 포함한다.
+
+- `TestSuite`와 `TestCase`는 같은 패키지에 있지만 서로 다른 AR이다. `TestCase`는 `TestSuite` 객체가 아니라 `TestSuiteId`만 보유하며 두 Repository Port도 분리한다.
+- `TestRun`과 `TestCaseSnapshot`도 서로 다른 AR이다. `TestRun`은 `TestSuite` 객체 대신 `TestSuiteId`를 보유한다. Snapshot은 `TestRun` 객체 대신 `TestRunId`, 원본 `TestCase` 객체 대신 `TestCaseId`를 보유하며 `testdefinition.domain.ExpectedResult`와 `Severity`를 값으로 사용한다.
+- 여러 AR을 한 트랜잭션으로 생성하거나 함께 조회해야 하면 소유 도메인의 `application` 유스케이스가 Repository Port를 조정한다. 한 AR이 다른 AR의 Repository를 직접 호출하지 않는다.
+- `TestExecution`에는 이 ADR만을 근거로 식별자 타입이나 Repository를 추가하지 않는다. 후속 결정에서 AR 또는 다른 AR 내부 Entity인지 확정한 뒤 위치를 보완한다.
+- Evaluation 타입에는 이 ADR만을 근거로 Repository를 추가하지 않는다. 세부 Aggregate와 저장 경계를 정한 뒤 `evaluation/domain/repository` 사용 여부를 결정한다.
+- `guardrail`에는 AR이 없다. `common/domain` 패키지도 만들지 않으며 식별자나 Repository Port를 `common`으로 이동하지 않는다.
+- 위 트리의 디렉터리를 미리 빈 상태로 만들 필요는 없다. 해당 구현 작업에서 필요한 파일만 생성한다.
+
 ### 패키지 의존 방향
 
 아래에서 `A -> B`는 A가 B의 공개 Domain 타입에 의존할 수 있음을 뜻한다.
 
 ```text
-testrun    -> testdefinition   (Snapshot이 ExpectedResult를 사용)
+testrun    -> testdefinition   (TestSuiteId, TestCaseId, ExpectedResult, Severity를 사용)
 evaluation -> testdefinition   (ExpectedResult를 평가 입력으로 사용)
 evaluation -> testrun          (Snapshot, TestExecution, ActualResult를 평가 입력으로 사용)
 guardrail  -> testrun          (실행 Port 구현과 ActualResult 정규화)
@@ -78,7 +138,7 @@ MVP에서 `common`이 소유하는 Domain 타입은 없다. `common`은 비어 �
 ### Repository Port 위치
 
 - Aggregate 저장 계약은 소유 도메인의 `domain/repository`에 둔다.
-- 권고안에 따른 저장 계약은 `testdefinition/domain/repository`의 `TestSuiteRepository`, `TestCaseRepository`와 `testrun/domain/repository`의 `TestRunRepository`, `TestCaseSnapshotRepository`다.
+- 선택지 1에 따른 저장 계약은 `testdefinition/domain/repository`의 `TestSuiteRepository`, `TestCaseRepository`와 `testrun/domain/repository`의 `TestRunRepository`, `TestCaseSnapshotRepository`다.
 - Evaluation 결과에 독립 저장 수명주기가 필요하면 해당 Aggregate 경계를 후속 구현 Issue에서 확인한 뒤 `evaluation/domain/repository`에 둔다. 이 ADR만으로 결과별 Repository를 선제 생성하지 않는다.
 - Repository 구현은 각 소유 도메인의 `infrastructure/persistence`에 둔다.
 - 페이지 조회나 화면용 Projection처럼 Aggregate 저장 계약이 아닌 읽기 Port는 소유 도메인의 Application 경계에 둘 수 있으며 Repository로 위장하지 않는다.
@@ -104,15 +164,17 @@ MVP에서 `common`이 소유하는 Domain 타입은 없다. `common`은 비어 �
 | 2. 공유 타입을 `domain/common`에 집중 | 겉보기에는 높음 | 낮음 | common을 통한 간접 결합이 커짐 | 초기에는 높으나 변경 충돌이 집중됨 | 낮음 |
 | 3. 구현 시점까지 경계 미확정 | 낮음 | 낮음 | 높음 | 낮음 | 낮음 |
 
-권고안은 선택지 1이다. 타입의 변경 이유가 있는 도메인에 소유권을 주고 필요한 방향으로만 의존하면 중복 없이 응집도를 유지할 수 있다. 선택지 2는 `common/domain`을 금지하는 승인된 패키지 계약과 충돌하고, 선택지 3은 Issue가 해결하려는 병렬 구현 충돌을 그대로 남긴다.
+이 ADR은 선택지 1을 결정 내용으로 삼는다. 타입의 변경 이유가 있는 도메인에 소유권을 주고 필요한 방향으로만 의존하면 중복 없이 응집도를 유지할 수 있다. 선택지 2는 `common/domain`을 금지하는 승인된 패키지 계약과 충돌하고, 선택지 3은 Issue가 해결하려는 병렬 구현 충돌을 그대로 남긴다.
 
-### Aggregate 세부 대안
+### 선택지 1의 Aggregate 세부 구조
 
-`TestSuite`가 모든 TestCase를 자식 Entity로 소유하는 대안은 한 객체에서 소속을 표현하기 쉽다. 그러나 TestCase가 독립 URL과 식별자로 수정·삭제되고 목록 전체를 Aggregate와 함께 읽지 않는 승인된 API 계약에 맞지 않으며, TestCase가 늘어날수록 불필요한 로딩과 동시 수정 충돌이 커진다.
+이 표는 선택지 1이 각 관계에서 어떤 코드를 요구하는지 설명한다. "별도 AR"은 별도 최상위 도메인 클래스와 Repository Port를 둔다는 뜻이며, 반드시 별도 DB 트랜잭션을 사용하라는 뜻은 아니다.
 
-`TestRun`이 모든 Snapshot을 자식 Entity 컬렉션으로 소유하는 대안은 접수 시점의 일관성을 한 Aggregate로 표현하기 쉽다. 그러나 Snapshot별 비동기 실행과 페이지 단위 결과 조회에서 TestRun 전체가 경합 지점이 된다. Snapshot은 생성 후 불변이고 원본 TestCase와 수명주기가 분리되므로 `testrun` 안의 별도 Aggregate가 더 작은 일관성 경계를 제공한다.
-
-Evaluation이 `ActualResult`를 소유하는 대안은 evaluator 입력을 한 패키지에 모을 수 있다. 하지만 ActualResult가 없는 실행 실패와 평가 실패를 혼동시키고, 실행 결과를 평가 구현에 종속시킨다. `ActualResult`는 TestExecution과 함께 `testrun`이 소유하고 Evaluation은 소비하는 편이 실행과 판정의 승인된 분리를 유지한다.
+| 관계 | 선택지 1의 구조 | 구현자가 작성할 코드 | 채택하지 않는 구조와 이유 |
+| --- | --- | --- | --- |
+| `TestSuite` - `TestCase` | `testdefinition` 안의 별도 AR | `TestCase`에는 `TestSuiteId`를 저장한다. `TestSuiteRepository`와 `TestCaseRepository`를 분리하고, 함께 생성할 때 `testdefinition/application`이 두 Port를 한 트랜잭션에서 호출한다. | `TestSuite` 내부에 `List<TestCase>`를 두는 구조는 독립 수정·삭제·페이지 조회와 맞지 않고 큰 Aggregate를 만든다. |
+| `TestRun` - `TestCaseSnapshot` | `testrun` 안의 별도 AR | TestRun에는 대상 `TestSuiteId`, Snapshot에는 `TestRunId`와 원본 `TestCaseId`를 저장한다. 두 Repository Port를 분리하고, 접수 시 `testrun/application`이 TestRun·Snapshot·Outbox 저장을 한 트랜잭션으로 조정한다. | `TestRun` 내부에 `List<TestCaseSnapshot>`을 두는 구조는 Snapshot별 비동기 실행과 페이지 조회에서 TestRun 전체를 경합 지점으로 만든다. |
+| `ActualResult` - Evaluation | `ActualResult`는 `testrun`의 VO이고 Evaluation은 읽기 입력으로만 사용 | Guardrail Adapter가 `ActualResult`를 만들고 `evaluation/application`이 `ExpectedResult`와 함께 평가 Domain 타입에 전달한다. | Evaluation이 별도 `ActualResult` 타입을 만들면 실행 실패와 평가 실패의 경계가 흐려지고 동일 개념이 중복된다. |
 
 ## Consequences
 
@@ -142,7 +204,7 @@ Evaluation이 `ActualResult`를 소유하는 대안은 evaluator 입력을 한 �
 4. `ExpectedResult`, `ActualResult`, 각 Repository Port의 소유 위치가 하나인지 검토한다.
 5. 문서 diff 외에 코드, API, DB, 의존성 변경이 없는지 확인한다.
 
-팀이 권고안을 승인할 때만 다음 변경을 수행한다.
+팀이 이 ADR을 승인할 때만 다음 변경을 수행한다.
 
 - 문서 `Status`를 `APPROVED`, ADR Status를 `ACCEPTED`로 변경한다.
 - 실제 승인 날짜를 `Decision date`와 `Last reviewed`에 기록한다.
