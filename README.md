@@ -14,6 +14,16 @@ Amazon Bedrock Guardrails의 Baseline과 Candidate를 같은 테스트 자산으
 
 JDK 21이 필요합니다. Gradle은 별도로 설치하지 않고 저장소의 Gradle Wrapper를 사용합니다.
 
+로컬 PostgreSQL 준비:
+
+```bash
+cp .env.example .env
+```
+
+`./gradlew bootRun` 실행 시 Spring Boot Docker Compose 지원이 `compose.yaml`의 PostgreSQL을 시작하고, Flyway가 승인된 스키마를 적용합니다. `.env`는 로컬 자격 증명 파일이므로 커밋하지 않습니다.
+
+통합 테스트는 로컬 Compose DB를 사용하지 않고 Testcontainers PostgreSQL을 별도로 시작합니다. 테스트 실행 전 Docker daemon이 실행 중이어야 합니다.
+
 애플리케이션 실행:
 
 ```bash
