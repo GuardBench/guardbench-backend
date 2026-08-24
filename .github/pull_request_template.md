@@ -54,7 +54,7 @@ Closes #
 
 ## 작성자 확인
 
-- [ ] Issue 전용 worktree와 codex/{issue-number}-{slug} 브랜치에서 작업했습니다. 예외가 있다면 위에 설명했습니다.
+- [ ] Issue 전용 worktree와 agent/{issue-number}-{slug} 브랜치에서 작업했습니다. 예외가 있다면 위에 설명했습니다.
 - [ ] Issue의 범위와 Non-Goals를 다시 확인했습니다.
 - [ ] APPROVED 계약을 지켰고 DRAFT·미결정이나 계약 변경은 승인 근거를 연결했습니다.
 - [ ] 전체 diff·commit·검증 결과를 확인했고 실패나 미검증을 기록했습니다.

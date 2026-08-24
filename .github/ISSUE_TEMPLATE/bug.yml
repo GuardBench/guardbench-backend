@@ -110,7 +110,7 @@ body:
     id: branch_slug
     attributes:
       label: 브랜치 slug
-      description: Issue 생성 후 codex/{issue-number}-{slug} 브랜치와 전용 worktree에 사용합니다.
+      description: Issue 생성 후 agent/{issue-number}-{slug} 브랜치와 전용 worktree에 사용합니다.
       placeholder: fix-test-run-status
     validations:
       required: true

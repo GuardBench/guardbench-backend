@@ -19,7 +19,7 @@
 
 ## Git과 검증
 
-- Issue 하나당 별도 worktree와 `codex/{issue-number}-{slug}` 브랜치를 사용한다.
+- Issue 하나당 별도 worktree와 `agent/{issue-number}-{slug}` 브랜치를 사용한다.
 - Issue에 명시된 에이전트 권한을 확인한다. 커밋이 허용된 경우에만 관련 테스트를 실행한 뒤 논리적 단위로 로컬 커밋한다.
 - push, PR 생성, 병합, force push는 사람의 명시적 승인 없이 수행하지 않는다.
 - 검증하지 않은 결과를 완료했다고 표현하지 않는다.
