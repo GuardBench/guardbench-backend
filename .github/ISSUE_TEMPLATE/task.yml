@@ -81,7 +81,7 @@ body:
     id: branch_slug
     attributes:
       label: 브랜치 slug
-      description: Issue 생성 후 codex/{issue-number}-{slug} 브랜치와 전용 worktree에 사용합니다.
+      description: Issue 생성 후 agent/{issue-number}-{slug} 브랜치와 전용 worktree에 사용합니다.
       placeholder: add-issue-templates
     validations:
       required: true
@@ -103,5 +103,5 @@ body:
     attributes:
       label: 작업 준비 확인
       options:
-        - label: 숨은 계약 변경이 없으며 Issue 전용 worktree와 codex/{issue-number}-{slug} 브랜치를 사용합니다.
+        - label: 숨은 계약 변경이 없으며 Issue 전용 worktree와 agent/{issue-number}-{slug} 브랜치를 사용합니다.
           required: true

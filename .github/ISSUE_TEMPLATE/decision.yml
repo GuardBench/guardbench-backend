@@ -69,7 +69,7 @@ body:
     id: branch_slug
     attributes:
       label: ADR 브랜치 slug
-      description: 승인 후 codex/{issue-number}-{slug} 브랜치와 전용 worktree에 사용합니다.
+      description: 승인 후 agent/{issue-number}-{slug} 브랜치와 전용 worktree에 사용합니다.
       placeholder: choose-persistence-strategy
     validations:
       required: true
