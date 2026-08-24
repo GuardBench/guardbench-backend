@@ -5,7 +5,6 @@
 > Last reviewed: 2026-08-23
 > Canonical source: GitHub
 > Origin: [Notion 코드 컨벤션](https://app.notion.com/p/3c0eeed6b62d816a8028cc3261c3edf3)
-> AI assistance: 이 문서의 초안은 LLM의 도움으로 작성되었으며 사람의 검토가 필요합니다.
 
 - 백엔드는 Java·Spring Boot만 사용한다. 예: AWS SDK 호출은 Java Infrastructure Adapter에 둔다.
 - Domain은 Spring MVC, AWS SDK, JPA, HTTP DTO를 import하지 않는다. 예: Bedrock response를 Domain method 인자로 전달하지 않는다.

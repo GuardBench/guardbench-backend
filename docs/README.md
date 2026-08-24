@@ -5,7 +5,6 @@
 > Last reviewed: 2026-08-24
 > Canonical source: GitHub
 > Origin: [Notion Dashboard](https://app.notion.com/p/3c0eeed6b62d80fbb64eec69796cc56d)
-> AI assistance: 이 문서의 초안은 LLM의 도움으로 작성되었으며 사람의 검토가 필요합니다.
 
 이 문서는 구현 계약의 진입점이다. 필요한 문서만 아래 순서로 읽는다. 문서의 `Status`가 판단 효력을 결정한다.
 

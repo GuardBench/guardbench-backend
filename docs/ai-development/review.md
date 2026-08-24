@@ -5,7 +5,6 @@
 > Last reviewed: 2026-08-24
 > Canonical source: GitHub
 > Origin: PR #20·#23 리뷰 사례와 Issue #33
-> AI assistance: 이 문서의 초안은 LLM의 도움으로 작성되었으며 사람의 검토가 필요합니다.
 
 리뷰의 목적은 중요한 결함을 빠르게 찾고 사람이 승인 여부를 판단하게 돕는 것이다. 리뷰 요청만 받았다면 파일 수정, commit, push, 승인과 병합을 하지 않는다.
 

@@ -6,7 +6,6 @@
 > Canonical source: GitHub
 > Origin: [GitHub Issue #3](https://github.com/GuardBench/guardbench-backend/issues/3)
 > Approval: [PR #20 정식 승인 리뷰](https://github.com/GuardBench/guardbench-backend/pull/20#pullrequestreview-5005535163)
-> AI assistance: 이 문서는 LLM의 도움으로 작성되었으며 PR #20에서 팀 검토와 정식 Approve를 완료했습니다.
 
 - ADR Status: ACCEPTED
 - Decision date: 2026-08-24
