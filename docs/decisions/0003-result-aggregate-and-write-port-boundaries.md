@@ -1,13 +1,12 @@
 # 0003. 실행·평가 결과 Aggregate와 write-side Port 경계
 
-> Status: DRAFT
+> Status: APPROVED
 > Owner: Backend
 > Last reviewed: 2026-08-24
 > Canonical source: GitHub
 > Origin: [GitHub Issue #27](https://github.com/GuardBench/guardbench-backend/issues/27)
-> AI assistance: 이 문서는 LLM의 도움으로 작성되었으며 팀의 검토와 승인이 필요합니다.
 
-- ADR Status: PROPOSED
+- ADR Status: ACCEPTED
 - Decision date: 2026-08-24
 - Related Issue: #27
 
