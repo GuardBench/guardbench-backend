@@ -9,6 +9,7 @@
 - ADR Status: ACCEPTED
 - Decision date: 2026-08-25
 - Related Issue: #5
+- Superseded in part by: [ADR 0006](0006-independent-domain-contract-boundaries.md) — `evaluation -> testrun` Java Domain 의존 해석
 
 ## Context
 

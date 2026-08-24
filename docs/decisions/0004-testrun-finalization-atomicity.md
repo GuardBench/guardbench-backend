@@ -2,13 +2,14 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Last reviewed: 2026-08-24
+> Last reviewed: 2026-08-25
 > Canonical source: GitHub
 > Origin: [GitHub Issue #28](https://github.com/GuardBench/guardbench-backend/issues/28)
 
 - ADR Status: ACCEPTED
 - Decision date: 2026-08-24
 - Related Issue: #28
+- Superseded in part by: [ADR 0006](0006-independent-domain-contract-boundaries.md) — Evaluation Application의 TestRun Domain·Repository 직접 호출 구조
 
 ## Context
 
