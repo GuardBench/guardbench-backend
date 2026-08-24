@@ -1,13 +1,12 @@
 # 0005. 비동기 TestRun 실행 계약
 
-> Status: DRAFT
+> Status: APPROVED
 > Owner: Backend
 > Last reviewed: 2026-08-25
 > Canonical source: GitHub
 > Origin: [GitHub Issue #5](https://github.com/GuardBench/guardbench-backend/issues/5)
-> AI assistance: 이 문서의 초안은 LLM의 도움으로 작성되었으며 사람의 검토가 필요합니다.
 
-- ADR Status: PROPOSED
+- ADR Status: ACCEPTED
 - Decision date: 2026-08-25
 - Related Issue: #5
 

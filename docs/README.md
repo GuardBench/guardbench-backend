@@ -40,7 +40,7 @@
 | 결정 | [ADR 0002: PostgreSQL 영속성 계약과 물리 ERD](decisions/0002-postgresql-persistence-contract.md) | APPROVED | Backend | 2026-08-24 | 없음 |
 | 결정 | [ADR 0003: 실행·평가 결과 Aggregate와 write-side Port 경계](decisions/0003-result-aggregate-and-write-port-boundaries.md) | APPROVED | Backend | 2026-08-24 | 없음 |
 | 결정 | [ADR 0004: TestRun 최종 평가와 종료의 원자성](decisions/0004-testrun-finalization-atomicity.md) | APPROVED | Backend | 2026-08-24 | 없음 |
-| 결정 | [ADR 0005: 비동기 TestRun 실행 계약](decisions/0005-async-test-run-execution-contract.md) | DRAFT | Backend | 2026-08-25 | 없음 |
+| 결정 | [ADR 0005: 비동기 TestRun 실행 계약](decisions/0005-async-test-run-execution-contract.md) | APPROVED | Backend | 2026-08-25 | 없음 |
 | AI 개발 | [작업 워크플로](ai-development/workflow.md) | APPROVED | Team | 2026-08-24 | 현재 대화에서 승격 |
 | AI 개발 | [코드 리뷰](ai-development/review.md) | APPROVED | Team | 2026-08-24 | PR #20·#23 사례와 Issue #33 |
 
