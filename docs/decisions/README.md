@@ -15,12 +15,10 @@
 | 작업 | 필수 | 조건부 추가 |
 | --- | --- | --- |
 | 도메인 타입 소유권, 기본 Aggregate, 패키지 의존 방향 | [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md) | 실행·평가 결과 경계도 바꾸면 [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), 최종화 경계도 바꾸면 [ADR 0004](0004-testrun-finalization-atomicity.md) |
-| PostgreSQL, JPA, Flyway, 물리 스키마 | [ADR 0002](0002-postgresql-persistence-contract.md) | 결과 테이블과 Repository 매핑은 [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), 최종화 제약은 [ADR 0004](0004-testrun-finalization-atomicity.md), Outbox·idempotency는 [Issue #5](https://github.com/GuardBench/guardbench-backend/issues/5) |
-| TestExecution·SnapshotEvaluation·QualityGateResult Aggregate와 write-side Repository | [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md), [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md) | 물리 매핑은 [ADR 0002](0002-postgresql-persistence-contract.md), TestRun 최종화는 [ADR 0004](0004-testrun-finalization-atomicity.md), Worker 중복 처리는 [Issue #5](https://github.com/GuardBench/guardbench-backend/issues/5) |
-| TestRun `FINISHED` 전환과 Quality Gate 원자 저장 | [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), [ADR 0004](0004-testrun-finalization-atomicity.md) | PostgreSQL 제약은 [ADR 0002](0002-postgresql-persistence-contract.md), Worker 선점·잠금/CAS·retry는 [Issue #5](https://github.com/GuardBench/guardbench-backend/issues/5) |
-| Worker 선점, 동시 실행, 잠금/CAS, retry·timeout | [Issue #5](https://github.com/GuardBench/guardbench-backend/issues/5) | 결과 저장 경계는 ADR 0003, 최종화 불변식은 ADR 0004, 물리 저장은 ADR 0002 |
-
-Issue #5는 열린 Decision Issue이며 승인된 구현 계약이 아니다. 그 결정에 따라 공개 동작이나 저장 방식이 달라지는 작업은 확정하지 않는다.
+| PostgreSQL, JPA, Flyway, 물리 스키마 | [ADR 0002](0002-postgresql-persistence-contract.md) | 결과 테이블과 Repository 매핑은 [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), 최종화 제약은 [ADR 0004](0004-testrun-finalization-atomicity.md), Outbox·idempotency는 [ADR 0005](0005-async-test-run-execution-contract.md) |
+| TestExecution·SnapshotEvaluation·QualityGateResult Aggregate와 write-side Repository | [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md), [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md) | 물리 매핑은 [ADR 0002](0002-postgresql-persistence-contract.md), TestRun 최종화는 [ADR 0004](0004-testrun-finalization-atomicity.md), Worker 중복 처리는 [ADR 0005](0005-async-test-run-execution-contract.md) |
+| TestRun `FINISHED` 전환과 Quality Gate 원자 저장 | [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), [ADR 0004](0004-testrun-finalization-atomicity.md) | PostgreSQL 제약은 [ADR 0002](0002-postgresql-persistence-contract.md), Worker 선점·잠금/CAS·retry는 [ADR 0005](0005-async-test-run-execution-contract.md) |
+| Worker 선점, 동시 실행, 잠금/CAS, retry·timeout | [ADR 0005](0005-async-test-run-execution-contract.md) | 결과 저장 경계는 [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), 최종화 불변식은 [ADR 0004](0004-testrun-finalization-atomicity.md), 물리 저장은 [ADR 0002](0002-postgresql-persistence-contract.md) |
 
 ## 결정 관계
 
@@ -30,10 +28,10 @@ ADR 0001  기본 타입 소유권·Aggregate·의존 방향
 │  └─ ADR 0004  0003의 TestRun 최종화 트랜잭션을 구체화
 └─ ADR 0002  현재 Domain 경계를 PostgreSQL 물리 구조에 매핑
 
-Issue #5  Worker 선점·동시 실행·잠금/CAS·retry 결정 (미승인)
+ADR 0005  ADR 0002·0003·0004를 전제로 비동기 실행·Worker 계약을 결정
 ```
 
-ADR 0003은 ADR 0001을 대체하지 않는다. ADR 0004도 0003의 Aggregate와 Repository 소유권을 유지한다. ADR 0002를 읽는 것만으로 Domain 경계나 Worker 계약이 새로 결정되지는 않는다.
+ADR 0003은 ADR 0001을 대체하지 않는다. ADR 0004도 0003의 Aggregate와 Repository 소유권을 유지한다. ADR 0002는 Domain 경계를 물리 구조로 매핑하고, ADR 0005는 그 경계를 바꾸지 않은 채 비동기 실행·Worker 계약을 추가한다.
 
 ## 상태와 작성
 
