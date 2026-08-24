@@ -7,7 +7,17 @@
 > Origin: [Notion Dashboard](https://app.notion.com/p/3c0eeed6b62d80fbb64eec69796cc56d)
 > AI assistance: 이 문서의 초안은 LLM의 도움으로 작성되었으며 사람의 검토가 필요합니다.
 
-이 문서는 구현 계약의 진입점이다. 문서의 `Status`가 개별 판단의 효력을 결정한다.
+이 문서는 구현 계약의 진입점이다. 필요한 문서만 아래 순서로 읽는다. 문서의 `Status`가 판단 효력을 결정한다.
+
+## 작업별 읽기 순서
+
+| 작업 | 먼저 읽을 문서 | 필요할 때 추가로 읽을 문서 |
+| --- | --- | --- |
+| 모든 작업 | `AGENTS.md`, 현재 Issue | [작업 워크플로](ai-development/workflow.md) |
+| API 구현 | [API 안내](api/README.md), [OpenAPI](api/openapi.yaml) | 오류·응답·DTO 컨벤션 |
+| 도메인 구현 | [핵심 모델](domain/core-model.md), [평가 계약](domain/evaluation-contract.md) | ADR 0001, 패키지 구조 |
+| 영속성·인프라 | 관련 승인 Issue와 ADR | 시스템 개요, DRAFT 인프라는 참고만 사용 |
+| 문서·결정 | 관련 계약과 [ADR 안내](decisions/README.md) | [ADR 템플릿](decisions/template.md) |
 
 ## 상태 정의
 
@@ -40,6 +50,6 @@
 | [API 공통 응답](conventions/api-response.md) | APPROVED | [API 공통 응답 DTO](https://app.notion.com/p/3c1eeed6b62d81e7abe2eea3d730c611) |
 | [애플리케이션 오류](conventions/application-errors.md) | APPROVED | [애플리케이션 오류 코드](https://app.notion.com/p/3c1eeed6b62d81d3a7c9f014bb788aa8) |
 
-## 충돌 처리
+## 판단 우선순위
 
-현재 Issue의 승인된 요구사항, APPROVED GitHub 계약, 테스트/공개 코드 계약, DRAFT GitHub 문서, Notion 순으로 판단한다. 충돌은 숨기지 말고 Issue 또는 PR에 기록한다.
+현재 Issue와 사용자 지시 → APPROVED GitHub 계약 → 테스트와 공개 코드 → DRAFT GitHub 문서 → Notion 순이다. DRAFT에 따라 공개 동작이 달라지면 구현하지 않는다. 충돌과 미결정은 Issue 또는 PR에 기록한다.
