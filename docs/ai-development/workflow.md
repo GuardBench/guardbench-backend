@@ -1,12 +1,12 @@
-# Codex 개발 워크플로
+# 에이전트 개발 워크플로
 
 > Status: APPROVED
 > Owner: Team
 > Last reviewed: 2026-08-24
 > Canonical source: GitHub
-> Origin: 현재 팀의 Codex 운영 논의
+> Origin: 현재 팀의 에이전트 운영 논의
 
-이 문서는 GitHub Issue를 Codex 작업으로 안전하게 전달하는 절차다. 저장소의 상시 규칙은 `AGENTS.md`, 기능별 요구사항은 Issue, 구현 계약은 `docs/`에 둔다.
+이 문서는 GitHub Issue를 에이전트 작업으로 안전하게 전달하는 절차다. 저장소의 상시 규칙은 `AGENTS.md`, 기능별 요구사항은 Issue, 구현 계약은 `docs/`에 둔다.
 
 ## 전체 흐름
 
@@ -41,12 +41,12 @@ git status
 
 - 기준 작업 폴더의 미커밋 변경을 새 작업에 가져오지 않는다.
 - 이미 다른 worktree에서 checkout한 branch를 재사용하지 않는다.
-- Codex 앱 worktree가 detached HEAD라면 첫 commit 전에 Issue branch를 만든다.
+- 에이전트 앱 worktree가 detached HEAD라면 첫 commit 전에 Issue branch를 만든다.
 - worktree 제거는 구현 권한이 아니다. 보존할 변경과 원격 반영 여부를 사람이 확인한 뒤 정리한다.
 
 ## 3. 작업 요청
 
-Codex가 Issue를 실제로 읽을 수 있다면 번호, 기준 branch, 권한과 승인 경계만 전달해도 된다. 접근할 수 없다면 목적, 계약, 범위, Non-Goals와 완료 조건도 요청에 포함한다. 번호만 보고 구현하지 않는다.
+에이전트가 Issue를 실제로 읽을 수 있다면 번호, 기준 branch, 권한과 승인 경계만 전달해도 된다. 접근할 수 없다면 목적, 계약, 범위, Non-Goals와 완료 조건도 요청에 포함한다. 번호만 보고 구현하지 않는다.
 
 ```text
 Issue #42를 구현해줘.
