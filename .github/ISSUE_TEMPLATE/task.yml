@@ -1,0 +1,117 @@
+name: Engineering Task
+description: 문서, 테스트, CI, 리팩터링 등 비기능성 작업을 정의합니다.
+title: "[Task] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        사용자 동작을 추가하면 Feature, 재현 가능한 오류 수정은 Bug, 구현 전 설계 승인은 Decision을 사용해 주세요.
+
+  - type: textarea
+    id: purpose
+    attributes:
+      label: 목적
+      description: 해결할 유지보수 문제와 기대하는 저장소 상태를 적어주세요.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: task_type
+    attributes:
+      label: 작업 유형
+      options:
+        - 문서
+        - 테스트
+        - CI/CD
+        - 리팩터링
+        - 빌드 또는 개발 도구
+        - 기타 유지보수
+    validations:
+      required: true
+
+  - type: textarea
+    id: contracts
+    attributes:
+      label: 관련 계약과 근거
+      description: GitHub 문서 경로와 상태(APPROVED/DRAFT), Issue/PR을 적습니다. 해당 없으면 이유를 적습니다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: 작업 범위
+      description: 변경을 허용하는 파일, 도구 또는 프로세스를 구체적으로 적어주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-Goals
+      description: 함께 수행하지 않을 기능 변경이나 정리 작업을 적어주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 완료 조건
+      description: 파일 존재 여부, 명령 결과, 문서 링크 등 검증 가능한 체크리스트로 작성해 주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: contract_impact
+    attributes:
+      label: 동작과 계약 영향
+      description: 사용자 동작, 공개 API, 도메인, DB, production 의존성, 아키텍처 영향 여부를 적습니다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: 예상 검증
+      description: 실행할 테스트, lint, 빌드 또는 수동 확인과 기대 결과를 적어주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: 미결정 사항과 의존 작업
+      description: 선행 Issue나 외부 의존성을 적습니다. 없으면 "없음"으로 작성합니다.
+    validations:
+      required: true
+
+  - type: input
+    id: branch_slug
+    attributes:
+      label: 브랜치 slug
+      description: Issue 생성 후 codex/{issue-number}-{slug} 브랜치와 전용 worktree에 사용합니다.
+      placeholder: add-issue-templates
+    validations:
+      required: true
+
+  - type: dropdown
+    id: agent_permission
+    attributes:
+      label: 에이전트 작업 범위
+      description: Issue 자체는 push, PR 생성, 병합 또는 force push 권한을 부여하지 않습니다.
+      options:
+        - 검증된 로컬 커밋까지 허용
+        - 파일 수정과 검증까지 허용 — 커밋 금지
+        - 조사와 진단만 허용 — 파일 변경 금지
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: ready
+    attributes:
+      label: 작업 준비 확인
+      options:
+        - label: 기능 또는 공개 계약 변경이 숨어 있지 않은지 확인했습니다.
+          required: true
+        - label: Issue 전용 worktree와 codex/{issue-number}-{slug} 브랜치를 사용합니다.
+          required: true
