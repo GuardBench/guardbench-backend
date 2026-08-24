@@ -5,7 +5,6 @@
 > Last reviewed: 2026-08-23
 > Canonical source: GitHub
 > Origin: [Notion 패키지 네이밍](https://app.notion.com/p/3c0eeed6b62d81d59ec3cb3beb995c68)
-> AI assistance: 이 문서의 초안은 LLM의 도움으로 작성되었으며 사람의 검토가 필요합니다.
 
 최상위는 기술 계층이 아니라 도메인으로 나누는 package-by-domain을 사용한다.
 

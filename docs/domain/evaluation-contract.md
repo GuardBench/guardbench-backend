@@ -5,7 +5,6 @@
 > Last reviewed: 2026-08-24
 > Canonical source: GitHub
 > Origin: [Notion MVP 평가 계약](https://app.notion.com/p/3c3eeed6b62d8120a57eebaa13b6ed27)
-> AI assistance: 이 문서의 초안은 LLM의 도움으로 작성되었으며 사람의 검토가 필요합니다.
 
 ## 최소 계약
 

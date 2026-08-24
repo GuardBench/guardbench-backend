@@ -8,7 +8,6 @@ info:
     Last reviewed: 2026-08-24
     Canonical source: GitHub
     Origin: https://app.notion.com/p/3c0eeed6b62d805dac0be8db487b1359
-    AI assistance: 이 계약의 초안은 LLM의 도움으로 작성되었으며 사람의 검토가 필요합니다.
     HTTP 상태와 GuardBench의 실행·판정 상태는 서로 독립적이다.
 servers:
   - url: http://localhost:8080

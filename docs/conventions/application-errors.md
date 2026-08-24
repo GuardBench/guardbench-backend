@@ -5,7 +5,6 @@
 > Last reviewed: 2026-08-24
 > Canonical source: GitHub
 > Origin: [Notion 애플리케이션 오류 코드](https://app.notion.com/p/3c1eeed6b62d81d3a7c9f014bb788aa8)
-> AI assistance: 이 문서의 초안은 LLM의 도움으로 작성되었으며 사람의 검토가 필요합니다.
 
 코드는 `UPPER_SNAKE_CASE`와 `{RESOURCE}_{REASON}` 형식을 우선한다. 클라이언트는 `message`가 아니라 `data.code`를 사용한다. 아래 목록은 MVP Application Error의 전체 계약이며 새 Code 추가나 기존 의미 변경은 공개 계약 변경으로 다룬다.
 
