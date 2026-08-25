@@ -190,7 +190,7 @@ public final class TestSuite {
     }
 
     private static String requireNonBlankName(String name) {
-        if (name == null || name.isBlank()) {
+        if (isContractBlank(name)) {
             throw new IllegalArgumentException("TestSuite 이름은 비어 있을 수 없습니다.");
         }
 
@@ -198,11 +198,21 @@ public final class TestSuite {
     }
 
     private static String normalizeDescription(String description) {
-        if (description == null || description.isBlank()) {
+        if (isContractBlank(description)) {
             return null;
         }
 
         return description;
+    }
+
+    private static boolean isContractBlank(String value) {
+        return value == null || value.codePoints().allMatch(TestSuite::isContractWhitespace);
+    }
+
+    private static boolean isContractWhitespace(int codePoint) {
+        return Character.isWhitespace(codePoint)
+                || Character.isSpaceChar(codePoint)
+                || codePoint == 0xFEFF;
     }
 
     private static Instant requireInstant(Instant instant, String label) {

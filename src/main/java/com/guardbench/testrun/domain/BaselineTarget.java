@@ -10,9 +10,19 @@ public record BaselineTarget(String guardrailId, String version) {
     }
 
     private static void validateText(String value, String field) {
-        if (value == null || value.isBlank()) {
+        if (isContractBlank(value)) {
             throw new IllegalArgumentException(field + " must not be blank");
         }
+    }
+
+    private static boolean isContractBlank(String value) {
+        return value == null || value.codePoints().allMatch(BaselineTarget::isContractWhitespace);
+    }
+
+    private static boolean isContractWhitespace(int codePoint) {
+        return Character.isWhitespace(codePoint)
+                || Character.isSpaceChar(codePoint)
+                || codePoint == 0xFEFF;
     }
 
     private static void validateVersion(String value, String field) {
