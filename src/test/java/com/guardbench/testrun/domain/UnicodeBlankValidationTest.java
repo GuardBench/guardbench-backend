@@ -3,6 +3,8 @@ package com.guardbench.testrun.domain;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.time.Instant;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -10,6 +12,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 import com.guardbench.testrun.application.port.out.TestCaseSnapshotSource;
 
 class UnicodeBlankValidationTest {
+
+    private static final Instant CREATED_AT = Instant.parse("2026-08-25T10:00:00Z");
 
     @ParameterizedTest
     @ValueSource(strings = {"\u00A0", "\u2007", "\u202F", "\uFEFF", " ", "\t", "\n", "\u3000"})
@@ -63,7 +67,8 @@ class UnicodeBlankValidationTest {
                 input,
                 new ExpectedResult(Action.BLOCK),
                 Severity.CRITICAL,
-                category);
+                category,
+                CREATED_AT);
     }
 
     private static TestCaseSnapshotSource source(
