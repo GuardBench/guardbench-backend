@@ -26,8 +26,8 @@ import jakarta.persistence.EntityManager;
  *
  * <p>논리 삭제는 별도 Port method가 아니라 Aggregate 상태 변경을 저장해 수행한다. 삭제 상태의
  * Aggregate는 {@code deleted_at IS NULL} 조건부 UPDATE로 저장하고, 영향받은 행이 0이면
- * {@code TEST_CASE_NOT_FOUND}로 변환한다. 삭제된 행도 {@link #findById(TestCaseId)}로는 조회되고
- * {@link #findActiveById(TestCaseId)}로는 조회되지 않는다.
+ * {@code TEST_CASE_NOT_FOUND}로 변환한다. 승인된 사용자 동작은 삭제된 TestCase를 찾지 못한 것으로
+ * 처리하므로 Domain Port 조회는 {@link #findActiveById(TestCaseId)}로 활성 행만 반환한다.
  *
  * <h2>saveAll의 신규·기존 구분</h2>
  *
@@ -97,13 +97,6 @@ class TestCaseRepositoryAdapter implements TestCaseRepository {
         }
 
         return List.copyOf(saved);
-    }
-
-    @Override
-    public Optional<TestCase> findById(TestCaseId id) {
-        Objects.requireNonNull(id, "TestCaseId must not be null");
-
-        return jpaRepository.findById(id.value()).map(TestCaseEntityMapper::toDomain);
     }
 
     @Override
