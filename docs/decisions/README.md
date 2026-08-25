@@ -21,6 +21,14 @@
 | Context 간 Port, Integration Adapter, 로컬 ID·VO와 Java 타입 격리 | [ADR 0006](0006-independent-domain-contract-boundaries.md) | Aggregate 저장 경계는 [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md)과 [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), 최종화는 [ADR 0004](0004-testrun-finalization-atomicity.md) |
 | Worker 선점, 동시 실행, 잠금/CAS, retry·timeout | [ADR 0005](0005-async-test-run-execution-contract.md), [ADR 0006](0006-independent-domain-contract-boundaries.md) | 결과 저장 경계는 [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), 최종화 불변식은 [ADR 0004](0004-testrun-finalization-atomicity.md), 물리 저장은 [ADR 0002](0002-postgresql-persistence-contract.md) |
 
+## 구현 계약 라우팅
+
+구현 계약은 ADR을 대체하지 않는다. `DRAFT` 구현 문서는 승인된 ADR의 위치와 미결정을 추적하는 용도이며, 새 동작·DB 제약은 APPROVED 근거 없이 구현하지 않는다.
+
+| 구현 작업 | 준비 문서 | 승인 근거와 상태 |
+| --- | --- | --- |
+| #14 TestRun Persistence Adapter | [TestRun Persistence Adapter 준비](../implementation/testrun-persistence.md) | ADR 0002·0003·0004·0005·0006에서 추출한 DRAFT. resolution claim·HTTP idempotency 물리 계약은 별도 결정 전 미결정이다. |
+
 ## 결정 관계
 
 ```text
