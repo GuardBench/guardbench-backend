@@ -10,6 +10,7 @@
 - Decision date: 2026-08-24
 - Related Issue: #4
 - Superseded in part by: [ADR 0006](0006-independent-domain-contract-boundaries.md) — Context 밖 Java ID VO 재사용과 직접 Repository 호출 해석
+- Extended by: [ADR 0008](0008-async-testrun-persistence-contract.md) — Outbox, claim과 HTTP Idempotency 물리 계약
 
 ## Context
 
@@ -102,7 +103,7 @@ GuardBench는 PostgreSQL에 TestSuite, TestCase, TestRun, Snapshot, 실행 결�
 
 FK 삭제 정책은 모두 `ON DELETE RESTRICT`다. 공개 TestCase 삭제는 물리 DELETE가 아니며 Snapshot에서 원본 TestCase로 향하는 FK를 유지한다. 일반 사용자 동작으로 TestSuite, TestRun, Snapshot과 결과를 물리 삭제하지 않는다. 운영 보존 기간과 물리 삭제 순서는 후속 운영 정책에서 정한다.
 
-TestRun 접수 트랜잭션은 현재 결정의 `test_run`과 `test_case_snapshot` 외에 Outbox와 요청 멱등성 정보도 함께 저장해야 한다. 다만 Outbox·메시지·Worker 및 Idempotency 물리 스키마는 Issue #5의 결정 범위이므로 이 ERD와 참고 DDL에서 의도적으로 제외한다. 따라서 아래 DDL만으로 TestRun 접수 기능 전체가 구현된 것으로 간주하지 않는다.
+TestRun 접수 트랜잭션은 현재 결정의 `test_run`과 `test_case_snapshot` 외에 Outbox와 요청 멱등성 정보도 함께 저장해야 한다. 이 ERD와 참고 DDL은 기존 결과 스키마만 표현하며, Outbox·claim·Idempotency 물리 스키마는 [ADR 0008](0008-async-testrun-persistence-contract.md)이 소유한다. 따라서 아래 DDL만으로 TestRun 접수 기능 전체가 구현된 것으로 간주하지 않는다.
 
 ### TestRun과 nullable 결과
 
@@ -562,7 +563,7 @@ JPA는 Infrastructure 구현 도구일 뿐 Domain 모델과 Aggregate 경계를 
 - `ILIKE '%...%'` 검색은 B-tree로 가속되지 않는다. 필요 시 PostgreSQL extension과 운영 권한을 별도로 검토해야 한다.
 - JPA sequence allocation 설정과 DB sequence 증가값이 다르면 식별자 생성 오류가 생길 수 있으므로 통합 테스트가 필요하다.
 - 참고 DDL의 cross-row/cross-table 불변식, 예를 들어 Assertion은 Candidate 성공 시에만 생성되고 FINISHED와 Quality Gate가 정확히 함께 존재한다는 규칙은 ADR 0004의 Application 트랜잭션과 통합 테스트로 보완한다.
-- Outbox와 Idempotency 테이블이 제외되어 있으므로 후속 #5 결정 없이 비동기 접수 구현을 완료할 수 없다.
+- Outbox, claim과 Idempotency 테이블은 ADR 0008에서 확정했으므로, #14는 해당 ADR의 DDL·ERD·통합 테스트 계약을 함께 구현해야 한다.
 
 이 결정을 되돌리려면 새 ADR로 Persistence 접근이나 스키마 표현을 supersede하고 새 Flyway migration으로 roll-forward한다. 이미 적용된 versioned migration을 수정하거나 운영 DB를 Hibernate 자동 DDL로 역변경하지 않는다.
 

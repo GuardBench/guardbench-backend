@@ -16,6 +16,7 @@ import java.util.Objects;
  * <p>식별자는 생성 시점에 부여되며 이후 절대 {@code null}이 아니다. Application이
  * {@code TestSuiteRepository.nextIdentity()}로 미리 발급받아 전달하므로, TestSuite와 초기 TestCase를
  * 저장 전에 메모리에서 모두 조립할 수 있고 Application이 persistence flush 순서에 의존하지 않는다.
+ * 동일한 식별자를 가진 TestSuite는 이름이나 설명과 무관하게 같은 Aggregate로 비교한다.
  *
  * <p>시각은 이 객체가 직접 만들지 않고 호출자가 전달한다. Application 계층이 시간 원천을 소유해
  * Domain을 결정적으로 테스트할 수 있게 한다.
@@ -68,6 +69,10 @@ public final class TestSuite {
 
     /**
      * 저장된 상태에서 Aggregate를 복원한다. Persistence Adapter가 사용한다.
+     *
+     * <p>{@code name}은 필수 값으로 검증하고 {@code description}은 {@link #create}
+     * 경로와 동일하게 {@code null}, 빈 문자열 또는 공백만 있는 값을 {@code null}로
+     * 정규화한다. 따라서 복원 결과는 DB의 비정규화된 설명 값과 문자열 단위로 같지 않을 수 있다.
      */
     public static TestSuite restore(
             TestSuiteId id,
@@ -151,6 +156,22 @@ public final class TestSuite {
 
     public Instant updatedAt() {
         return updatedAt;
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (this == object) {
+            return true;
+        }
+        if (!(object instanceof TestSuite testSuite)) {
+            return false;
+        }
+        return id.equals(testSuite.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
     }
 
     private Instant requireUpdateInstant(Instant now) {

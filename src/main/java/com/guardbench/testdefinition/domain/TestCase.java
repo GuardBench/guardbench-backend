@@ -1,6 +1,7 @@
 package com.guardbench.testdefinition.domain;
 
 import java.time.Instant;
+import java.util.Objects;
 
 /**
  * 현재 편집 가능한 TestCase 정의이며 Aggregate Root다.
@@ -20,6 +21,8 @@ import java.time.Instant;
  * <p>식별자는 생성 시점에 부여되며 이후 절대 {@code null}이 아니다. Application이
  * {@code TestCaseRepository.nextIdentity()}로 미리 발급받아 전달하므로, TestSuite와 초기 TestCase를
  * 저장 전에 메모리에서 모두 조립할 수 있고 Application이 persistence flush 순서에 의존하지 않는다.
+ * 동일한 식별자를 가진 TestCase는 현재 정의나 상태와 무관하게 같은 Aggregate로 비교한다. 이로써
+ * Repository의 다건 저장 경계에서도 같은 TestCase가 중복되는지 식별자 기준으로 판단할 수 있다.
  *
  * <p>근거: {@code docs/domain/core-model.md},
  * {@code docs/decisions/0001-domain-type-ownership-and-aggregate-boundaries.md},
@@ -94,7 +97,12 @@ public final class TestCase {
     /**
      * 저장된 상태에서 Aggregate를 복원한다. Persistence Adapter가 사용한다.
      *
+     * <p>정의 문자열은 {@link #create} 경로와 동일하게 필수 값을 검증하지만 trim 등의
+     * 정규화는 하지 않는다. 문자열 인자의 순서는 {@code name}, {@code input}, {@code category}이며,
+     * Persistence Adapter가 이 순서대로 전달한 복원 값은 저장된 값과 같다.
+     *
      * <p>{@code deletedAt}이 {@code null}이 아니면 논리 삭제된 TestCase로 복원한다.
+     * 이때 영속성 계약에 따라 {@code deletedAt}과 {@code updatedAt}은 같아야 한다.
      */
     public static TestCase restore(
             TestCaseId id,
@@ -112,6 +120,10 @@ public final class TestCase {
         requireNotBefore(restoredUpdatedAt, restoredCreatedAt, "수정 시각");
         if (deletedAt != null) {
             requireNotBefore(deletedAt, restoredCreatedAt, "삭제 시각");
+            if (!deletedAt.equals(restoredUpdatedAt)) {
+                throw new IllegalArgumentException(
+                        "TestCase 삭제 시각과 수정 시각은 같아야 합니다.");
+            }
         }
 
         return new TestCase(
@@ -254,6 +266,22 @@ public final class TestCase {
 
     public Instant deletedAt() {
         return deletedAt;
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (this == object) {
+            return true;
+        }
+        if (!(object instanceof TestCase testCase)) {
+            return false;
+        }
+        return id.equals(testCase.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
     }
 
     private void requireNotDeleted(String operation) {

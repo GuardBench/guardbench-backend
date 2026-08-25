@@ -1,5 +1,6 @@
 package com.guardbench.testrun.domain;
 
+import java.time.Instant;
 import java.util.Objects;
 
 public record TestCaseSnapshot(
@@ -10,7 +11,8 @@ public record TestCaseSnapshot(
         String input,
         ExpectedResult expectedResult,
         Severity severity,
-        String category
+        String category,
+        Instant createdAt
 ) {
 
     public TestCaseSnapshot {
@@ -22,6 +24,7 @@ public record TestCaseSnapshot(
         Objects.requireNonNull(expectedResult, "expected result must not be null");
         Objects.requireNonNull(severity, "severity must not be null");
         validateText(category, "category");
+        Objects.requireNonNull(createdAt, "snapshot created time must not be null");
     }
 
     public static TestCaseSnapshot of(
@@ -32,9 +35,20 @@ public record TestCaseSnapshot(
             String input,
             ExpectedResult expectedResult,
             Severity severity,
-            String category
+            String category,
+            Instant createdAt
     ) {
-        return new TestCaseSnapshot(id, testRunId, sourceTestCaseId, name, input, expectedResult, severity, category);
+        return new TestCaseSnapshot(
+                id,
+                testRunId,
+                sourceTestCaseId,
+                name,
+                input,
+                expectedResult,
+                severity,
+                category,
+                createdAt
+        );
     }
 
     private static void validateText(String value, String field) {

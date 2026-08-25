@@ -49,6 +49,35 @@ public final class TestRun {
         return new TestRun(id, sourceTestSuiteId, baselineTarget, candidateTarget, testCaseCount, createdAt);
     }
 
+    public static TestRun rehydrate(
+            TestRunId id,
+            SourceTestSuiteId sourceTestSuiteId,
+            BaselineTarget baselineTarget,
+            CandidateTarget candidateTarget,
+            int testCaseCount,
+            int processedTestCaseCount,
+            TestRunStatus status,
+            TestRunExecutionOutcome executionOutcome,
+            TestRunTimeline timeline
+    ) {
+        TestRun testRun = new TestRun(
+                id,
+                sourceTestSuiteId,
+                baselineTarget,
+                candidateTarget,
+                testCaseCount,
+                timeline.createdAt()
+        );
+        if (processedTestCaseCount < 0 || processedTestCaseCount > testCaseCount) {
+            throw new IllegalArgumentException("processed TestCase count must be between zero and total count");
+        }
+        testRun.processedTestCaseCount = processedTestCaseCount;
+        testRun.status = Objects.requireNonNull(status, "TestRun status must not be null");
+        testRun.executionOutcome = executionOutcome;
+        testRun.timeline = Objects.requireNonNull(timeline, "TestRun timeline must not be null");
+        return testRun;
+    }
+
     public void beginPreparing(Instant preparedAt) {
         requireStatus(TestRunStatus.QUEUED, "begin preparation");
         timeline = timeline.start(preparedAt);

@@ -1,6 +1,7 @@
 package com.guardbench.testdefinition.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -18,6 +19,30 @@ class TestSuiteTest {
 
     private static TestSuite newTestSuite(String description) {
         return TestSuite.create(TEST_SUITE_ID, "안전성 회귀", description, CREATED_AT);
+    }
+
+    @Nested
+    @DisplayName("Aggregate 동등성")
+    class Equality {
+
+        @Test
+        @DisplayName("식별자가 같으면 이름과 설명이 달라도 동등하다")
+        void considersSuitesWithSameIdentifierEqual() {
+            TestSuite restored = TestSuite.restore(
+                    TEST_SUITE_ID, "다른 이름", "다른 설명", CREATED_AT, UPDATED_AT);
+
+            assertEquals(newTestSuite(null), restored);
+            assertEquals(newTestSuite(null).hashCode(), restored.hashCode());
+        }
+
+        @Test
+        @DisplayName("식별자가 다르면 이름과 설명이 같아도 동등하지 않다")
+        void considersSuitesWithDifferentIdentifiersUnequal() {
+            TestSuite another = TestSuite.restore(
+                    new TestSuiteId(2L), "안전성 회귀", null, CREATED_AT, CREATED_AT);
+
+            assertNotEquals(newTestSuite(null), another);
+        }
     }
 
     @Nested
@@ -225,6 +250,15 @@ class TestSuiteTest {
                             null,
                             UPDATED_AT,
                             CREATED_AT));
+        }
+
+        @Test
+        @DisplayName("공백만 있는 설명은 null로 정규화해 복원한다")
+        void normalizesBlankDescriptionToNull() {
+            TestSuite testSuite = TestSuite.restore(
+                    TEST_SUITE_ID, "안전성 회귀", "   ", CREATED_AT, UPDATED_AT);
+
+            assertNull(testSuite.description());
         }
     }
 }
