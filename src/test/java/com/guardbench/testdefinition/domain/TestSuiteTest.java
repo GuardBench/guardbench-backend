@@ -12,8 +12,13 @@ import org.junit.jupiter.api.Test;
 
 class TestSuiteTest {
 
+    private static final TestSuiteId TEST_SUITE_ID = new TestSuiteId(1L);
     private static final Instant CREATED_AT = Instant.parse("2026-08-25T10:00:00Z");
     private static final Instant UPDATED_AT = Instant.parse("2026-08-25T11:00:00Z");
+
+    private static TestSuite newTestSuite(String description) {
+        return TestSuite.create(TEST_SUITE_ID, "안전성 회귀", description, CREATED_AT);
+    }
 
     @Nested
     @DisplayName("새 TestSuite 생성")
@@ -22,7 +27,7 @@ class TestSuiteTest {
         @Test
         @DisplayName("이름과 설명을 보유하고 생성 시각을 수정 시각으로 함께 사용한다")
         void keepsNameDescriptionAndUsesCreationInstantAsUpdatedAt() {
-            TestSuite testSuite = TestSuite.create("안전성 회귀", "PII 차단 정책", CREATED_AT);
+            TestSuite testSuite = newTestSuite("PII 차단 정책");
 
             assertEquals("안전성 회귀", testSuite.name());
             assertEquals("PII 차단 정책", testSuite.description());
@@ -31,17 +36,25 @@ class TestSuiteTest {
         }
 
         @Test
-        @DisplayName("저장 전에는 식별자가 없다")
-        void hasNoIdentifierBeforePersistence() {
-            TestSuite testSuite = TestSuite.create("안전성 회귀", null, CREATED_AT);
+        @DisplayName("생성 시점에 전달한 식별자를 보유한다")
+        void keepsIdentifierGivenAtCreation() {
+            TestSuite testSuite = newTestSuite(null);
 
-            assertNull(testSuite.id());
+            assertEquals(TEST_SUITE_ID, testSuite.id());
+        }
+
+        @Test
+        @DisplayName("식별자가 null이면 IllegalArgumentException을 던진다")
+        void rejectsNullIdentifier() {
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> TestSuite.create(null, "안전성 회귀", null, CREATED_AT));
         }
 
         @Test
         @DisplayName("공백만 있는 설명은 값이 없는 것으로 정규화한다")
         void normalizesBlankDescriptionToNull() {
-            TestSuite testSuite = TestSuite.create("안전성 회귀", "   ", CREATED_AT);
+            TestSuite testSuite = newTestSuite("   ");
 
             assertNull(testSuite.description());
         }
@@ -51,7 +64,7 @@ class TestSuiteTest {
         void rejectsBlankName() {
             assertThrows(
                     IllegalArgumentException.class,
-                    () -> TestSuite.create("   ", null, CREATED_AT));
+                    () -> TestSuite.create(TEST_SUITE_ID, "   ", null, CREATED_AT));
         }
 
         @Test
@@ -59,7 +72,7 @@ class TestSuiteTest {
         void rejectsNullName() {
             assertThrows(
                     IllegalArgumentException.class,
-                    () -> TestSuite.create(null, null, CREATED_AT));
+                    () -> TestSuite.create(TEST_SUITE_ID, null, null, CREATED_AT));
         }
 
         @Test
@@ -67,7 +80,7 @@ class TestSuiteTest {
         void rejectsNullCreationInstant() {
             assertThrows(
                     IllegalArgumentException.class,
-                    () -> TestSuite.create("안전성 회귀", null, null));
+                    () -> TestSuite.create(TEST_SUITE_ID, "안전성 회귀", null, null));
         }
     }
 
@@ -78,7 +91,7 @@ class TestSuiteTest {
         @Test
         @DisplayName("새 이름과 수정 시각을 반영하고 생성 시각은 유지한다")
         void appliesNewNameAndUpdatedAtWhileKeepingCreatedAt() {
-            TestSuite testSuite = TestSuite.create("안전성 회귀", null, CREATED_AT);
+            TestSuite testSuite = newTestSuite(null);
 
             testSuite.rename("안전성 회귀 v2", UPDATED_AT);
 
@@ -90,7 +103,7 @@ class TestSuiteTest {
         @Test
         @DisplayName("공백만 있는 이름으로는 수정할 수 없다")
         void rejectsBlankName() {
-            TestSuite testSuite = TestSuite.create("안전성 회귀", null, CREATED_AT);
+            TestSuite testSuite = newTestSuite(null);
 
             assertThrows(
                     IllegalArgumentException.class,
@@ -100,7 +113,7 @@ class TestSuiteTest {
         @Test
         @DisplayName("수정 시각이 생성 시각보다 앞서면 IllegalArgumentException을 던진다")
         void rejectsUpdateInstantBeforeCreatedAt() {
-            TestSuite testSuite = TestSuite.create("안전성 회귀", null, CREATED_AT);
+            TestSuite testSuite = newTestSuite(null);
 
             assertThrows(
                     IllegalArgumentException.class,
@@ -110,7 +123,7 @@ class TestSuiteTest {
         @Test
         @DisplayName("검증에 실패하면 이름과 수정 시각을 모두 바꾸지 않는다")
         void keepsStateUnchangedWhenValidationFails() {
-            TestSuite testSuite = TestSuite.create("안전성 회귀", null, CREATED_AT);
+            TestSuite testSuite = newTestSuite(null);
 
             assertThrows(
                     IllegalArgumentException.class,
@@ -128,7 +141,7 @@ class TestSuiteTest {
         @Test
         @DisplayName("새 설명과 수정 시각을 반영한다")
         void appliesNewDescriptionAndUpdatedAt() {
-            TestSuite testSuite = TestSuite.create("안전성 회귀", "이전 설명", CREATED_AT);
+            TestSuite testSuite = newTestSuite("이전 설명");
 
             testSuite.changeDescription("새 설명", UPDATED_AT);
 
@@ -139,7 +152,7 @@ class TestSuiteTest {
         @Test
         @DisplayName("null을 전달하면 설명을 제거한다")
         void removesDescriptionWhenNullGiven() {
-            TestSuite testSuite = TestSuite.create("안전성 회귀", "이전 설명", CREATED_AT);
+            TestSuite testSuite = newTestSuite("이전 설명");
 
             testSuite.changeDescription(null, UPDATED_AT);
 

@@ -17,6 +17,10 @@ import java.time.Instant;
  *
  * <p>{@code category}는 승인된 API 계약과 같이 고정 Enum이 아닌 비어 있지 않은 문자열로 둔다.
  *
+ * <p>식별자는 생성 시점에 부여되며 이후 절대 {@code null}이 아니다. Application이
+ * {@code TestCaseRepository.nextIdentity()}로 미리 발급받아 전달하므로, TestSuite와 초기 TestCase를
+ * 저장 전에 메모리에서 모두 조립할 수 있고 Application이 persistence flush 순서에 의존하지 않는다.
+ *
  * <p>근거: {@code docs/domain/core-model.md},
  * {@code docs/decisions/0001-domain-type-ownership-and-aggregate-boundaries.md},
  * {@code docs/api/README.md}
@@ -59,11 +63,12 @@ public final class TestCase {
     }
 
     /**
-     * 아직 식별자가 없는 새 TestCase를 만든다. 식별자는 저장 시점에 부여된다.
+     * 미리 발급받은 식별자로 새 TestCase를 만든다.
      *
      * <p>다섯 정의 값은 모두 필수이며 서버가 숨은 기본값으로 보완하지 않는다.
      */
     public static TestCase create(
+            TestCaseId id,
             TestSuiteId testSuiteId,
             String name,
             String input,
@@ -74,7 +79,7 @@ public final class TestCase {
         Instant createdAt = requireInstant(now, "생성 시각");
 
         return new TestCase(
-                null,
+                requireId(id),
                 requireTestSuiteId(testSuiteId),
                 requireNonBlank(name, "이름"),
                 requireNonBlank(input, "입력"),
@@ -102,10 +107,6 @@ public final class TestCase {
             Instant createdAt,
             Instant updatedAt,
             Instant deletedAt) {
-        if (id == null) {
-            throw new IllegalArgumentException("복원하는 TestCase에는 TestCaseId가 필요합니다.");
-        }
-
         Instant restoredCreatedAt = requireInstant(createdAt, "생성 시각");
         Instant restoredUpdatedAt = requireInstant(updatedAt, "수정 시각");
         requireNotBefore(restoredUpdatedAt, restoredCreatedAt, "수정 시각");
@@ -114,7 +115,7 @@ public final class TestCase {
         }
 
         return new TestCase(
-                id,
+                requireId(id),
                 requireTestSuiteId(testSuiteId),
                 requireNonBlank(name, "이름"),
                 requireNonBlank(input, "입력"),
@@ -241,6 +242,14 @@ public final class TestCase {
         requireNotBefore(candidate, createdAt, "수정 시각");
 
         return candidate;
+    }
+
+    private static TestCaseId requireId(TestCaseId id) {
+        if (id == null) {
+            throw new IllegalArgumentException("TestCase의 TestCaseId는 필수입니다.");
+        }
+
+        return id;
     }
 
     private static TestSuiteId requireTestSuiteId(TestSuiteId testSuiteId) {

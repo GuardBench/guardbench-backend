@@ -12,6 +12,10 @@ import java.time.Instant;
  * <p>{@code testCaseCount}처럼 TestCase 집합에서 파생되는 값은 이 Aggregate가 관리하지 않는다.
  * 조회 시점에 계산하거나 조회 전용 Projection이 제공한다.
  *
+ * <p>식별자는 생성 시점에 부여되며 이후 절대 {@code null}이 아니다. Application이
+ * {@code TestSuiteRepository.nextIdentity()}로 미리 발급받아 전달하므로, TestSuite와 초기 TestCase를
+ * 저장 전에 메모리에서 모두 조립할 수 있고 Application이 persistence flush 순서에 의존하지 않는다.
+ *
  * <p>시각은 이 객체가 직접 만들지 않고 호출자가 전달한다. Application 계층이 시간 원천을 소유해
  * Domain을 결정적으로 테스트할 수 있게 한다.
  *
@@ -41,16 +45,20 @@ public final class TestSuite {
     }
 
     /**
-     * 아직 식별자가 없는 새 TestSuite를 만든다. 식별자는 저장 시점에 부여된다.
+     * 미리 발급받은 식별자로 새 TestSuite를 만든다.
      *
      * <p>{@code description}은 선택 값이며 {@code null}을 허용한다. 빈 문자열이나 공백만 있는 값은
      * 값이 없는 것과 같으므로 {@code null}로 정규화한다.
      */
-    public static TestSuite create(String name, String description, Instant now) {
+    public static TestSuite create(
+            TestSuiteId id,
+            String name,
+            String description,
+            Instant now) {
         Instant createdAt = requireInstant(now, "생성 시각");
 
         return new TestSuite(
-                null,
+                requireId(id),
                 requireNonBlankName(name),
                 normalizeDescription(description),
                 createdAt,
@@ -66,16 +74,12 @@ public final class TestSuite {
             String description,
             Instant createdAt,
             Instant updatedAt) {
-        if (id == null) {
-            throw new IllegalArgumentException("복원하는 TestSuite에는 TestSuiteId가 필요합니다.");
-        }
-
         Instant restoredCreatedAt = requireInstant(createdAt, "생성 시각");
         Instant restoredUpdatedAt = requireInstant(updatedAt, "수정 시각");
         requireNotBefore(restoredUpdatedAt, restoredCreatedAt, "수정 시각");
 
         return new TestSuite(
-                id,
+                requireId(id),
                 requireNonBlankName(name),
                 normalizeDescription(description),
                 restoredCreatedAt,
@@ -132,6 +136,14 @@ public final class TestSuite {
         requireNotBefore(candidate, createdAt, "수정 시각");
 
         return candidate;
+    }
+
+    private static TestSuiteId requireId(TestSuiteId id) {
+        if (id == null) {
+            throw new IllegalArgumentException("TestSuite의 TestSuiteId는 필수입니다.");
+        }
+
+        return id;
     }
 
     private static String requireNonBlankName(String name) {
