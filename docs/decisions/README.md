@@ -20,11 +20,11 @@
 | TestExecution·SnapshotEvaluation·QualityGateResult Aggregate와 write-side Repository | [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md), [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), [ADR 0006](0006-independent-domain-contract-boundaries.md) | 물리 매핑은 [ADR 0002](0002-postgresql-persistence-contract.md), TestRun 최종화는 [ADR 0004](0004-testrun-finalization-atomicity.md), Worker 중복 처리는 [ADR 0005](0005-async-test-run-execution-contract.md) |
 | TestRun `FINISHED` 전환과 Quality Gate 원자 저장 | [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), [ADR 0004](0004-testrun-finalization-atomicity.md), [ADR 0006](0006-independent-domain-contract-boundaries.md) | PostgreSQL 제약은 [ADR 0002](0002-postgresql-persistence-contract.md), Worker 선점·잠금/CAS·retry는 [ADR 0005](0005-async-test-run-execution-contract.md) |
 | Context 간 Port, Integration Adapter, 로컬 ID·VO와 Java 타입 격리 | [ADR 0006](0006-independent-domain-contract-boundaries.md) | Aggregate 저장 경계는 [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md)과 [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), 최종화는 [ADR 0004](0004-testrun-finalization-atomicity.md) |
-| Worker 선점, 동시 실행, 잠금/CAS, retry·timeout | [ADR 0005](0005-async-test-run-execution-contract.md), [ADR 0006](0006-independent-domain-contract-boundaries.md) | 결과 저장 경계는 [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), 최종화 불변식은 [ADR 0004](0004-testrun-finalization-atomicity.md), 물리 저장은 [ADR 0002](0002-postgresql-persistence-contract.md) |
+| Worker 선점, 동시 실행, 잠금/CAS, retry·timeout | [ADR 0005](0005-async-test-run-execution-contract.md), [ADR 0006](0006-independent-domain-contract-boundaries.md) | 결과 저장 경계는 [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), 최종화 불변식은 [ADR 0004](0004-testrun-finalization-atomicity.md), 기존 결과 스키마는 [ADR 0002](0002-postgresql-persistence-contract.md), claim·Outbox 물리 저장은 [ADR 0008](0008-async-testrun-persistence-contract.md) |
 
-## 비동기 TestRun 계약 라우팅
+## 비동기 TestRun 계약 맵
 
-[비동기 TestRun 계약 라우팅](../contracts/README.md)은 #14·#16·#17·#18·#19가 메시지, Outbox, claim, 오류, 최종화와 Context 경계 질문별로 필요한 APPROVED 단락으로 이동하게 한다. 이 DRAFT 인덱스는 ADR을 대체하거나 새 DB 제약을 정하지 않으며, 미결정 물리 계약은 Issue #49에서 추적한다.
+[비동기 TestRun 계약 맵](../contracts/README.md)은 #14·#16·#17·#18·#19의 변경을 계약 키별 **Primary contract**와 필수 보조 참조로 연결한다. 이 DRAFT 인덱스는 탐색 보조물일 뿐 ADR을 대체하거나 새 DB 제약을 정하지 않는다. ADR 0007·0008로 승인되지 않은 물리 계약을 해석하지 않으며, 새 미결정만 관련 Issue에 기록한다.
 
 ## 결정 관계
 
@@ -34,13 +34,16 @@ ADR 0001  기본 타입 소유권·Aggregate·의존 방향
 │  └─ ADR 0004  0003의 TestRun 최종화 트랜잭션을 구체화
 └─ ADR 0002  현재 Domain 경계를 PostgreSQL 물리 구조에 매핑
 
-ADR 0005  ADR 0002·0003·0004를 전제로 비동기 실행·Worker 계약을 결정
+ADR 0005  ADR 0002·0003·0004를 전제로 비동기 실행·Worker·메시지 계약을 결정
+└─ ADR 0008  0005의 Outbox·claim·HTTP Idempotency를 물리 DDL·lease 계약으로 구체화
+
+ADR 0007  Candidate HTTP 입력을 DRAFT 전용으로 확정
 
 ADR 0006  0001·0002·0003·0004·0005의 경계 간 Java 타입 공유와 직접 의존만 부분 대체
           Aggregate·Persistence·최종화·비동기 실행 결정은 유지
 ```
 
-ADR 0003은 ADR 0001을 대체하지 않는다. ADR 0004도 0003의 Aggregate와 Repository 소유권을 유지한다. ADR 0002는 Domain 경계를 물리 구조로 매핑하고, ADR 0005는 그 경계를 바꾸지 않은 채 비동기 실행·Worker 계약을 추가한다. ADR 0006은 기존 Aggregate와 런타임 결정을 유지하면서 Context 사이의 Java 타입 공유, ID VO 재사용과 직접 패키지 의존만 소비자 소유 Port와 로컬 모델로 대체한다.
+ADR 0003은 ADR 0001을 대체하지 않는다. ADR 0004도 0003의 Aggregate와 Repository 소유권을 유지한다. ADR 0002는 Domain 경계를 물리 구조로 매핑하고, ADR 0005는 그 경계를 바꾸지 않은 채 비동기 실행·Worker·메시지 계약을 추가한다. ADR 0008은 ADR 0005의 의미를 바꾸지 않고 Outbox·claim·HTTP Idempotency의 물리 표현과 DB 시간 규칙을 확정한다. ADR 0007은 Candidate HTTP 입력 의미만 소유하며 resolution 흐름을 대체하지 않는다. ADR 0006은 기존 Aggregate와 런타임 결정을 유지하면서 Context 사이의 Java 타입 공유, ID VO 재사용과 직접 패키지 의존만 소비자 소유 Port와 로컬 모델로 대체한다.
 
 ## 상태와 작성
 
