@@ -1,7 +1,5 @@
 package com.guardbench.testrun.application.port.out;
 
-import java.util.Objects;
-
 public record GuardrailMaterializationRequest(String guardrailIdentifier, long testRunId) {
 
     public GuardrailMaterializationRequest {

@@ -1,7 +1,5 @@
 package com.guardbench.testrun.application.port.out;
 
-import java.util.Objects;
-
 public record GuardrailMaterializedVersion(String guardrailIdentifier, String version) {
 
     public GuardrailMaterializedVersion {
