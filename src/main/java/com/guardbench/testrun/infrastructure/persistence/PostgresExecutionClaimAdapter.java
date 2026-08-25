@@ -1,9 +1,11 @@
 package com.guardbench.testrun.infrastructure.persistence;
 
+import java.util.List;
 import java.util.UUID;
 
-import org.springframework.jdbc.core.JdbcTemplate;
+import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.guardbench.testrun.application.port.out.ClaimResult;
 import com.guardbench.testrun.application.port.out.ExecutionClaimPort;
@@ -13,53 +15,63 @@ class PostgresExecutionClaimAdapter implements ExecutionClaimPort {
 
     private static final int LEASE_SECONDS = 45;
 
-    private final JdbcTemplate jdbcTemplate;
+    private final EntityManager entityManager;
 
-    PostgresExecutionClaimAdapter(JdbcTemplate jdbcTemplate) {
-        this.jdbcTemplate = jdbcTemplate;
+    PostgresExecutionClaimAdapter(EntityManager entityManager) {
+        this.entityManager = entityManager;
     }
 
     @Override
+    @Transactional
     public ClaimResult tryAcquire(long snapshotId, String targetType) {
         UUID newToken = UUID.randomUUID();
-        var rows = jdbcTemplate.query(
-                """
-                INSERT INTO test_execution_claim (snapshot_id, target_type, claim_token, lease_until, attempt_count, claimed_at, updated_at)
-                VALUES (?, ?, ?::uuid, clock_timestamp() + INTERVAL '%d seconds', 1, clock_timestamp(), clock_timestamp())
-                ON CONFLICT (snapshot_id, target_type) DO UPDATE
-                SET claim_token = EXCLUDED.claim_token,
-                    lease_until = clock_timestamp() + INTERVAL '%d seconds',
-                    attempt_count = test_execution_claim.attempt_count + 1,
-                    updated_at = clock_timestamp()
-                WHERE test_execution_claim.lease_until <= clock_timestamp()
-                RETURNING claim_token, attempt_count
-                """.formatted(LEASE_SECONDS, LEASE_SECONDS),
-                (rs, rowNum) -> new ClaimResult.Acquired(
-                        UUID.fromString(rs.getString("claim_token")),
-                        rs.getInt("attempt_count")
-                ),
-                snapshotId,
-                targetType,
-                newToken.toString()
-        );
+        List<?> rows = entityManager.createNativeQuery(
+                        """
+                        INSERT INTO test_execution_claim (snapshot_id, target_type, claim_token, lease_until, attempt_count, claimed_at, updated_at)
+                        VALUES (:snapshotId, :targetType, CAST(:claimToken AS uuid), clock_timestamp() + INTERVAL '%d seconds', 1, clock_timestamp(), clock_timestamp())
+                        ON CONFLICT (snapshot_id, target_type) DO UPDATE
+                        SET claim_token = EXCLUDED.claim_token,
+                            lease_until = clock_timestamp() + INTERVAL '%d seconds',
+                            attempt_count = test_execution_claim.attempt_count + 1,
+                            updated_at = clock_timestamp()
+                        WHERE test_execution_claim.lease_until <= clock_timestamp()
+                        RETURNING claim_token, attempt_count
+                        """.formatted(LEASE_SECONDS, LEASE_SECONDS))
+                .setParameter("snapshotId", snapshotId)
+                .setParameter("targetType", targetType)
+                .setParameter("claimToken", newToken.toString())
+                .getResultList();
         if (rows.isEmpty()) {
             return new ClaimResult.AlreadyHeld();
         }
-        return rows.getFirst();
+        return acquired(rows.getFirst());
     }
 
     @Override
+    @Transactional(readOnly = true)
     public boolean isHeldBy(long snapshotId, String targetType, UUID claimToken) {
-        Integer count = jdbcTemplate.queryForObject(
-                """
-                SELECT COUNT(*) FROM test_execution_claim
-                WHERE snapshot_id = ? AND target_type = ? AND claim_token = ?::uuid AND lease_until > clock_timestamp()
-                """,
-                Integer.class,
-                snapshotId,
-                targetType,
-                claimToken.toString()
+        Object held = entityManager.createNativeQuery(
+                        """
+                        SELECT EXISTS (
+                            SELECT 1 FROM test_execution_claim
+                            WHERE snapshot_id = :snapshotId
+                              AND target_type = :targetType
+                              AND claim_token = CAST(:claimToken AS uuid)
+                              AND lease_until > clock_timestamp()
+                        )
+                        """)
+                .setParameter("snapshotId", snapshotId)
+                .setParameter("targetType", targetType)
+                .setParameter("claimToken", claimToken.toString())
+                .getSingleResult();
+        return Boolean.TRUE.equals(held);
+    }
+
+    private static ClaimResult.Acquired acquired(Object row) {
+        Object[] values = (Object[]) row;
+        return new ClaimResult.Acquired(
+                UUID.fromString(values[0].toString()),
+                ((Number) values[1]).intValue()
         );
-        return count != null && count > 0;
     }
 }
