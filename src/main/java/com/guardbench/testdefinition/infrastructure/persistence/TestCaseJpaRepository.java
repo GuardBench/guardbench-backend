@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -42,6 +43,25 @@ interface TestCaseJpaRepository extends JpaRepository<TestCaseEntity, Long> {
             Long testSuiteId);
 
     long countByTestSuiteIdAndDeletedAtIsNull(Long testSuiteId);
+
+    /**
+     * 활성 TestCase 하나를 조건부로 논리 삭제한다.
+     *
+     * <p>동시 요청의 활성 판정과 쓰기를 UPDATE 한 건으로 묶는다. 반환 값은 영향받은 행 수이며, 0이면
+     * 존재하지 않거나 이미 삭제된 TestCase다.
+     */
+    @Modifying
+    @Query(value = """
+            UPDATE test_case
+               SET deleted_at = :deletedAt,
+                   updated_at = :updatedAt
+             WHERE id = :id
+               AND deleted_at IS NULL
+            """, nativeQuery = true)
+    int softDeleteIfActive(
+            @Param("id") Long id,
+            @Param("deletedAt") java.time.Instant deletedAt,
+            @Param("updatedAt") java.time.Instant updatedAt);
 
     /**
      * 주어진 식별자 중 이미 저장된 것만 한 번의 query로 가려낸다.

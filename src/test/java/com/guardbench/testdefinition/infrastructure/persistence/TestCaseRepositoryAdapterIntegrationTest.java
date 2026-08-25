@@ -1,6 +1,7 @@
 package com.guardbench.testdefinition.infrastructure.persistence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
@@ -14,6 +15,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.guardbench.common.error.ApplicationErrorCode;
+import com.guardbench.common.error.ApplicationException;
 import com.guardbench.testdefinition.domain.Action;
 import com.guardbench.testdefinition.domain.ExpectedResult;
 import com.guardbench.testdefinition.domain.Severity;
@@ -120,6 +123,37 @@ class TestCaseRepositoryAdapterIntegrationTest {
 
         assertEquals(DELETED_AT, reloaded.deletedAt());
         assertEquals(DELETED_AT, reloaded.updatedAt());
+    }
+
+    @Test
+    @DisplayName("이미 논리 삭제된 TestCase 상태를 다시 저장하면 TEST_CASE_NOT_FOUND를 반환한다")
+    void rejectsRepeatedDeletionWithNotFound() {
+        TestCaseId id = storedTestCase("PII 유출 차단", Severity.CRITICAL);
+        TestCase target = repository.findById(id).orElseThrow();
+        target.delete(DELETED_AT);
+        repository.save(target);
+        flushAndClear();
+
+        ApplicationException exception = assertThrows(
+                ApplicationException.class,
+                () -> repository.save(target));
+
+        assertEquals(ApplicationErrorCode.TEST_CASE_NOT_FOUND, exception.errorCode());
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 TestCase의 삭제 상태를 저장하면 TEST_CASE_NOT_FOUND를 반환한다")
+    void rejectsAbsentDeletionWithNotFound() {
+        TestCase absent = TestCase.restore(
+                new TestCaseId(999_998L), suiteId, "없는 TestCase", "input",
+                new ExpectedResult(Action.BLOCK), Severity.LOW, "PII",
+                CREATED_AT, DELETED_AT, DELETED_AT);
+
+        ApplicationException exception = assertThrows(
+                ApplicationException.class,
+                () -> repository.save(absent));
+
+        assertEquals(ApplicationErrorCode.TEST_CASE_NOT_FOUND, exception.errorCode());
     }
 
     @Test

@@ -9,6 +9,8 @@ import java.util.Set;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.guardbench.common.error.ApplicationErrorCode;
+import com.guardbench.common.error.ApplicationException;
 import com.guardbench.testdefinition.domain.TestCase;
 import com.guardbench.testdefinition.domain.TestCaseId;
 import com.guardbench.testdefinition.domain.TestSuiteId;
@@ -22,8 +24,10 @@ import jakarta.persistence.EntityManager;
  * <p>Spring Data와 JPA 타입은 이 클래스와 {@link TestCaseJpaRepository}에서 끝나고 Domain으로
  * 올라가지 않는다.
  *
- * <p>논리 삭제는 별도 method가 아니라 Aggregate 상태 변경을 저장해 수행한다. 삭제된 행도
- * {@link #findById(TestCaseId)}로는 조회되고 {@link #findActiveById(TestCaseId)}로는 조회되지 않는다.
+ * <p>논리 삭제는 별도 Port method가 아니라 Aggregate 상태 변경을 저장해 수행한다. 삭제 상태의
+ * Aggregate는 {@code deleted_at IS NULL} 조건부 UPDATE로 저장하고, 영향받은 행이 0이면
+ * {@code TEST_CASE_NOT_FOUND}로 변환한다. 삭제된 행도 {@link #findById(TestCaseId)}로는 조회되고
+ * {@link #findActiveById(TestCaseId)}로는 조회되지 않는다.
  *
  * <h2>saveAll의 신규·기존 구분</h2>
  *
@@ -35,11 +39,13 @@ import jakarta.persistence.EntityManager;
  * {@code persist}로 SELECT 없이 넣고 기존은 {@code merge}로 반영한다. 배치 크기와 무관하게 확인 query가
  * 하나다. 신규와 기존이 섞인 목록도 정상 처리한다.
  *
- * <p>단건 {@link #save(TestCase)}는 Spring Data의 {@code save}를 그대로 사용한다. 한 건에서 얻는
- * 이득이 작고 갱신 경로를 단순하게 유지하는 편이 낫다.
+ * <p>활성 Aggregate의 단건 {@link #save(TestCase)}는 Spring Data의 {@code save}를 그대로 사용한다.
+ * JPA merge가 전체 Entity 상태를 반영하므로 동시 PATCH는 last-write-wins이고, 서로 다른 필드 수정도
+ * stale 값으로 덮을 수 있다. ADR 0009가 이 한계를 MVP에서 수용한다.
  *
  * <p>근거: {@code docs/decisions/0002-postgresql-persistence-contract.md},
- * {@code docs/api/openapi.yaml}
+ * {@code docs/api/openapi.yaml},
+ * {@code docs/decisions/0009-testcase-soft-delete-concurrency.md}
  */
 @Repository
 class TestCaseRepositoryAdapter implements TestCaseRepository {
@@ -58,8 +64,13 @@ class TestCaseRepositoryAdapter implements TestCaseRepository {
     }
 
     @Override
+    @Transactional
     public TestCase save(TestCase testCase) {
         Objects.requireNonNull(testCase, "TestCase must not be null");
+
+        if (testCase.isDeleted()) {
+            return saveDeletion(testCase);
+        }
 
         TestCaseEntity saved = jpaRepository.save(TestCaseEntityMapper.toEntity(testCase));
 
@@ -135,5 +146,15 @@ class TestCaseRepositoryAdapter implements TestCaseRepository {
         entityManager.persist(entity);
 
         return entity;
+    }
+
+    private TestCase saveDeletion(TestCase testCase) {
+        int affectedRows = jpaRepository.softDeleteIfActive(
+                testCase.id().value(), testCase.deletedAt(), testCase.updatedAt());
+        if (affectedRows == 0) {
+            throw new ApplicationException(ApplicationErrorCode.TEST_CASE_NOT_FOUND);
+        }
+
+        return testCase;
     }
 }
