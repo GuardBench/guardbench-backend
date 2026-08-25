@@ -1,5 +1,6 @@
 package com.guardbench.testrun.application;
 
+import java.time.Instant;
 import java.util.Objects;
 
 import com.guardbench.testrun.application.port.out.TestCaseSnapshotSource;
@@ -19,7 +20,8 @@ public final class TestCaseSnapshotSourceMapper {
     public static TestCaseSnapshot toSnapshot(
             TestCaseSnapshotSource source,
             TestCaseSnapshotId snapshotId,
-            TestRunId testRunId
+            TestRunId testRunId,
+            Instant createdAt
     ) {
         Objects.requireNonNull(source, "snapshot source must not be null");
         return TestCaseSnapshot.of(
@@ -30,7 +32,8 @@ public final class TestCaseSnapshotSourceMapper {
                 source.input(),
                 new ExpectedResult(Action.fromCode(source.expectedActionCode())),
                 Severity.fromCode(source.severityCode()),
-                source.category()
+                source.category(),
+                createdAt
         );
     }
 }
