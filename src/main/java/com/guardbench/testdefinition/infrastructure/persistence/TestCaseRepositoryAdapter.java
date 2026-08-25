@@ -149,6 +149,7 @@ class TestCaseRepositoryAdapter implements TestCaseRepository {
     }
 
     private TestCase saveDeletion(TestCase testCase) {
+        synchronizeAndDetach(testCase.id());
         int affectedRows = jpaRepository.softDeleteIfActive(
                 testCase.id().value(), testCase.deletedAt(), testCase.updatedAt());
         if (affectedRows == 0) {
@@ -156,5 +157,11 @@ class TestCaseRepositoryAdapter implements TestCaseRepository {
         }
 
         return testCase;
+    }
+
+    private void synchronizeAndDetach(TestCaseId id) {
+        entityManager.flush();
+        TestCaseEntity reference = entityManager.getReference(TestCaseEntity.class, id.value());
+        entityManager.detach(reference);
     }
 }

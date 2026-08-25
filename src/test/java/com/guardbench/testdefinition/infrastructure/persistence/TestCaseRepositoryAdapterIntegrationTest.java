@@ -126,6 +126,21 @@ class TestCaseRepositoryAdapterIntegrationTest {
     }
 
     @Test
+    @DisplayName("논리 삭제 저장 직후 같은 트랜잭션에서 재조회하면 삭제 상태를 반환한다")
+    void returnsDeletedStateWhenReloadedInSameTransaction() {
+        TestCaseId id = storedTestCase("PII 유출 차단", Severity.CRITICAL);
+        TestCase target = repository.findActiveById(id).orElseThrow();
+        target.delete(DELETED_AT);
+
+        repository.save(target);
+        TestCase reloaded = repository.findById(id).orElseThrow();
+
+        assertEquals(DELETED_AT, reloaded.deletedAt());
+        assertEquals(DELETED_AT, reloaded.updatedAt());
+        assertTrue(repository.findActiveById(id).isEmpty());
+    }
+
+    @Test
     @DisplayName("이미 논리 삭제된 TestCase 상태를 다시 저장하면 TEST_CASE_NOT_FOUND를 반환한다")
     void rejectsRepeatedDeletionWithNotFound() {
         TestCaseId id = storedTestCase("PII 유출 차단", Severity.CRITICAL);
