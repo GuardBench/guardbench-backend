@@ -21,7 +21,7 @@ class TestExecutionTest {
     }
 
     @Test
-    @DisplayName("FAILED 실행은 안전한 오류만 가진다")
+    @DisplayName("FAILED 실행은 허용된 오류 code와 외부 공개용으로 가공된 detail만 가진다")
     void failedExecutionContainsOnlySafeError() {
         TestExecutionError error = new TestExecutionError(
                 TestExecutionErrorCode.PROVIDER_UNAVAILABLE,
