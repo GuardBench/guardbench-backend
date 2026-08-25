@@ -1,6 +1,7 @@
 package com.guardbench.testrun.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.guardbench.testrun.application.port.out.GuardrailExecutionResult;
@@ -77,5 +78,19 @@ class GuardrailResultNormalizerTest {
         GuardrailExecutionNormalization normalized = GuardrailResultNormalizer.normalize(null);
 
         assertEquals(TestExecutionErrorCode.PROVIDER_RESPONSE_INVALID, normalized.error().code());
+    }
+
+    @Test
+    @DisplayName("모든 GuardrailFailureCode는 같은 이름의 TestExecutionErrorCode와 안전한 메시지로 정규화된다")
+    void normalizesEveryFailureCodeToNamedErrorWithSafeMessage() {
+        for (GuardrailFailureCode failureCode : GuardrailFailureCode.values()) {
+            GuardrailExecutionNormalization normalized = GuardrailResultNormalizer.normalize(
+                    GuardrailExecutionResult.failed(failureCode)
+            );
+
+            assertNull(normalized.actualResult(), failureCode.name());
+            assertEquals(failureCode.name(), normalized.error().code().name());
+            assertFalse(normalized.error().message().isBlank(), failureCode.name());
+        }
     }
 }
