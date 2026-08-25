@@ -1,5 +1,11 @@
 package com.guardbench.testrun.application.port.out;
 
+/**
+ * Guardrail Adapter가 provider response를 해석해 만든 provider-independent binary action 결과다.
+ *
+ * <p>성공 action은 {@code ALLOW} 또는 {@code BLOCK}만 허용하며, provider raw action·assessment·output은
+ * 이 경계를 넘지 않는다.
+ */
 public record GuardrailExecutionResult(String actionCode, GuardrailFailureCode failureCode) {
 
     public GuardrailExecutionResult {

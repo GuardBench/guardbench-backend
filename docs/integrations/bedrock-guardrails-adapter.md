@@ -67,19 +67,22 @@ ApplyGuardrailRequest의 `content`는 필수이며 `source`는 `INPUT` 또는 `O
 
 ### 응답 정규화
 
-판정은 `action` 값만 사용한다.
+AWS top-level `action`만으로는 hard block과 masking을 구분할 수 없다. `GUARDRAIL_INTERVENED`는 AWS에서 두 결과 모두에 사용된다. 따라서 Bedrock Adapter는 `INTERVENTIONS` scope의 structured assessment action만 내부적으로 allowlist 분류하고, raw provider 내용 없이 provider-independent binary action을 Port에 전달한다.
 
-| AWS action | TestRun 결과 |
+| AWS 응답 조건 | TestRun 결과 |
 | --- | --- |
-| `NONE` | ActualResult(`ALLOW`) |
-| `GUARDRAIL_INTERVENED` | ActualResult(`BLOCK`) |
-| null/unknown | `PROVIDER_RESPONSE_INVALID` |
+| top-level `NONE` | ActualResult(`ALLOW`) |
+| `GUARDRAIL_INTERVENED` + assessment에 `BLOCKED` 하나 이상 | ActualResult(`BLOCK`) |
+| `GUARDRAIL_INTERVENED` + `BLOCKED` 없이 `ANONYMIZED` 하나 이상 | ActualResult(`ALLOW`) |
+| `GUARDRAIL_INTERVENED` + 알 수 없는/누락된 structured policy action | `PROVIDER_RESPONSE_INVALID` |
 
-`action`이 없거나 알 수 없는 값이면 `PROVIDER_RESPONSE_INVALID`로 실패 처리하고 `ActualResult`를 만들지 않는다. `GuardrailResultNormalizer.java`는 이 매핑만 수행하며 다른 응답 필드를 판정에 사용하지 않는다.
+`BLOCKED`와 `ANONYMIZED`가 함께 있으면 실제 흐름을 거부하는 `BLOCKED`를 우선한다. `ANONYMIZED`는 Guardrail 처리 뒤 흐름이 계속되는 현재 MVP의 binary `ALLOW`로 축약한다. 이로 인해 no-intervention ALLOW와 masked ALLOW를 Evaluation이 구분하거나, masking 자체를 기대값으로 검증하지는 않는다. 그런 redaction correctness와 별도 masking 기대값은 후속 계약 범위다.
 
-`guardrailCoverage`와 `textCharacters`는 AWS API에서 optional이므로 실행 성공/실패의 조건으로 두지 않는다. 값이 누락되거나 `guarded != total`이어도 그 자체만으로 유효한 `action`을 실패로 바꾸지 않는다. guarded/total 숫자는 추후 내부 telemetry 후보로만 검토하며, MVP evaluator와 `GuardrailExecutionResult`에는 포함하지 않는다.
+`GuardrailResultNormalizer.java`는 Adapter가 이미 만든 `ALLOW` 또는 `BLOCK`만 Domain ActualResult로 변환한다. Adapter가 AWS raw `action`, assessment, output을 Port에 전달하지 않으므로, null/unknown provider response나 분류 불가 intervention은 `PROVIDER_RESPONSE_INVALID`로 실패 처리하고 ActualResult를 만들지 않는다.
 
-실제 응답에는 `actionReason`, `assessments`, `outputs`, `usage`, `coverage`가 포함될 수 있지만 MVP Core의 판정 입력은 action뿐이다. `actionReason`, `assessments`, `outputs`와 assessment 내 match/regex/custom word/PII 값, ARN, provider raw error, 원문 content는 Port·Domain·DB·API·일반 로그 어디에도 전달하거나 저장하지 않는다. `usage`와 guardrail processing latency는 raw text 없이 수치 메트릭으로만, 별도 telemetry 계약이 승인된 뒤에 추가한다. 정책 family의 allowlisted summary도 별도 계약 없이는 추가하지 않는다.
+`guardrailCoverage`와 `textCharacters`는 AWS API에서 optional이므로 실행 성공/실패의 조건으로 두지 않는다. 값이 누락되거나 `guarded != total`이어도 그 자체만으로 유효한 action을 실패로 바꾸지 않는다. guarded/total 숫자는 추후 내부 telemetry 후보로만 검토하며, MVP evaluator와 `GuardrailExecutionResult`에는 포함하지 않는다.
+
+실제 응답에는 `actionReason`, `assessments`, `outputs`, `usage`, `coverage`가 포함될 수 있지만 Adapter는 위 allowlisted action code만 내부적으로 읽는다. `actionReason`, assessment 내 match/regex/custom word/PII 값, output text, ARN, provider raw error, 원문 content는 Port·Domain·DB·API·일반 로그 어디에도 전달하거나 저장하지 않는다. `usage`와 guardrail processing latency는 raw text 없이 수치 메트릭으로만, 별도 telemetry 계약이 승인된 뒤에 추가한다. 정책 family의 allowlisted summary도 별도 계약 없이는 추가하지 않는다.
 
 ## 오류와 timeout 매핑
 

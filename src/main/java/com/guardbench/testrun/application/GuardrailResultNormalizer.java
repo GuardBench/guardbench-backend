@@ -14,8 +14,8 @@ import com.guardbench.testrun.domain.TestExecutionErrorCode;
  */
 public final class GuardrailResultNormalizer {
 
-    private static final String NONE_ACTION = "NONE";
-    private static final String INTERVENED_ACTION = "GUARDRAIL_INTERVENED";
+    private static final String ALLOW_ACTION = "ALLOW";
+    private static final String BLOCK_ACTION = "BLOCK";
 
     private GuardrailResultNormalizer() {
     }
@@ -29,10 +29,10 @@ public final class GuardrailResultNormalizer {
         }
 
         return switch (providerResult.actionCode()) {
-            case NONE_ACTION -> GuardrailExecutionNormalization.succeeded(
+            case ALLOW_ACTION -> GuardrailExecutionNormalization.succeeded(
                     new ActualResult(Action.ALLOW)
             );
-            case INTERVENED_ACTION -> GuardrailExecutionNormalization.succeeded(
+            case BLOCK_ACTION -> GuardrailExecutionNormalization.succeeded(
                     new ActualResult(Action.BLOCK)
             );
             default -> failed(GuardrailFailureCode.PROVIDER_RESPONSE_INVALID);
