@@ -120,40 +120,23 @@ public final class TestRun {
         return id;
     }
 
-    /**
-     * Exports immutable aggregate state for the Infrastructure persistence mapper.
-     */
-    public TestRunPersistenceSnapshot persistenceSnapshot() {
-        return new TestRunPersistenceSnapshot(
-                id,
-                sourceTestSuiteId,
-                baselineTarget,
-                candidateTarget,
-                testCaseCount,
-                processedTestCaseCount,
-                status,
-                executionOutcome,
-                timeline
-        );
-    }
-
-    SourceTestSuiteId sourceTestSuiteId() {
+    public SourceTestSuiteId sourceTestSuiteId() {
         return sourceTestSuiteId;
     }
 
-    BaselineTarget baselineTarget() {
+    public BaselineTarget baselineTarget() {
         return baselineTarget;
     }
 
-    CandidateTarget candidateTarget() {
+    public CandidateTarget candidateTarget() {
         return candidateTarget;
     }
 
-    int testCaseCount() {
+    public int testCaseCount() {
         return testCaseCount;
     }
 
-    int processedTestCaseCount() {
+    public int processedTestCaseCount() {
         return processedTestCaseCount;
     }
 
@@ -161,11 +144,11 @@ public final class TestRun {
         return status;
     }
 
-    TestRunExecutionOutcome executionOutcome() {
+    public TestRunExecutionOutcome executionOutcome() {
         return executionOutcome;
     }
 
-    TestRunTimeline timeline() {
+    public TestRunTimeline timeline() {
         return timeline;
     }
 

@@ -28,23 +28,22 @@ final class TestRunPersistenceMapper {
     }
 
     static TestRunEntity toEntity(TestRun source) {
-        var snapshot = source.persistenceSnapshot();
         return TestRunEntity.of(
-                snapshot.id().value(),
-                snapshot.sourceTestSuiteId().value(),
-                snapshot.status().name(),
-                snapshot.testCaseCount(),
-                snapshot.processedTestCaseCount(),
-                snapshot.baselineTarget().guardrailId(),
-                snapshot.baselineTarget().version(),
-                snapshot.candidateTarget().guardrailId(),
-                snapshot.candidateTarget().requestedSource().name(),
-                snapshot.candidateTarget().resolvedVersion(),
-                snapshot.executionOutcome() == null ? null : snapshot.executionOutcome().name(),
-                snapshot.timeline().createdAt(),
-                snapshot.timeline().startedAt(),
-                snapshot.timeline().completedAt(),
-                snapshot.timeline().updatedAt()
+                source.id().value(),
+                source.sourceTestSuiteId().value(),
+                source.status().name(),
+                source.testCaseCount(),
+                source.processedTestCaseCount(),
+                source.baselineTarget().guardrailId(),
+                source.baselineTarget().version(),
+                source.candidateTarget().guardrailId(),
+                source.candidateTarget().requestedSource().name(),
+                source.candidateTarget().resolvedVersion(),
+                source.executionOutcome() == null ? null : source.executionOutcome().name(),
+                source.timeline().createdAt(),
+                source.timeline().startedAt(),
+                source.timeline().completedAt(),
+                source.timeline().updatedAt()
         );
     }
 

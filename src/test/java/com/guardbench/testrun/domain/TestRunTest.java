@@ -118,27 +118,6 @@ class TestRunTest {
         );
     }
 
-    @Test
-    @DisplayName("persistence snapshot은 저장에 필요한 TestRun 상태를 하나의 불변 값으로 제공한다")
-    void persistenceSnapshotExposesCompleteAggregateState() {
-        TestRun testRun = queuedTestRun(2);
-        testRun.beginPreparing(CREATED_AT.plusSeconds(1));
-        testRun.beginRunning("5", CREATED_AT.plusSeconds(2));
-        testRun.updateProgress(summary(succeededPair(1), succeededPair(2)), CREATED_AT.plusSeconds(3));
-
-        TestRunPersistenceSnapshot snapshot = testRun.persistenceSnapshot();
-
-        assertEquals(new TestRunId(1), snapshot.id());
-        assertEquals(new SourceTestSuiteId(10), snapshot.sourceTestSuiteId());
-        assertEquals("4", snapshot.baselineTarget().version());
-        assertEquals("5", snapshot.candidateTarget().resolvedVersion());
-        assertEquals(2, snapshot.testCaseCount());
-        assertEquals(2, snapshot.processedTestCaseCount());
-        assertEquals(TestRunStatus.RUNNING, snapshot.status());
-        assertNull(snapshot.executionOutcome());
-        assertEquals(CREATED_AT.plusSeconds(3), snapshot.timeline().updatedAt());
-    }
-
     private static TestRun queuedTestRun(int testCaseCount) {
         return TestRun.queue(
                 new TestRunId(1),
