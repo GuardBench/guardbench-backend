@@ -22,7 +22,7 @@ public final class TestCaseSnapshotSourceMapper {
             TestRunId testRunId
     ) {
         Objects.requireNonNull(source, "snapshot source must not be null");
-        return new TestCaseSnapshot(
+        return TestCaseSnapshot.of(
                 snapshotId,
                 testRunId,
                 new SourceTestCaseId(source.sourceTestCaseId()),

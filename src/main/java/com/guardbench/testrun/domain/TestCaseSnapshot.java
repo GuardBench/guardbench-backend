@@ -24,6 +24,19 @@ public record TestCaseSnapshot(
         validateText(category, "category");
     }
 
+    public static TestCaseSnapshot of(
+            TestCaseSnapshotId id,
+            TestRunId testRunId,
+            SourceTestCaseId sourceTestCaseId,
+            String name,
+            String input,
+            ExpectedResult expectedResult,
+            Severity severity,
+            String category
+    ) {
+        return new TestCaseSnapshot(id, testRunId, sourceTestCaseId, name, input, expectedResult, severity, category);
+    }
+
     private static void validateText(String value, String field) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(field + " must not be blank");

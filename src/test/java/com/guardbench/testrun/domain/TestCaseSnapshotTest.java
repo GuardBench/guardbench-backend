@@ -12,7 +12,7 @@ import com.guardbench.testrun.application.port.out.TestCaseSnapshotSource;
 class TestCaseSnapshotTest {
 
     @Test
-    @DisplayName("Snapshot은 source의 실행 시점 값을 TestRun 로컬 모델로 복제한다")
+    @DisplayName("Snapshot은 source의 실행 시점 값을 testrun Context 소유 값으로 복제한다")
     void snapshotCopiesSourceValuesIntoTestRunLocalModel() {
         TestCaseSnapshotSource source = new TestCaseSnapshotSource(
                 10,
@@ -42,7 +42,7 @@ class TestCaseSnapshotTest {
     void rejectsBlankExecutionDefinition() {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new TestCaseSnapshot(
+                () -> TestCaseSnapshot.of(
                         new TestCaseSnapshotId(1),
                         new TestRunId(2),
                         new SourceTestCaseId(3),
