@@ -3,7 +3,7 @@
 > Status: DRAFT
 > Scope: Issue #17
 > Canonical implementation contract: Issue #49에서 분리 예정
-> Last verified: 2026-08-25
+> Last verified: 2026-08-25 (리뷰 반영: ApplyGuardrail 응답 소비 경계)
 
 이 문서는 #17의 Port와 Normalizer가 실제 Amazon Bedrock API/Java SDK 계약을 어떻게 반영하는지 기록한다. 이 문서 자체는 운영 인프라나 AWS 자격 증명을 승인하지 않으며, 실제 SDK dependency와 concrete Adapter 구현 전의 설계 근거다.
 
@@ -13,6 +13,8 @@
 
 - [CreateGuardrailVersion API](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_CreateGuardrailVersion.html)
 - [ApplyGuardrail API](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ApplyGuardrail.html)
+- [GuardrailCoverage API](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_GuardrailCoverage.html)
+- [독립 ApplyGuardrail 사용 가이드](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-use-independent-api.html)
 - [AWS SDK for Java BedrockClient](https://docs.aws.amazon.com/java/api/latest/software/amazon/awssdk/services/bedrock/BedrockClient.html)
 - [AWS SDK for Java BedrockRuntimeClient](https://docs.aws.amazon.com/java/api/latest/software/amazon/awssdk/services/bedrockruntime/BedrockRuntimeClient.html)
 - [AWS SDK for Java ApplyGuardrailResponse](https://docs.aws.amazon.com/java/api/latest/software/amazon/awssdk/services/bedrockruntime/model/ApplyGuardrailResponse.html)
@@ -56,13 +58,15 @@ ApplyGuardrail에는 다음을 전달한다.
 | guardrailVersion | Candidate 경로에서는 1~8자리 숫자형 resolved version. AWS API 자체는 사전 구성된 Guardrail의 `DRAFT`도 허용 |
 | source | MVP input 실행이므로 `INPUT` |
 | content | Snapshot input을 하나의 text content block으로 변환 |
-| outputScope | MVP에서는 생략하거나 `INTERVENTIONS`. 전체 출력이 필요한 디버깅 시에만 `FULL` |
+| outputScope | MVP에서는 `INTERVENTIONS`로 고정. `FULL`은 detected/non-detected 항목 전체를 반환하는 enhanced debugging 용도이며 PII detection 값까지 포함할 수 있으므로 MVP에서는 사용하지 않는다 |
 
-ApplyGuardrailRequest의 `content`는 필수이며 `source`는 `INPUT` 또는 `OUTPUT`이다. MVP는 TestCaseSnapshot input 평가이므로 `INPUT`만 사용한다. `outputScope`는 Required: No이고 유효한 값은 `INTERVENTIONS`와 `FULL`이다. API Reference는 기본값을 명시하지 않으므로 이 문서도 기본값을 단정하지 않는다. 판정 입력이 action뿐이라 두 값 중 무엇을 보내도 MVP 결과는 달라지지 않는다.
+ApplyGuardrailRequest의 `content`는 필수이며 `source`는 `INPUT` 또는 `OUTPUT`이다. MVP는 TestCaseSnapshot input 평가이므로 `INPUT`만 사용한다. `outputScope`는 Required: No이고 유효한 값은 `INTERVENTIONS`와 `FULL`이다. API Reference는 기본값을 명시하지 않으므로 이 문서도 기본값을 단정하지 않는다. MVP 판정 입력은 action뿐이므로 `INTERVENTIONS`로 고정하고, PII를 포함한 assessment 원문을 응답에 담을 수 있는 `FULL`은 별도 telemetry 계약이 승인되기 전까지 요청하지 않는다.
 
 `guardrailVersion` Pattern은 `(|([1-9][0-9]{0,7})|(DRAFT))`이므로 `GuardrailExecutionRequest`와 `GuardrailMaterializedVersion`의 `[1-9][0-9]{0,7}` 검증은 AWS 계약을 따른다. 다만 `docs/api/openapi.yaml`과 `ck_test_run_versions`는 `^[0-9]+$`를 허용해 `"0"`과 9자리 값이 입력·저장될 수 있고, 그 값은 Port 생성 시점에 `IllegalArgumentException`으로 거부된다.
 
 ### 응답 정규화
+
+판정은 `action` 값만 사용한다.
 
 | AWS action | TestRun 결과 |
 | --- | --- |
@@ -70,7 +74,11 @@ ApplyGuardrailRequest의 `content`는 필수이며 `source`는 `INPUT` 또는 `O
 | `GUARDRAIL_INTERVENED` | ActualResult(`BLOCK`) |
 | null/unknown | `PROVIDER_RESPONSE_INVALID` |
 
-실제 응답에는 `actionReason`, `assessments`, `outputs`, `usage`, `coverage`가 포함될 수 있지만 MVP Core의 판정 입력은 action뿐이다. 이 값들과 ARN, 원문 content는 Port 결과로 노출하지 않는다. `GuardrailResultNormalizer.java`는 SDK 타입이 아닌 action code를 입력으로 받아 이 경계를 검증한다.
+`action`이 없거나 알 수 없는 값이면 `PROVIDER_RESPONSE_INVALID`로 실패 처리하고 `ActualResult`를 만들지 않는다. `GuardrailResultNormalizer.java`는 이 매핑만 수행하며 다른 응답 필드를 판정에 사용하지 않는다.
+
+`guardrailCoverage`와 `textCharacters`는 AWS API에서 optional이므로 실행 성공/실패의 조건으로 두지 않는다. 값이 누락되거나 `guarded != total`이어도 그 자체만으로 유효한 `action`을 실패로 바꾸지 않는다. guarded/total 숫자는 추후 내부 telemetry 후보로만 검토하며, MVP evaluator와 `GuardrailExecutionResult`에는 포함하지 않는다.
+
+실제 응답에는 `actionReason`, `assessments`, `outputs`, `usage`, `coverage`가 포함될 수 있지만 MVP Core의 판정 입력은 action뿐이다. `actionReason`, `assessments`, `outputs`와 assessment 내 match/regex/custom word/PII 값, ARN, provider raw error, 원문 content는 Port·Domain·DB·API·일반 로그 어디에도 전달하거나 저장하지 않는다. `usage`와 guardrail processing latency는 raw text 없이 수치 메트릭으로만, 별도 telemetry 계약이 승인된 뒤에 추가한다. 정책 family의 allowlisted summary도 별도 계약 없이는 추가하지 않는다.
 
 ## 오류와 timeout 매핑
 
