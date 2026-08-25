@@ -28,23 +28,24 @@ final class TestRunPersistenceMapper {
     }
 
     static TestRunEntity toEntity(TestRun source) {
-        TestRunEntity target = new TestRunEntity();
-        target.id = source.id().value();
-        target.testSuiteId = source.sourceTestSuiteId().value();
-        target.status = source.status().name();
-        target.testCaseCount = source.testCaseCount();
-        target.processedTestCaseCount = source.processedTestCaseCount();
-        target.baselineGuardrailId = source.baselineTarget().guardrailId();
-        target.baselineVersion = source.baselineTarget().version();
-        target.candidateGuardrailId = source.candidateTarget().guardrailId();
-        target.candidateRequestedSource = source.candidateTarget().requestedSource().name();
-        target.candidateResolvedVersion = source.candidateTarget().resolvedVersion();
-        target.executionOutcome = source.executionOutcome() == null ? null : source.executionOutcome().name();
-        target.createdAt = source.timeline().createdAt();
-        target.startedAt = source.timeline().startedAt();
-        target.completedAt = source.timeline().completedAt();
-        target.updatedAt = source.timeline().updatedAt();
-        return target;
+        var snapshot = source.persistenceSnapshot();
+        return TestRunEntity.of(
+                snapshot.id().value(),
+                snapshot.sourceTestSuiteId().value(),
+                snapshot.status().name(),
+                snapshot.testCaseCount(),
+                snapshot.processedTestCaseCount(),
+                snapshot.baselineTarget().guardrailId(),
+                snapshot.baselineTarget().version(),
+                snapshot.candidateTarget().guardrailId(),
+                snapshot.candidateTarget().requestedSource().name(),
+                snapshot.candidateTarget().resolvedVersion(),
+                snapshot.executionOutcome() == null ? null : snapshot.executionOutcome().name(),
+                snapshot.timeline().createdAt(),
+                snapshot.timeline().startedAt(),
+                snapshot.timeline().completedAt(),
+                snapshot.timeline().updatedAt()
+        );
     }
 
     static TestRun toDomain(TestRunEntity source) {
@@ -66,17 +67,17 @@ final class TestRunPersistenceMapper {
     }
 
     static TestCaseSnapshotEntity toEntity(TestCaseSnapshot source) {
-        TestCaseSnapshotEntity target = new TestCaseSnapshotEntity();
-        target.id = source.id().value();
-        target.testRunId = source.testRunId().value();
-        target.sourceTestCaseId = source.sourceTestCaseId().value();
-        target.name = source.name();
-        target.input = source.input();
-        target.expectedAction = source.expectedResult().action().name();
-        target.severity = source.severity().name();
-        target.category = source.category();
-        target.createdAt = source.createdAt();
-        return target;
+        return TestCaseSnapshotEntity.of(
+                source.id().value(),
+                source.testRunId().value(),
+                source.sourceTestCaseId().value(),
+                source.name(),
+                source.input(),
+                source.expectedResult().action().name(),
+                source.severity().name(),
+                source.category(),
+                source.createdAt()
+        );
     }
 
     static TestCaseSnapshot toDomain(TestCaseSnapshotEntity source) {
@@ -94,15 +95,15 @@ final class TestRunPersistenceMapper {
     }
 
     static TestExecutionEntity toEntity(TestExecution source) {
-        TestExecutionEntity target = new TestExecutionEntity();
-        target.id = new TestExecutionEntityId(source.id().snapshotId().value(), source.id().targetType().name());
-        target.resultStatus = source.status().name();
-        target.actualAction = source.actualResult() == null ? null : source.actualResult().action().name();
-        target.errorCode = source.error() == null ? null : source.error().code().name();
-        target.errorMessage = source.error() == null ? null : source.error().message();
-        target.startedAt = source.startedAt();
-        target.completedAt = source.completedAt();
-        return target;
+        return TestExecutionEntity.of(
+                new TestExecutionEntityId(source.id().snapshotId().value(), source.id().targetType().name()),
+                source.status().name(),
+                source.actualResult() == null ? null : source.actualResult().action().name(),
+                source.error() == null ? null : source.error().code().name(),
+                source.error() == null ? null : source.error().message(),
+                source.startedAt(),
+                source.completedAt()
+        );
     }
 
     static TestExecution toDomain(TestExecutionEntity source) {
