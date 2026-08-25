@@ -108,14 +108,60 @@ entity "quality_gate_result" as quality_gate {
   * created_at : TIMESTAMPTZ(6)
 }
 
+entity "test_run_idempotency" as idempotency {
+  * idempotency_key : VARCHAR(100) <<PK>>
+  --
+  * request_fingerprint : CHAR(64)
+  * test_run_id : BIGINT <<UK, FK>>
+  * created_at : TIMESTAMPTZ(6)
+  * expires_at : TIMESTAMPTZ(6)
+}
+
+entity "test_run_resolution_claim" as resolution_claim {
+  * test_run_id : BIGINT <<PK, FK>>
+  --
+  * claim_token : UUID
+  * lease_until : TIMESTAMPTZ(6)
+  * attempt_count : INTEGER
+  * claimed_at : TIMESTAMPTZ(6)
+  * updated_at : TIMESTAMPTZ(6)
+}
+
+entity "test_execution_claim" as execution_claim {
+  * snapshot_id : BIGINT <<PK, FK>>
+  * target_type : VARCHAR(16) <<PK>>
+  --
+  * claim_token : UUID
+  * lease_until : TIMESTAMPTZ(6)
+  * attempt_count : INTEGER
+  * claimed_at : TIMESTAMPTZ(6)
+  * updated_at : TIMESTAMPTZ(6)
+}
+
+entity "outbox_event" as outbox {
+  * event_id : UUID <<PK>>
+  --
+  * event_type : VARCHAR(32)
+  * schema_version : SMALLINT
+  * payload : JSONB
+  * deduplication_key : TEXT <<UK>>
+  * status : VARCHAR(16)
+  * created_at : TIMESTAMPTZ(6)
+    published_at : TIMESTAMPTZ(6)
+}
+
 test_suite ||--o{ test_case : contains
 test_suite ||--o{ test_run : selected by
 test_run ||--|{ snapshot : fixes
 test_case ||--o{ snapshot : source of
 snapshot ||--o{ execution : BASELINE / CANDIDATE
+snapshot ||--o| execution_claim : technical lease
+test_run ||--o| idempotency : request replay
+test_run ||--o| resolution_claim : technical lease
 snapshot ||--o| assertion : candidate assertion
 snapshot ||--o| change_result : baseline comparison
 test_run ||--o| quality_gate : final evaluation
+outbox ..> test_run : payload reference only
 
 note right of test_case
   Active row: deleted_at IS NULL
@@ -135,8 +181,10 @@ end note
 
 legend left
   Every FK uses ON DELETE RESTRICT.
-  Outbox and Idempotency tables are reserved for Issue #5.
-  This diagram does not create new Domain IDs or Repository Ports.
+  Outbox has no test_run_id column; its payload
+  carries the immutable event identifiers.
+  Claim relations are technical leases, not Domain IDs
+  or Aggregate Repositories.
 endlegend
 
 @enduml

@@ -33,13 +33,8 @@
 | 비동기 실행, Outbox, claim, 메시지, retry | [ADR 0005](../decisions/0005-async-test-run-execution-contract.md) | #14·#16·#17·#18·#19가 필요한 단락으로 이동하게 한다. |
 | Context 간 Java 타입 격리 | [ADR 0006](../decisions/0006-independent-domain-contract-boundaries.md) | scalar/code 계약과 Integration Adapter 경계를 확인하게 한다. |
 
-## #14 착수 전 미결정
+## #14 물리 계약
 
-[Issue #49 미결정 기록](https://github.com/GuardBench/guardbench-backend/issues/49#issuecomment-5404846847)에 따라 다음 물리 계약은 아직 APPROVED source가 없다.
+[ADR 0008](../decisions/0008-async-testrun-persistence-contract.md)은 `test_run_idempotency`, `test_run_resolution_claim`, `test_execution_claim`, `outbox_event`의 DDL·시간·retry·멱등성 의미를 소유한다. #14는 이 계약과 기존 ADR 0002 ERD를 기준으로 Flyway Migration·PlantUML ERD·Persistence Adapter를 구현한다.
 
-- resolution claim relation의 relation 이름·PK·컬럼·제약·조건부 선점 SQL
-- HTTP Idempotency relation의 key·payload 충돌·TestRun/Outbox 연결·제약
-- Outbox와 execution claim의 일부 SQL type·CHECK·index
-- 위 relation의 물리 ERD cardinality
-
-따라서 #14는 이를 임의 Migration으로 확정하지 않는다. 승인된 결정이 추가되면, 이 인덱스에는 새 canonical 계약 문서만 연결한다.
+Candidate HTTP 입력은 [ADR 0007](../decisions/0007-testrun-candidate-draft-input.md)에 따라 `DRAFT`만 허용한다.

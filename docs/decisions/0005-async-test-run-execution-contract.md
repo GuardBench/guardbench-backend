@@ -10,6 +10,7 @@
 - Decision date: 2026-08-25
 - Related Issue: #5
 - Superseded in part by: [ADR 0006](0006-independent-domain-contract-boundaries.md) — `evaluation -> testrun` Java Domain 의존 해석
+- Extended by: [ADR 0008](0008-async-testrun-persistence-contract.md) — Outbox, claim과 HTTP Idempotency 물리 계약
 - Implementation routing: [비동기 TestRun 계약 라우팅](../contracts/README.md) (`DRAFT`; ADR의 승인 내용을 대체하지 않으며 #14·#16·#17·#18·#19의 질문별 진입점을 제공)
 
 ## Context
