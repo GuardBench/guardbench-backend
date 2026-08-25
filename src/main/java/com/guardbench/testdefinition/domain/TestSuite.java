@@ -87,11 +87,14 @@ public final class TestSuite {
     }
 
     /**
-     * 이름과 설명을 수정한다.
+     * 이름을 수정한다.
      *
-     * <p>{@code name}이 {@code null}이면 기존 이름을 유지한다. {@code description}은 값 제거를 허용
-     * 해야 하므로 이 method의 인자로 구분할 수 없다. 설명만 비우려면
-     * {@link #changeDescription(String, Instant)}를 사용한다.
+     * <p>{@code name}은 필수이며 {@code null}과 공백만 있는 값을 거부한다. 승인된 API 계약이 이름의
+     * 명시적 {@code null}을 허용하지 않기 때문이다. {@code description}은 값 제거를 허용해야 하므로
+     * 이 method의 인자로 "생략"과 "명시적 null"을 구분할 수 없어 함께 다루지 않는다. 설명을 바꾸거나
+     * 비우려면 {@link #changeDescription(String, Instant)}를 사용한다.
+     *
+     * <p>근거: {@code docs/api/openapi.yaml}
      */
     public void rename(String name, Instant now) {
         String changedName = requireNonBlankName(name);
