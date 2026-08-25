@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -21,6 +20,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import com.guardbench.testrun.application.port.out.ClaimResult;
 import com.guardbench.testrun.application.port.out.ExecutionClaimPort;
 import com.guardbench.testrun.application.port.out.ResolutionClaimPort;
+import com.guardbench.testrun.support.fixture.TestRunPersistenceFixture;
 import com.guardbench.testsupport.PostgresTestConfiguration;
 
 @SpringBootTest
@@ -40,30 +40,12 @@ class ClaimAdapterIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        jdbcTemplate.execute("TRUNCATE TABLE test_execution_claim, test_run_resolution_claim, outbox_event, test_suite CASCADE");
-        jdbcTemplate.update(
-                "INSERT INTO test_suite(id, name, created_at, updated_at) VALUES (?, ?, ?, ?)",
-                800L, "suite", Timestamp.from(BASE), Timestamp.from(BASE));
-        jdbcTemplate.update(
-                """
-                INSERT INTO test_run(id, test_suite_id, status, test_case_count, processed_test_case_count,
-                    baseline_guardrail_id, baseline_version, candidate_guardrail_id,
-                    candidate_requested_source, created_at, updated_at)
-                VALUES (801, 800, 'QUEUED', 1, 0, 'g1', '1', 'g1', 'DRAFT', ?, ?)
-                """,
-                Timestamp.from(BASE), Timestamp.from(BASE));
-        jdbcTemplate.update(
-                """
-                INSERT INTO test_case(id, test_suite_id, name, input, expected_action, severity, category, created_at, updated_at)
-                VALUES (802, 800, 'case', 'input', 'ALLOW', 'HIGH', 'cat', ?, ?)
-                """,
-                Timestamp.from(BASE), Timestamp.from(BASE));
-        jdbcTemplate.update(
-                """
-                INSERT INTO test_case_snapshot(id, test_run_id, source_test_case_id, name, input, expected_action, severity, category, created_at)
-                VALUES (803, 801, 802, 'case', 'input', 'ALLOW', 'HIGH', 'cat', ?)
-                """,
-                Timestamp.from(BASE));
+        TestRunPersistenceFixture fixture = new TestRunPersistenceFixture(jdbcTemplate);
+        fixture.clearPersistenceTables();
+        fixture.insertTestSuite(800L, BASE);
+        fixture.insertQueuedTestRun(801L, 800L, 1, BASE);
+        fixture.insertTestCase(802L, 800L, BASE);
+        fixture.insertSnapshot(803L, 801L, 802L, BASE);
     }
 
     @Nested

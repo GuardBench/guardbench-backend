@@ -3,7 +3,6 @@ package com.guardbench;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
@@ -18,6 +17,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import com.guardbench.testrun.application.port.out.IdempotencyPort;
 import com.guardbench.testrun.application.port.out.IdempotencyRecord;
+import com.guardbench.testrun.support.fixture.TestRunPersistenceFixture;
 import com.guardbench.testsupport.PostgresTestConfiguration;
 
 @SpringBootTest
@@ -36,27 +36,11 @@ class IdempotencyAdapterIntegrationTest {
 
     @BeforeEach
     void cleanUp() {
-        jdbcTemplate.execute("TRUNCATE TABLE test_run_idempotency CASCADE");
-        jdbcTemplate.execute("TRUNCATE TABLE test_suite CASCADE");
-        jdbcTemplate.update(
-                "INSERT INTO test_suite(id, name, created_at, updated_at) VALUES (?, ?, ?, ?)",
-                900L, "suite", Timestamp.from(BASE), Timestamp.from(BASE));
-        jdbcTemplate.update(
-                """
-                INSERT INTO test_run(id, test_suite_id, status, test_case_count, processed_test_case_count,
-                    baseline_guardrail_id, baseline_version, candidate_guardrail_id,
-                    candidate_requested_source, created_at, updated_at)
-                VALUES (901, 900, 'QUEUED', 1, 0, 'g1', '1', 'g1', 'DRAFT', ?, ?)
-                """,
-                Timestamp.from(BASE), Timestamp.from(BASE));
-        jdbcTemplate.update(
-                """
-                INSERT INTO test_run(id, test_suite_id, status, test_case_count, processed_test_case_count,
-                    baseline_guardrail_id, baseline_version, candidate_guardrail_id,
-                    candidate_requested_source, created_at, updated_at)
-                VALUES (902, 900, 'QUEUED', 1, 0, 'g1', '1', 'g1', 'DRAFT', ?, ?)
-                """,
-                Timestamp.from(BASE), Timestamp.from(BASE));
+        TestRunPersistenceFixture fixture = new TestRunPersistenceFixture(jdbcTemplate);
+        fixture.clearPersistenceTables();
+        fixture.insertTestSuite(900L, BASE);
+        fixture.insertQueuedTestRun(901L, 900L, 1, BASE);
+        fixture.insertQueuedTestRun(902L, 900L, 1, BASE);
     }
 
     private Instant nowPlus3Hours() {

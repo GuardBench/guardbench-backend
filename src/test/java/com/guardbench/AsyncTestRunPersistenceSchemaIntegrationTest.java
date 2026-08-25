@@ -16,23 +16,30 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import com.guardbench.testrun.support.fixture.TestRunPersistenceFixture;
 import com.guardbench.testsupport.PostgresTestConfiguration;
 
+/**
+ * @see <a href="../../../../docs/decisions/0008-async-testrun-persistence-contract.md">ADR 0008</a>
+ */
 @SpringBootTest
 @Import(PostgresTestConfiguration.class)
 class AsyncTestRunPersistenceSchemaIntegrationTest {
 
-    private static final Timestamp CREATED_AT = Timestamp.from(Instant.parse("2026-08-25T00:00:00Z"));
-    private static final Timestamp EXPIRES_AT = Timestamp.from(Instant.parse("2026-08-25T03:00:00Z"));
+    private static final Instant CREATED_AT = Instant.parse("2026-08-25T00:00:00Z");
+    private static final Instant EXPIRES_AT = Instant.parse("2026-08-25T03:00:00Z");
+
+    private TestRunPersistenceFixture fixture;
 
     @BeforeEach
     void resetDatabase(@Autowired JdbcTemplate jdbcTemplate) {
-        jdbcTemplate.execute("TRUNCATE TABLE outbox_event, test_suite CASCADE");
+        fixture = new TestRunPersistenceFixture(jdbcTemplate);
+        fixture.clearPersistenceTables();
     }
 
     @Test
-    @DisplayName("ADR 0008 기술 테이블 네 개의 PK, FK와 index 대상이 생성된다")
-    void createsApprovedTechnicalTables(@Autowired JdbcTemplate jdbcTemplate) {
+    @DisplayName("비동기 TestRun의 멱등성·Outbox·두 Claim 테이블을 생성한다")
+    void createsAsyncTechnicalTables(@Autowired JdbcTemplate jdbcTemplate) {
         Integer tableCount = jdbcTemplate.queryForObject(
                 """
                 SELECT count(*)
@@ -50,9 +57,9 @@ class AsyncTestRunPersistenceSchemaIntegrationTest {
     }
 
     @Test
-    @DisplayName("Idempotency expiry와 claim lease·attempt 제약은 유효하지 않은 행을 거부한다")
-    void rejectsInvalidIdempotencyAndClaimShapes(@Autowired JdbcTemplate jdbcTemplate) {
-        insertTestRunFixture(jdbcTemplate);
+    @DisplayName("유효하지 않은 Idempotency 만료 시각과 resolution claim lease·시도 횟수는 저장하지 않는다")
+    void rejectsInvalidIdempotencyAndResolutionClaimShapes(@Autowired JdbcTemplate jdbcTemplate) {
+        insertTestRunFixture();
 
         assertThrows(
                 DataIntegrityViolationException.class,
@@ -65,8 +72,8 @@ class AsyncTestRunPersistenceSchemaIntegrationTest {
                         "run-1",
                         "a".repeat(64),
                         100L,
-                        CREATED_AT,
-                        CREATED_AT
+                        Timestamp.from(CREATED_AT),
+                        Timestamp.from(CREATED_AT)
                 )
         );
 
@@ -80,19 +87,19 @@ class AsyncTestRunPersistenceSchemaIntegrationTest {
                         """,
                         100L,
                         UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                        CREATED_AT,
+                        Timestamp.from(CREATED_AT),
                         -1,
-                        CREATED_AT,
-                        CREATED_AT
+                        Timestamp.from(CREATED_AT),
+                        Timestamp.from(CREATED_AT)
                 )
         );
     }
 
     @Test
-    @DisplayName("Execution claim target과 Outbox event shape은 승인된 값만 허용한다")
+    @DisplayName("허용하지 않은 execution claim 대상과 Outbox event 값은 저장하지 않는다")
     void rejectsInvalidExecutionClaimAndOutboxValues(@Autowired JdbcTemplate jdbcTemplate) {
-        insertTestRunFixture(jdbcTemplate);
-        insertSnapshotFixture(jdbcTemplate);
+        insertTestRunFixture();
+        fixture.insertSnapshot(1000L, 100L, 11L, CREATED_AT);
 
         assertThrows(
                 DataIntegrityViolationException.class,
@@ -105,10 +112,10 @@ class AsyncTestRunPersistenceSchemaIntegrationTest {
                         1000L,
                         "UNKNOWN",
                         UUID.fromString("00000000-0000-0000-0000-000000000002"),
-                        EXPIRES_AT,
+                        Timestamp.from(EXPIRES_AT),
                         0,
-                        CREATED_AT,
-                        CREATED_AT
+                        Timestamp.from(CREATED_AT),
+                        Timestamp.from(CREATED_AT)
                 )
         );
 
@@ -127,79 +134,15 @@ class AsyncTestRunPersistenceSchemaIntegrationTest {
                         "{}",
                         "dedup-1",
                         "PENDING",
-                        CREATED_AT,
-                        CREATED_AT
+                        Timestamp.from(CREATED_AT),
+                        Timestamp.from(CREATED_AT)
                 )
         );
     }
 
-    private static void insertTestRunFixture(JdbcTemplate jdbcTemplate) {
-        jdbcTemplate.update(
-                """
-                INSERT INTO test_suite(id, name, description, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                10L,
-                "suite",
-                null,
-                CREATED_AT,
-                CREATED_AT
-        );
-        jdbcTemplate.update(
-                """
-                INSERT INTO test_case(
-                    id, test_suite_id, name, input, expected_action, severity, category, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                11L,
-                10L,
-                "case",
-                "input",
-                "ALLOW",
-                "HIGH",
-                "category",
-                CREATED_AT,
-                CREATED_AT
-        );
-        jdbcTemplate.update(
-                """
-                INSERT INTO test_run(
-                    id, test_suite_id, status, test_case_count, processed_test_case_count,
-                    baseline_guardrail_id, baseline_version, candidate_guardrail_id,
-                    candidate_requested_source, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                100L,
-                10L,
-                "QUEUED",
-                1,
-                0,
-                "guardrail",
-                "1",
-                "guardrail",
-                "DRAFT",
-                CREATED_AT,
-                CREATED_AT
-        );
-    }
-
-    private static void insertSnapshotFixture(JdbcTemplate jdbcTemplate) {
-        jdbcTemplate.update(
-                """
-                INSERT INTO test_case_snapshot(
-                    id, test_run_id, source_test_case_id, name, input,
-                    expected_action, severity, category, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                1000L,
-                100L,
-                11L,
-                "case",
-                "input",
-                "ALLOW",
-                "HIGH",
-                "category",
-                CREATED_AT
-        );
+    private void insertTestRunFixture() {
+        fixture.insertTestSuite(10L, CREATED_AT);
+        fixture.insertTestCase(11L, 10L, CREATED_AT);
+        fixture.insertQueuedTestRun(100L, 10L, 1, CREATED_AT);
     }
 }

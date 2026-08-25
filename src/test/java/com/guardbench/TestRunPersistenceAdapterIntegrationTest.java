@@ -3,7 +3,6 @@ package com.guardbench;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.sql.Timestamp;
 import java.time.Instant;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +33,7 @@ import com.guardbench.testrun.domain.TestRunId;
 import com.guardbench.testrun.domain.repository.TestCaseSnapshotRepository;
 import com.guardbench.testrun.domain.repository.TestExecutionRepository;
 import com.guardbench.testrun.domain.repository.TestRunRepository;
+import com.guardbench.testrun.support.fixture.TestRunPersistenceFixture;
 import com.guardbench.testsupport.PostgresTestConfiguration;
 
 @SpringBootTest
@@ -43,17 +43,10 @@ class TestRunPersistenceAdapterIntegrationTest {
 
     @BeforeEach
     void resetDatabase(@Autowired JdbcTemplate jdbcTemplate) {
-        jdbcTemplate.execute("TRUNCATE TABLE outbox_event, test_suite CASCADE");
-        jdbcTemplate.update(
-                "INSERT INTO test_suite(id, name, created_at, updated_at) VALUES (?, ?, ?, ?)",
-                500L, "suite", Timestamp.from(CREATED_AT), Timestamp.from(CREATED_AT));
-        jdbcTemplate.update(
-                """
-                INSERT INTO test_case(id, test_suite_id, name, input, expected_action, severity, category, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                501L, 500L, "case", "input", "ALLOW", "HIGH", "category",
-                Timestamp.from(CREATED_AT), Timestamp.from(CREATED_AT));
+        TestRunPersistenceFixture fixture = new TestRunPersistenceFixture(jdbcTemplate);
+        fixture.clearPersistenceTables();
+        fixture.insertTestSuite(500L, CREATED_AT);
+        fixture.insertTestCase(501L, 500L, CREATED_AT);
     }
 
     @Test

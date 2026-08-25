@@ -19,6 +19,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import com.guardbench.testrun.application.port.out.OutboxEventRecord;
 import com.guardbench.testrun.application.port.out.OutboxPort;
+import com.guardbench.testrun.support.fixture.TestRunPersistenceFixture;
 import com.guardbench.testsupport.PostgresTestConfiguration;
 
 @SpringBootTest
@@ -39,7 +40,7 @@ class OutboxAdapterIntegrationTest {
 
     @BeforeEach
     void cleanUp() {
-        jdbcTemplate.execute("TRUNCATE TABLE outbox_event CASCADE");
+        new TestRunPersistenceFixture(jdbcTemplate).clearPersistenceTables();
     }
 
     @Test
@@ -67,6 +68,7 @@ class OutboxAdapterIntegrationTest {
     }
 
     @Test
+    @DisplayName("PENDING Outbox event를 저장한 뒤 batch로 조회한다")
     void savePendingEvent_andFindBatch() {
         UUID eventId = UUID.randomUUID();
         OutboxEventRecord event = OutboxEventRecord.pending(
