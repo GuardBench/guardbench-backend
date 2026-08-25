@@ -1,9 +1,10 @@
 # Bedrock Guardrails Adapter 설계 근거
 
-> Status: DRAFT
-> Scope: Issue #17
-> Canonical implementation contract: Issue #49에서 분리 예정
-> Last verified: 2026-08-25 (리뷰 반영: ApplyGuardrail 응답 소비 경계)
+> Status: APPROVED
+> Owner: Backend
+> Last reviewed: 2026-08-25
+> Canonical source: GitHub
+> Origin: Issue #17, PR #58 리뷰 반영
 
 이 문서는 #17의 Port와 Normalizer가 실제 Amazon Bedrock API/Java SDK 계약을 어떻게 반영하는지 기록한다. 이 문서 자체는 운영 인프라나 AWS 자격 증명을 승인하지 않으며, 실제 SDK dependency와 concrete Adapter 구현 전의 설계 근거다.
 
@@ -112,4 +113,4 @@ DB commit, SQS publish/ack 같은 기술 실패는 이 Adapter에서 TestExecuti
 - version 제약 세 계층(`openapi.yaml`·`ck_test_run_versions`·Guardrail Port) 정렬과 거부 값을 `TARGET_CONFIGURATION_INVALID`로 정규화하는 변환은 #18의 Worker orchestration에서 처리한다
 - `guardrailIdentifier`에 AWS Pattern 검증을 도입할지는 Port 계약을 좁히는 결정이므로 별도 판단이 필요하다
 
-이 문서의 DRAFT 상태를 APPROVED 구현 계약으로 승격하는 작업과 canonical 문서 라우팅은 #49에서 처리한다.
+이 문서는 #49에서 APPROVED로 승격됐으며 [비동기 TestRun 계약 맵](../contracts/README.md)의 `resolution-flow`, `provider-retry-and-dlq` 계약 키에서 보조 참조로 라우팅된다. Primary contract는 여전히 [ADR 0005](../decisions/0005-async-test-run-execution-contract.md)이며, 이 문서는 그 계약이 실제 AWS API/SDK 필드에 대응하는 설계 근거를 소유한다.
