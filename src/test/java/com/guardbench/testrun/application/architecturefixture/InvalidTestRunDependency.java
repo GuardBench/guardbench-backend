@@ -1,12 +1,12 @@
 package com.guardbench.testrun.application.architecturefixture;
 
-import com.guardbench.evaluation.domain.architecturefixture.EvaluationMarker;
+import com.guardbench.testdefinition.domain.architecturefixture.TestDefinitionMarker;
 
 public final class InvalidTestRunDependency {
 
-    private EvaluationMarker marker;
+    private TestDefinitionMarker marker;
 
-    public EvaluationMarker getMarker() {
+    public TestDefinitionMarker getMarker() {
         return marker;
     }
 }
