@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,12 +42,19 @@ import com.guardbench.testsupport.PostgresTestConfiguration;
 class TestRunPersistenceAdapterIntegrationTest {
     private static final Instant CREATED_AT = Instant.parse("2026-08-25T00:00:00Z");
 
+    private TestRunPersistenceFixture fixture;
+
     @BeforeEach
     void resetDatabase(@Autowired JdbcTemplate jdbcTemplate) {
-        TestRunPersistenceFixture fixture = new TestRunPersistenceFixture(jdbcTemplate);
+        fixture = new TestRunPersistenceFixture(jdbcTemplate);
         fixture.clearPersistenceTables();
         fixture.insertTestSuite(500L, CREATED_AT);
         fixture.insertTestCase(501L, 500L, CREATED_AT);
+    }
+
+    @AfterEach
+    void clearDatabase() {
+        fixture.clearPersistenceTables();
     }
 
     @Test
