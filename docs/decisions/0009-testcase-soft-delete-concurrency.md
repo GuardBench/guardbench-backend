@@ -60,7 +60,7 @@ Repository Port의 공개 method 목록과 signature, Domain 모델, 공개 API,
 - 논리 삭제 시각과 상태 전이 규칙은 계속 Aggregate가 소유하고, Adapter는 원자적 저장 경쟁만 판정한다.
 - schema, Migration과 Repository Port 변경이 없어 되돌릴 범위가 작다.
 - 삭제 저장 경로는 일반적인 entity merge나 무조건 UPDATE가 아니라 affected-row count를 신뢰할 수 있는 조건부 UPDATE를 사용해야 한다.
-- 격리수준을 `READ UNCOMMITTED`에 준하는 동작으로 바꾸거나 PostgreSQL 외 DB로 이전하면 이 동시성 보장을 다시 검토해야 한다.
+- 격리수준을 `READ COMMITTED`가 아닌 값으로 변경하거나 PostgreSQL 외 DB로 이전하면 이 동시성 보장을 다시 검토해야 한다. `REPEATABLE READ` 또는 `SERIALIZABLE`을 채택할 때는 serialization failure의 트랜잭션 재시도와 최종 404 매핑을 함께 결정한다.
 
 동시 PATCH의 last-write-wins는 이 결정의 범위가 아니며 MVP에서 수용한다. PATCH 동시성 의미는 승인된 계약에 없고 저장 전략에 따라 충돌 양상이 달라지므로, 필요하면 별도 Issue와 ADR에서 다룬다. TestSuite 편집, 실행 경로 동시성, Aggregate 시각 단조성과 분산 락도 범위에 포함하지 않는다.
 
