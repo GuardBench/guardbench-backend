@@ -10,7 +10,7 @@
 - Decision date: 2026-08-25
 - Related Issue: #5
 - Superseded in part by: [ADR 0006](0006-independent-domain-contract-boundaries.md) — `evaluation -> testrun` Java Domain 의존 해석
-- Implementation preparation: [TestRun Persistence Adapter 준비](../implementation/testrun-persistence.md) (`DRAFT`; ADR의 승인 내용을 대체하지 않으며 #14 물리 계약의 미결정을 추적)
+- Implementation routing: [비동기 TestRun 계약 라우팅](../contracts/README.md) (`DRAFT`; ADR의 승인 내용을 대체하지 않으며 #14·#16·#17·#18·#19의 질문별 진입점을 제공)
 
 ## Context
 
