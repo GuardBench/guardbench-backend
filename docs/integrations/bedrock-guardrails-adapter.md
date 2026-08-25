@@ -7,6 +7,8 @@
 
 이 문서는 #17의 Port와 Normalizer가 실제 Amazon Bedrock API/Java SDK 계약을 어떻게 반영하는지 기록한다. 이 문서 자체는 운영 인프라나 AWS 자격 증명을 승인하지 않으며, 실제 SDK dependency와 concrete Adapter 구현 전의 설계 근거다.
 
+`ApplyGuardrail`은 foundation model 호출과 분리된 독립 평가 API다. 따라서 GuardBench가 평가할 입력 텍스트를 직접 전달하며, 모델 ID나 모델 응답을 요청하지 않는다. #17의 Candidate 경로에서는 먼저 DRAFT를 숫자 버전으로 materialize한 뒤 그 버전을 평가하지만, API 자체는 사전 구성된 Guardrail의 `DRAFT` 버전을 직접 평가하는 것도 허용한다.
+
 ## 공식 참고 자료
 
 - [CreateGuardrailVersion API](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_CreateGuardrailVersion.html)
@@ -40,7 +42,7 @@ AWS 문서상 `clientRequestToken`은 1~256자의 영숫자/하이픈 값이며 
 
 ### 응답
 
-HTTP 202 응답의 `guardrailId`와 숫자형 `version`을 `GuardrailMaterializedVersion.java`로 변환한다. DRAFT version이나 빈 version은 실행 대상으로 허용하지 않는다.
+HTTP 202 응답의 `guardrailId`와 숫자형 `version`을 `GuardrailMaterializedVersion.java`로 변환한다. #17의 Candidate materialization 결과는 반드시 숫자형 version이어야 하며, Candidate DRAFT를 그대로 실행 대상으로 전달하지 않는다.
 
 ## Guardrail 실행
 
@@ -51,12 +53,12 @@ ApplyGuardrail에는 다음을 전달한다.
 | AWS 필드 | 설계 값 |
 | --- | --- |
 | guardrailIdentifier | materialized target identifier |
-| guardrailVersion | 1~8자리 숫자형 resolved version |
+| guardrailVersion | Candidate 경로에서는 1~8자리 숫자형 resolved version. AWS API 자체는 사전 구성된 Guardrail의 `DRAFT`도 허용 |
 | source | MVP input 실행이므로 `INPUT` |
 | content | Snapshot input을 하나의 text content block으로 변환 |
-| outputScope | MVP에서는 action만 필요하므로 기본값 사용 |
+| outputScope | MVP에서는 `INTERVENTIONS`(기본값) 또는 생략. 전체 출력이 필요한 디버깅 시에만 `FULL` |
 
-ApplyGuardrailRequest의 `content`는 필수이며 `source`는 `INPUT` 또는 `OUTPUT`이다. MVP는 TestCaseSnapshot input 평가이므로 `INPUT`만 사용한다.
+ApplyGuardrailRequest의 `content`는 필수이며 `source`는 `INPUT` 또는 `OUTPUT`이다. MVP는 TestCaseSnapshot input 평가이므로 `INPUT`만 사용한다. `outputScope`의 유효한 값은 `INTERVENTIONS`와 `FULL`이며, 모델 호출 없이 Guardrail 평가 결과만 반환한다.
 
 ### 응답 정규화
 
