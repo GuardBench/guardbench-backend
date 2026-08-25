@@ -34,7 +34,7 @@ CreateGuardrailVersion에는 다음 값을 전달한다.
 
 | AWS 필드 | 설계 값 |
 | --- | --- |
-| guardrailIdentifier | TestRun의 고정 target identifier |
+| guardrailIdentifier | TestRun의 고정 target identifier. AWS Pattern과 2048자 제약은 실행 요청과 동일하며 현재 Port는 non-blank만 검증한다 |
 | clientRequestToken | `guardbench-test-run-{testRunId}` |
 | description | MVP에서는 선택 사항이며 별도 의미를 부여하지 않음 |
 
@@ -52,13 +52,15 @@ ApplyGuardrail에는 다음을 전달한다.
 
 | AWS 필드 | 설계 값 |
 | --- | --- |
-| guardrailIdentifier | materialized target identifier |
+| guardrailIdentifier | materialized target identifier. AWS Pattern은 `(\|([a-z0-9]+)\|(arn:aws(-[^:]+)?:bedrock:[a-z0-9-]{1,20}:[0-9]{12}:guardrail/[a-z0-9]+))`이고 최대 2048자다. 현재 Port는 non-blank만 검증한다 |
 | guardrailVersion | Candidate 경로에서는 1~8자리 숫자형 resolved version. AWS API 자체는 사전 구성된 Guardrail의 `DRAFT`도 허용 |
 | source | MVP input 실행이므로 `INPUT` |
 | content | Snapshot input을 하나의 text content block으로 변환 |
-| outputScope | MVP에서는 `INTERVENTIONS`(기본값) 또는 생략. 전체 출력이 필요한 디버깅 시에만 `FULL` |
+| outputScope | MVP에서는 생략하거나 `INTERVENTIONS`. 전체 출력이 필요한 디버깅 시에만 `FULL` |
 
-ApplyGuardrailRequest의 `content`는 필수이며 `source`는 `INPUT` 또는 `OUTPUT`이다. MVP는 TestCaseSnapshot input 평가이므로 `INPUT`만 사용한다. `outputScope`의 유효한 값은 `INTERVENTIONS`와 `FULL`이며, 모델 호출 없이 Guardrail 평가 결과만 반환한다.
+ApplyGuardrailRequest의 `content`는 필수이며 `source`는 `INPUT` 또는 `OUTPUT`이다. MVP는 TestCaseSnapshot input 평가이므로 `INPUT`만 사용한다. `outputScope`는 Required: No이고 유효한 값은 `INTERVENTIONS`와 `FULL`이다. API Reference는 기본값을 명시하지 않으므로 이 문서도 기본값을 단정하지 않는다. 판정 입력이 action뿐이라 두 값 중 무엇을 보내도 MVP 결과는 달라지지 않는다.
+
+`guardrailVersion` Pattern은 `(|([1-9][0-9]{0,7})|(DRAFT))`이므로 `GuardrailExecutionRequest`와 `GuardrailMaterializedVersion`의 `[1-9][0-9]{0,7}` 검증은 AWS 계약을 따른다. 다만 `docs/api/openapi.yaml`과 `ck_test_run_versions`는 `^[0-9]+$`를 허용해 `"0"`과 9자리 값이 입력·저장될 수 있고, 그 값은 Port 생성 시점에 `IllegalArgumentException`으로 거부된다.
 
 ### 응답 정규화
 
@@ -99,5 +101,7 @@ DB commit, SQS publish/ack 같은 기술 실패는 이 Adapter에서 TestExecuti
 - `BedrockClient`/`BedrockRuntimeClient` concrete Adapter
 - AWS SDK model/exception mock 테스트
 - 실제 AWS credential을 이용한 E2E
+- version 제약 세 계층(`openapi.yaml`·`ck_test_run_versions`·Guardrail Port) 정렬과 거부 값을 `TARGET_CONFIGURATION_INVALID`로 정규화하는 변환은 #18의 Worker orchestration에서 처리한다
+- `guardrailIdentifier`에 AWS Pattern 검증을 도입할지는 Port 계약을 좁히는 결정이므로 별도 판단이 필요하다
 
 이 문서의 DRAFT 상태를 APPROVED 구현 계약으로 승격하는 작업과 canonical 문서 라우팅은 #49에서 처리한다.
