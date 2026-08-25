@@ -37,8 +37,8 @@ class TestRunTest {
             assertEquals(TestRunExecutionOutcome.COMPLETED, testRun.executionOutcome());
             assertEquals(2, testRun.processedTestCaseCount());
             assertEquals("5", testRun.candidateTarget().resolvedVersion());
-            assertEquals(CREATED_AT.plusSeconds(1), testRun.startedAt());
-            assertEquals(CREATED_AT.plusSeconds(4), testRun.completedAt());
+            assertEquals(CREATED_AT.plusSeconds(1), testRun.timeline().startedAt());
+            assertEquals(CREATED_AT.plusSeconds(4), testRun.timeline().completedAt());
         }
 
         @Test
@@ -52,7 +52,7 @@ class TestRunTest {
             assertEquals(TestRunStatus.FINISHED, testRun.status());
             assertEquals(TestRunExecutionOutcome.ERROR, testRun.executionOutcome());
             assertEquals(2, testRun.processedTestCaseCount());
-            assertEquals(CREATED_AT.plusSeconds(2), testRun.completedAt());
+            assertEquals(CREATED_AT.plusSeconds(2), testRun.timeline().completedAt());
         }
 
         @Test
@@ -67,6 +67,38 @@ class TestRunTest {
 
             assertThrows(IllegalStateException.class, () -> testRun.updateProgress(summary(succeededPair(1)), CREATED_AT));
             assertThrows(IllegalStateException.class, () -> testRun.beginPreparing(CREATED_AT));
+        }
+
+        @Test
+        @DisplayName("Candidate 확정 version 없이는 RUNNING으로 전이하지 않는다")
+        void rejectsRunningTransitionWithoutResolvedCandidateVersion() {
+            TestRun testRun = queuedTestRun(1);
+            testRun.beginPreparing(CREATED_AT.plusSeconds(1));
+
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> testRun.beginRunning(null, CREATED_AT.plusSeconds(2))
+            );
+
+            assertEquals(TestRunStatus.PREPARING, testRun.status());
+            assertNull(testRun.candidateTarget().resolvedVersion());
+        }
+
+        @Test
+        @DisplayName("완료 시각이 시작 시각보다 앞서면 FINISHED로 전이하지 않는다")
+        void rejectsFinishWithCompletedTimeBeforeStartedTime() {
+            TestRun testRun = queuedTestRun(1);
+            testRun.beginPreparing(CREATED_AT.plusSeconds(10));
+            testRun.beginRunning("5", CREATED_AT.plusSeconds(11));
+
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> testRun.finish(summary(succeededPair(1)), CREATED_AT.plusSeconds(9))
+            );
+
+            assertEquals(TestRunStatus.RUNNING, testRun.status());
+            assertNull(testRun.executionOutcome());
+            assertNull(testRun.timeline().completedAt());
         }
     }
 

@@ -13,10 +13,7 @@ public final class TestRun {
     private int processedTestCaseCount;
     private TestRunStatus status;
     private TestRunExecutionOutcome executionOutcome;
-    private final Instant createdAt;
-    private Instant startedAt;
-    private Instant completedAt;
-    private Instant updatedAt;
+    private TestRunTimeline timeline;
 
     private TestRun(
             TestRunId id,
@@ -37,8 +34,7 @@ public final class TestRun {
             throw new IllegalArgumentException("test case count must be positive");
         }
         this.testCaseCount = testCaseCount;
-        this.createdAt = Objects.requireNonNull(createdAt, "created time must not be null");
-        this.updatedAt = createdAt;
+        this.timeline = TestRunTimeline.created(createdAt);
         this.status = TestRunStatus.QUEUED;
     }
 
@@ -55,15 +51,14 @@ public final class TestRun {
 
     public void beginPreparing(Instant preparedAt) {
         requireStatus(TestRunStatus.QUEUED, "begin preparation");
-        startedAt = requireTime(preparedAt);
-        updatedAt = preparedAt;
+        timeline = timeline.start(preparedAt);
         status = TestRunStatus.PREPARING;
     }
 
-    public void beginRunning(String resolvedCandidateVersion, Instant startedAt) {
+    public void beginRunning(String resolvedCandidateVersion, Instant runningAt) {
         requireStatus(TestRunStatus.PREPARING, "begin execution");
         candidateTarget = candidateTarget.resolve(resolvedCandidateVersion);
-        this.updatedAt = requireTime(startedAt);
+        timeline = timeline.touch(runningAt);
         status = TestRunStatus.RUNNING;
     }
 
@@ -71,26 +66,24 @@ public final class TestRun {
         requireStatus(TestRunStatus.RUNNING, "update progress");
         validateSummary(executionSummary);
         processedTestCaseCount = executionSummary.processedTestCaseCount();
-        this.updatedAt = requireTime(updatedAt);
+        timeline = timeline.touch(updatedAt);
     }
 
     public void finish(TestRunExecutionSummary executionSummary, Instant completedAt) {
         requireStatus(TestRunStatus.RUNNING, "finish");
         validateSummary(executionSummary);
         TestRunExecutionOutcome outcome = executionSummary.outcome();
+        timeline = timeline.complete(completedAt);
         processedTestCaseCount = executionSummary.processedTestCaseCount();
         executionOutcome = outcome;
-        this.completedAt = requireTime(completedAt);
-        updatedAt = completedAt;
         status = TestRunStatus.FINISHED;
     }
 
     public void failPreparation(Instant completedAt) {
         requireStatus(TestRunStatus.PREPARING, "fail preparation");
+        timeline = timeline.complete(completedAt);
         processedTestCaseCount = testCaseCount;
         executionOutcome = TestRunExecutionOutcome.ERROR;
-        this.completedAt = requireTime(completedAt);
-        updatedAt = completedAt;
         status = TestRunStatus.FINISHED;
     }
 
@@ -126,20 +119,8 @@ public final class TestRun {
         return executionOutcome;
     }
 
-    public Instant createdAt() {
-        return createdAt;
-    }
-
-    public Instant startedAt() {
-        return startedAt;
-    }
-
-    public Instant completedAt() {
-        return completedAt;
-    }
-
-    public Instant updatedAt() {
-        return updatedAt;
+    public TestRunTimeline timeline() {
+        return timeline;
     }
 
     private void validateSummary(TestRunExecutionSummary executionSummary) {
@@ -153,9 +134,5 @@ public final class TestRun {
         if (status != expectedStatus) {
             throw new IllegalStateException("cannot " + operation + " when TestRun status is " + status);
         }
-    }
-
-    private static Instant requireTime(Instant time) {
-        return Objects.requireNonNull(time, "time must not be null");
     }
 }

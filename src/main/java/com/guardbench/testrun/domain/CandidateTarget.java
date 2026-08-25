@@ -15,6 +15,9 @@ public record CandidateTarget(String guardrailId, CandidateSource requestedSourc
     }
 
     public CandidateTarget resolve(String version) {
+        if (version == null) {
+            throw new IllegalArgumentException("resolved version must not be null");
+        }
         return new CandidateTarget(guardrailId, requestedSource, version);
     }
 }
