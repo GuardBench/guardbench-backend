@@ -2,7 +2,6 @@ package com.guardbench.architecture;
 
 import static com.guardbench.architecture.GuardBenchArchitectureRules.COMMON_DOMAIN_TYPES;
 import static com.guardbench.architecture.GuardBenchArchitectureRules.DOMAIN_DEPENDENCIES;
-import static com.guardbench.architecture.GuardBenchArchitectureRules.DOMAIN_TYPE_OWNERSHIP;
 import static com.guardbench.architecture.GuardBenchArchitectureRules.PACKAGE_BY_DOMAIN;
 import static com.guardbench.architecture.GuardBenchArchitectureRules.TESTRUN_DEPENDENCIES;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -41,23 +40,16 @@ class GuardBenchArchitectureRuleDetectionTest {
     }
 
     @Test
-    @DisplayName("testrun에서 evaluation으로 향하는 역방향 의존을 탐지한다")
-    void dependencyDirectionRuleDetectsTestrunToEvaluation() {
+    @DisplayName("testrun Core에서 다른 Bounded Context로 향하는 의존을 탐지한다")
+    void dependencyDirectionRuleDetectsTestRunCoreToAnotherBoundedContext() {
         JavaClasses fixture = importer.importPackages(
                 "com.guardbench.testrun.application.architecturefixture",
-                "com.guardbench.evaluation.domain.architecturefixture"
+                "com.guardbench.testdefinition.domain.architecturefixture"
         );
 
-        assertViolation(TESTRUN_DEPENDENCIES, fixture, "EvaluationMarker");
+        assertViolation(TESTRUN_DEPENDENCIES, fixture, "TestDefinitionMarker");
     }
 
-    @Test
-    @DisplayName("testrun에 중복 정의된 Action을 소유권 위반으로 탐지한다")
-    void ownershipRuleDetectsDuplicateAction() {
-        JavaClasses fixture = importer.importPackages("com.guardbench.testrun.domain.architecturefixture");
-
-        assertViolation(DOMAIN_TYPE_OWNERSHIP, fixture, "must be owned by com.guardbench.testdefinition.domain");
-    }
 
     @Test
     @DisplayName("common.domain의 타입을 Domain 소유권 위반으로 탐지한다")

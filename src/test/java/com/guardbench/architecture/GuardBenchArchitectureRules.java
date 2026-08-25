@@ -29,9 +29,6 @@ final class GuardBenchArchitectureRules {
             Map.entry("TestSuiteId", "com.guardbench.testdefinition.domain"),
             Map.entry("TestCase", "com.guardbench.testdefinition.domain"),
             Map.entry("TestCaseId", "com.guardbench.testdefinition.domain"),
-            Map.entry("ExpectedResult", "com.guardbench.testdefinition.domain"),
-            Map.entry("Action", "com.guardbench.testdefinition.domain"),
-            Map.entry("Severity", "com.guardbench.testdefinition.domain"),
             Map.entry("TestSuiteRepository", "com.guardbench.testdefinition.domain.repository"),
             Map.entry("TestCaseRepository", "com.guardbench.testdefinition.domain.repository"),
             Map.entry("TestRun", "com.guardbench.testrun.domain"),
@@ -80,12 +77,16 @@ final class GuardBenchArchitectureRules {
             .allowEmptyShould(true);
 
     static final ArchRule TESTRUN_DEPENDENCIES = noClasses()
-            .that().resideInAPackage("com.guardbench.testrun..")
+            .that().resideInAnyPackage(
+                    "com.guardbench.testrun.domain..",
+                    "com.guardbench.testrun.application.."
+            )
             .should().dependOnClassesThat().resideInAnyPackage(
+                    "com.guardbench.testdefinition..",
                     "com.guardbench.evaluation..",
                     "com.guardbench.guardrail.."
             )
-            .as("testrun must not depend on evaluation or guardrail")
+            .as("testrun Domain and Application Core must not depend on other bounded contexts")
             .allowEmptyShould(true);
 
     static final ArchRule EVALUATION_DEPENDENCIES = noClasses()

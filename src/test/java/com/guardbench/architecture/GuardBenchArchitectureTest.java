@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
  * 승인된 package-by-domain 구조와 도메인 의존 경계를 production class에서 검증한다.
  *
  * @see <a href="../../../../../../docs/conventions/package-structure.md">패키지 구조와 네이밍</a>
- * @see <a href="../../../../../../docs/decisions/0001-domain-type-ownership-and-aggregate-boundaries.md">ADR 0001</a>
+ * @see <a href="../../../../../../docs/decisions/0006-independent-domain-contract-boundaries.md">ADR 0006</a>
  */
 class GuardBenchArchitectureTest {
 
@@ -48,8 +48,8 @@ class GuardBenchArchitectureTest {
     }
 
     @Test
-    @DisplayName("최상위 도메인 간 의존은 ADR 0001 방향을 따른다")
-    void topLevelDomainDependenciesFollowAdr0001() {
+    @DisplayName("최상위 도메인 간 의존은 ADR 0006 경계를 따른다")
+    void topLevelDomainDependenciesFollowAdr0006() {
         TESTDEFINITION_DEPENDENCIES.check(productionClasses);
         TESTRUN_DEPENDENCIES.check(productionClasses);
         EVALUATION_DEPENDENCIES.check(productionClasses);
@@ -58,7 +58,7 @@ class GuardBenchArchitectureTest {
     }
 
     @Test
-    @DisplayName("ADR 0001 Domain 타입은 승인된 패키지 한 곳에서만 소유한다")
+    @DisplayName("경계 간 공유하지 않는 Domain 타입은 승인된 패키지에서 소유한다")
     void domainTypesHaveOneApprovedOwner() {
         DOMAIN_TYPE_OWNERSHIP.check(productionClasses);
     }
