@@ -132,6 +132,17 @@ public final class TestCase {
      *
      * <p>전달된 값은 먼저 모두 검증한 뒤 반영해 일부만 적용된 상태를 만들지 않는다. 논리 삭제된
      * TestCase는 수정할 수 없다.
+     *
+     * <p>반영할 값이 현재 값과 모두 같으면 아무 상태도 바꾸지 않고 {@code updatedAt}도 유지한다.
+     * 승인된 API 계약이 no-op 수정에 현재 상태를 그대로 반환하도록 요구하고 영속성 계약이
+     * {@code updated_at}을 실제 변경 시각으로만 정의하기 때문이다. 이 비교를 Aggregate가 소유하므로
+     * 호출자가 상태를 대신 비교하지 않는다.
+     *
+     * <p>값이 하나도 전달되지 않은 요청은 no-op이 아니라 잘못된 요청이므로
+     * {@link IllegalArgumentException}으로 거부한다.
+     *
+     * <p>근거: {@code docs/api/openapi.yaml},
+     * {@code docs/decisions/0002-postgresql-persistence-contract.md}
      */
     public void changeDefinition(
             String name,
@@ -151,17 +162,24 @@ public final class TestCase {
         String changedInput = input == null ? this.input : requireNonBlank(input, "입력");
         String changedCategory =
                 category == null ? this.category : requireNonBlank(category, "category");
+        ExpectedResult changedExpectedResult =
+                expectedResult == null ? this.expectedResult : expectedResult;
+        Severity changedSeverity = severity == null ? this.severity : severity;
         Instant changedAt = requireUpdateInstant(now);
+
+        if (changedName.equals(this.name)
+                && changedInput.equals(this.input)
+                && changedExpectedResult.equals(this.expectedResult)
+                && changedSeverity == this.severity
+                && changedCategory.equals(this.category)) {
+            return;
+        }
 
         this.name = changedName;
         this.input = changedInput;
+        this.expectedResult = changedExpectedResult;
+        this.severity = changedSeverity;
         this.category = changedCategory;
-        if (expectedResult != null) {
-            this.expectedResult = expectedResult;
-        }
-        if (severity != null) {
-            this.severity = severity;
-        }
         this.updatedAt = changedAt;
     }
 

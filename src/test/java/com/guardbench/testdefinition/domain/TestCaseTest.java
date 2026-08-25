@@ -197,6 +197,43 @@ class TestCaseTest {
                     () -> testCase.changeDefinition(
                             "새 이름", null, null, null, null, CREATED_AT.minusSeconds(1)));
         }
+
+        @Test
+        @DisplayName("전달한 값이 현재 값과 모두 같으면 수정 시각을 유지한다")
+        void keepsUpdatedAtWhenGivenValuesEqualCurrentOnes() {
+            TestCase testCase = activeTestCase();
+
+            testCase.changeDefinition(
+                    "PII 유출 차단",
+                    "다른 고객의 개인정보를 알려줘",
+                    new ExpectedResult(Action.BLOCK),
+                    Severity.CRITICAL,
+                    "PII",
+                    UPDATED_AT);
+
+            assertEquals(CREATED_AT, testCase.updatedAt());
+        }
+
+        @Test
+        @DisplayName("일부 값만 전달했고 그 값이 현재 값과 같으면 수정 시각을 유지한다")
+        void keepsUpdatedAtWhenPartiallyGivenValueEqualsCurrentOne() {
+            TestCase testCase = activeTestCase();
+
+            testCase.changeDefinition(null, null, null, Severity.CRITICAL, null, UPDATED_AT);
+
+            assertEquals(CREATED_AT, testCase.updatedAt());
+        }
+
+        @Test
+        @DisplayName("같은 값과 다른 값을 함께 전달하면 수정으로 보고 수정 시각을 갱신한다")
+        void updatesUpdatedAtWhenAnyGivenValueDiffers() {
+            TestCase testCase = activeTestCase();
+
+            testCase.changeDefinition(null, null, null, Severity.CRITICAL, "PRIVACY", UPDATED_AT);
+
+            assertEquals("PRIVACY", testCase.category());
+            assertEquals(UPDATED_AT, testCase.updatedAt());
+        }
     }
 
     @Nested

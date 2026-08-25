@@ -132,6 +132,16 @@ class TestSuiteTest {
             assertEquals("안전성 회귀", testSuite.name());
             assertEquals(CREATED_AT, testSuite.updatedAt());
         }
+
+        @Test
+        @DisplayName("현재 이름과 같은 이름을 전달하면 수정 시각을 유지한다")
+        void keepsUpdatedAtWhenGivenNameEqualsCurrentOne() {
+            TestSuite testSuite = newTestSuite(null);
+
+            testSuite.rename("안전성 회귀", UPDATED_AT);
+
+            assertEquals(CREATED_AT, testSuite.updatedAt());
+        }
     }
 
     @Nested
@@ -157,6 +167,27 @@ class TestSuiteTest {
             testSuite.changeDescription(null, UPDATED_AT);
 
             assertNull(testSuite.description());
+        }
+
+        @Test
+        @DisplayName("현재 설명과 같은 설명을 전달하면 수정 시각을 유지한다")
+        void keepsUpdatedAtWhenGivenDescriptionEqualsCurrentOne() {
+            TestSuite testSuite = newTestSuite("이전 설명");
+
+            testSuite.changeDescription("이전 설명", UPDATED_AT);
+
+            assertEquals(CREATED_AT, testSuite.updatedAt());
+        }
+
+        @Test
+        @DisplayName("설명이 이미 없을 때 공백만 있는 값을 전달하면 수정 시각을 유지한다")
+        void keepsUpdatedAtWhenBlankGivenToAbsentDescription() {
+            TestSuite testSuite = newTestSuite(null);
+
+            testSuite.changeDescription("   ", UPDATED_AT);
+
+            assertNull(testSuite.description());
+            assertEquals(CREATED_AT, testSuite.updatedAt());
         }
     }
 

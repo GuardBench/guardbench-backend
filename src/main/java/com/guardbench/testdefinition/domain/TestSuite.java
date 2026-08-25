@@ -1,6 +1,7 @@
 package com.guardbench.testdefinition.domain;
 
 import java.time.Instant;
+import java.util.Objects;
 
 /**
  * 관련 TestCase를 묶는 정책 테스트 자산이며 Aggregate Root다.
@@ -94,11 +95,19 @@ public final class TestSuite {
      * 이 method의 인자로 "생략"과 "명시적 null"을 구분할 수 없어 함께 다루지 않는다. 설명을 바꾸거나
      * 비우려면 {@link #changeDescription(String, Instant)}를 사용한다.
      *
-     * <p>근거: {@code docs/api/openapi.yaml}
+     * <p>새 이름이 현재 이름과 같으면 아무 상태도 바꾸지 않고 {@code updatedAt}도 유지한다. 영속성
+     * 계약이 {@code updated_at}을 이름 또는 설명이 실제로 바뀔 때만 변경하도록 정의하기 때문이다.
+     *
+     * <p>근거: {@code docs/api/openapi.yaml},
+     * {@code docs/decisions/0002-postgresql-persistence-contract.md}
      */
     public void rename(String name, Instant now) {
         String changedName = requireNonBlankName(name);
         Instant changedAt = requireUpdateInstant(now);
+
+        if (changedName.equals(this.name)) {
+            return;
+        }
 
         this.name = changedName;
         this.updatedAt = changedAt;
@@ -106,11 +115,21 @@ public final class TestSuite {
 
     /**
      * 설명을 수정한다. {@code null}, 빈 문자열과 공백 문자열은 설명 제거로 처리한다.
+     *
+     * <p>정규화한 새 설명이 현재 설명과 같으면 아무 상태도 바꾸지 않고 {@code updatedAt}도 유지한다.
+     * 정규화한 값으로 비교하므로 공백만 있는 값을 이미 비어 있는 설명에 전달해도 변경으로 보지 않는다.
+     *
+     * <p>근거: {@code docs/decisions/0002-postgresql-persistence-contract.md}
      */
     public void changeDescription(String description, Instant now) {
+        String changedDescription = normalizeDescription(description);
         Instant changedAt = requireUpdateInstant(now);
 
-        this.description = normalizeDescription(description);
+        if (Objects.equals(changedDescription, this.description)) {
+            return;
+        }
+
+        this.description = changedDescription;
         this.updatedAt = changedAt;
     }
 
