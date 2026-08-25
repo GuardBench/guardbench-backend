@@ -45,6 +45,7 @@
 | 결정 | [ADR 0006: 독립 도메인 개발을 위한 경계 계약과 Java 타입 격리](decisions/0006-independent-domain-contract-boundaries.md) | APPROVED | Backend | 2026-08-25 | 없음 |
 | 결정 | [ADR 0007: TestRun Candidate 입력은 DRAFT만 허용](decisions/0007-testrun-candidate-draft-input.md) | APPROVED | Backend | 2026-08-25 | 없음 |
 | 결정 | [ADR 0008: 비동기 TestRun 물리 멱등성·claim·Outbox 계약](decisions/0008-async-testrun-persistence-contract.md) | APPROVED | Backend | 2026-08-25 | 없음 |
+| 결정 | [ADR 0009: TestCase 논리 삭제의 동시 요청 처리](decisions/0009-testcase-soft-delete-concurrency.md) | APPROVED | Backend | 2026-08-25 | 없음 |
 | AI 개발 | [작업 워크플로](ai-development/workflow.md) | APPROVED | Team | 2026-08-24 | 현재 대화에서 승격 |
 | AI 개발 | [코드 리뷰](ai-development/review.md) | APPROVED | Team | 2026-08-24 | PR #20·#23 사례와 Issue #33 |
 
