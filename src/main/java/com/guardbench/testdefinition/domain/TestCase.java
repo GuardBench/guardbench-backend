@@ -302,11 +302,21 @@ public final class TestCase {
     }
 
     private static String requireNonBlank(String value, String label) {
-        if (value == null || value.isBlank()) {
+        if (isContractBlank(value)) {
             throw new IllegalArgumentException("TestCase " + label + "은 비어 있을 수 없습니다.");
         }
 
         return value;
+    }
+
+    private static boolean isContractBlank(String value) {
+        return value == null || value.codePoints().allMatch(TestCase::isContractWhitespace);
+    }
+
+    private static boolean isContractWhitespace(int codePoint) {
+        return Character.isWhitespace(codePoint)
+                || Character.isSpaceChar(codePoint)
+                || codePoint == 0xFEFF;
     }
 
     private static Instant requireInstant(Instant instant, String label) {

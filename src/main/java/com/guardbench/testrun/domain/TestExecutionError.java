@@ -6,8 +6,18 @@ public record TestExecutionError(TestExecutionErrorCode code, String message) {
 
     public TestExecutionError {
         Objects.requireNonNull(code, "error code must not be null");
-        if (message == null || message.isBlank()) {
+        if (isContractBlank(message)) {
             throw new IllegalArgumentException("error message must not be blank");
         }
+    }
+
+    private static boolean isContractBlank(String value) {
+        return value == null || value.codePoints().allMatch(TestExecutionError::isContractWhitespace);
+    }
+
+    private static boolean isContractWhitespace(int codePoint) {
+        return Character.isWhitespace(codePoint)
+                || Character.isSpaceChar(codePoint)
+                || codePoint == 0xFEFF;
     }
 }
