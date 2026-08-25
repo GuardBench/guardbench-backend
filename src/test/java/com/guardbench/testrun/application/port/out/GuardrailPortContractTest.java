@@ -1,6 +1,7 @@
 package com.guardbench.testrun.application.port.out;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -124,6 +125,16 @@ class GuardrailPortContractTest {
         void rejectsBlankActionCode() {
             assertThrows(IllegalArgumentException.class,
                     () -> new GuardrailExecutionResult("   ", null));
+        }
+
+        @Test
+        @DisplayName("빈 action code와 failure code를 함께 설정하면 failure로 성립하고 isSuccess는 false다")
+        void treatsBlankActionWithFailureAsFailure() {
+            GuardrailExecutionResult result =
+                    new GuardrailExecutionResult("   ", GuardrailFailureCode.PROVIDER_TIMEOUT);
+
+            assertFalse(result.isSuccess());
+            assertEquals(GuardrailFailureCode.PROVIDER_TIMEOUT, result.failureCode());
         }
     }
 }

@@ -19,6 +19,6 @@ public record GuardrailExecutionResult(String actionCode, GuardrailFailureCode f
     }
 
     public boolean isSuccess() {
-        return actionCode != null;
+        return actionCode != null && !actionCode.isBlank();
     }
 }

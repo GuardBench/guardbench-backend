@@ -61,6 +61,18 @@ class GuardrailResultNormalizerTest {
     }
 
     @Test
+    @DisplayName("blank action code와 failure code가 함께 있는 결과도 failure code 그대로 정규화된다")
+    void normalizesBlankActionWithFailureCodeAsFailure() {
+        GuardrailExecutionNormalization normalized = GuardrailResultNormalizer.normalize(
+                new GuardrailExecutionResult("   ", GuardrailFailureCode.PROVIDER_TIMEOUT)
+        );
+
+        assertNull(normalized.actualResult());
+        assertEquals(TestExecutionErrorCode.PROVIDER_TIMEOUT, normalized.error().code());
+        assertEquals("Guardrail provider timed out.", normalized.error().message());
+    }
+
+    @Test
     @DisplayName("Provider target 오류는 공개 가능한 고정 메시지로 정규화된다")
     void normalizesTargetFailureToSafeMessage() {
         GuardrailExecutionNormalization normalized = GuardrailResultNormalizer.normalize(
