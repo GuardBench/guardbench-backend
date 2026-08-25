@@ -168,8 +168,14 @@ public final class TestCase {
     /**
      * TestCase를 논리 삭제한다.
      *
+     * <p>삭제 시각과 수정 시각을 같은 값으로 기록한다. 승인된 영속성 계약이 논리 삭제를 상태 변경으로
+     * 취급해 {@code deleted_at}과 {@code updated_at}을 같은 시각으로 요구하며, 삭제 후에는 수정을
+     * 거부하므로 이 method가 두 시각을 함께 확정한다.
+     *
      * <p>이미 삭제된 TestCase를 다시 삭제하면 {@link IllegalStateException}을 던진다. 삭제는 이미
      * 만들어진 Snapshot과 실행·판정 결과에 전파되지 않는다.
+     *
+     * <p>근거: {@code docs/decisions/0002-postgresql-persistence-contract.md}
      */
     public void delete(Instant now) {
         requireNotDeleted("삭제");
@@ -178,6 +184,7 @@ public final class TestCase {
         requireNotBefore(deletedInstant, createdAt, "삭제 시각");
 
         this.deletedAt = deletedInstant;
+        this.updatedAt = deletedInstant;
     }
 
     /**

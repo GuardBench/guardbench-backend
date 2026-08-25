@@ -216,6 +216,17 @@ class TestCaseTest {
         }
 
         @Test
+        @DisplayName("삭제 시각과 수정 시각을 같은 값으로 기록한다")
+        void recordsDeletionInstantAsUpdatedAt() {
+            TestCase testCase = activeTestCase();
+
+            testCase.delete(DELETED_AT);
+
+            assertEquals(DELETED_AT, testCase.deletedAt());
+            assertEquals(DELETED_AT, testCase.updatedAt());
+        }
+
+        @Test
         @DisplayName("삭제해도 실행 기준이 되는 정의 값은 그대로 남는다")
         void keepsDefinitionValuesAfterDeletion() {
             TestCase testCase = activeTestCase();
