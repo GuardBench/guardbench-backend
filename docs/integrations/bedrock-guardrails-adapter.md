@@ -6,7 +6,7 @@
 > Canonical source: GitHub
 > Origin: Issue #17, PR #58 리뷰 반영
 
-이 문서는 #17의 Port와 Normalizer가 실제 Amazon Bedrock API/Java SDK 계약을 어떻게 반영하는지 기록한다. 이 문서 자체는 운영 인프라나 AWS 자격 증명을 승인하지 않으며, 실제 SDK dependency와 concrete Adapter 구현 전의 설계 근거다.
+이 문서는 #17의 Port와 Normalizer, concrete Adapter가 실제 Amazon Bedrock API/Java SDK 계약을 어떻게 반영하는지 기록한다. 이 문서는 운영 인프라나 AWS 자격 증명을 승인하지 않으며, SDK client의 Spring credentials/region 조립과 실제 AWS E2E는 별도 범위다.
 
 `ApplyGuardrail`은 foundation model 호출과 분리된 독립 평가 API다. 따라서 GuardBench가 평가할 입력 텍스트를 직접 전달하며, 모델 ID나 모델 응답을 요청하지 않는다. #17의 Candidate 경로에서는 먼저 DRAFT를 숫자 버전으로 materialize한 뒤 그 버전을 평가하지만, API 자체는 사전 구성된 Guardrail의 `DRAFT` 버전을 직접 평가하는 것도 허용한다.
 
@@ -97,18 +97,17 @@ DB commit, SQS publish/ack 같은 기술 실패는 이 Adapter에서 TestExecuti
 
 ## 현재 구현과 후속 범위
 
-현재 PR #58에는 다음만 구현되어 있다.
+현재 PR에는 다음을 구현한다.
 
-- 소비자 소유 materialization/execution Port
-- provider-independent request/result/failure value contract
+- 소비자 소유 materialization/execution Port와 provider-independent request/result/failure value contract
 - action과 failure code를 Core 결과로 바꾸는 Normalizer
-- 실제 AWS 호출 없이 실행하는 단위 테스트
+- `guardrail/infrastructure/bedrock`의 `BedrockClient`/`BedrockRuntimeClient` concrete Adapter
+- AWS SDK request·response·exception mock 단위 테스트
+- `software.amazon.awssdk:bedrock:2.54.3`, `software.amazon.awssdk:bedrockruntime:2.54.3` production dependency
 
 아직 구현하지 않은 항목:
 
-- `software.amazon.awssdk:bedrock` 및 `bedrockruntime` production dependency
-- `BedrockClient`/`BedrockRuntimeClient` concrete Adapter
-- AWS SDK model/exception mock 테스트
+- Spring credentials/region 및 SDK client bean 조립
 - 실제 AWS credential을 이용한 E2E
 - version 제약 세 계층(`openapi.yaml`·`ck_test_run_versions`·Guardrail Port) 정렬과 거부 값을 `TARGET_CONFIGURATION_INVALID`로 정규화하는 변환은 #18의 Worker orchestration에서 처리한다
 - `guardrailIdentifier`에 AWS Pattern 검증을 도입할지는 Port 계약을 좁히는 결정이므로 별도 판단이 필요하다

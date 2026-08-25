@@ -8,5 +8,10 @@ package com.guardbench.testrun.application.port.out;
  */
 public interface GuardrailMaterializationPort {
 
+    /**
+     * Candidate DRAFT를 숫자형 version으로 materialize한다.
+     *
+     * @throws GuardrailProviderException provider 실패를 안정적인 failure code로 전달할 때
+     */
     GuardrailMaterializedVersion materialize(GuardrailMaterializationRequest request);
 }
