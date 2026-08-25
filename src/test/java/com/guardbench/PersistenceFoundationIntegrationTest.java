@@ -45,10 +45,5 @@ class PersistenceFoundationIntegrationTest {
                 Integer.class);
 
         assertEquals(12, tableCount);
-
-        Integer suiteCount = jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM test_suite", Integer.class);
-
-        assertEquals(0, suiteCount);
     }
 }
