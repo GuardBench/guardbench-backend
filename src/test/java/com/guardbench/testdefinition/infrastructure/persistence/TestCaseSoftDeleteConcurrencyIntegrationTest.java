@@ -56,6 +56,9 @@ class TestCaseSoftDeleteConcurrencyIntegrationTest {
     private TestSuiteRepository testSuiteRepository;
 
     @Autowired
+    private TestCaseJpaRepository jpaRepository;
+
+    @Autowired
     private PlatformTransactionManager transactionManager;
 
     @Autowired
@@ -104,7 +107,9 @@ class TestCaseSoftDeleteConcurrencyIntegrationTest {
             assertEquals(ApplicationErrorCode.TEST_CASE_NOT_FOUND, failure.errorCode());
         }
 
-        TestCase stored = repository.findById(testCaseId).orElseThrow();
+        TestCase stored = jpaRepository.findById(testCaseId.value())
+                .map(TestCaseEntityMapper::toDomain)
+                .orElseThrow();
         assertTrue(stored.isDeleted());
         assertEquals(stored.deletedAt(), stored.updatedAt());
         assertTrue(List.of(FIRST_DELETED_AT, SECOND_DELETED_AT).contains(stored.deletedAt()));

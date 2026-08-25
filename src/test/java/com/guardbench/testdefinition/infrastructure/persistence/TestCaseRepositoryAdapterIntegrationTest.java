@@ -54,6 +54,9 @@ class TestCaseRepositoryAdapterIntegrationTest {
     private TestSuiteRepository testSuiteRepository;
 
     @Autowired
+    private TestCaseJpaRepository jpaRepository;
+
+    @Autowired
     private EntityManager entityManager;
 
     private TestSuiteId suiteId;
@@ -82,7 +85,7 @@ class TestCaseRepositoryAdapterIntegrationTest {
         repository.save(newTestCase(id, "PII 유출 차단", Severity.CRITICAL));
 
         flushAndClear();
-        TestCase reloaded = repository.findById(id).orElseThrow();
+        TestCase reloaded = repository.findActiveById(id).orElseThrow();
 
         assertEquals(id, reloaded.id());
         assertEquals(suiteId, reloaded.testSuiteId());
@@ -96,16 +99,16 @@ class TestCaseRepositoryAdapterIntegrationTest {
     }
 
     @Test
-    @DisplayName("논리 삭제한 TestCase는 findById로는 조회되고 findActiveById로는 조회되지 않는다")
+    @DisplayName("논리 삭제한 TestCase 행은 유지되고 활성 조회에서는 제외된다")
     void excludesDeletedTestCaseFromActiveLookupOnly() {
         TestCaseId id = storedTestCase("PII 유출 차단", Severity.CRITICAL);
 
-        TestCase stored = repository.findById(id).orElseThrow();
+        TestCase stored = repository.findActiveById(id).orElseThrow();
         stored.delete(DELETED_AT);
         repository.save(stored);
         flushAndClear();
 
-        assertTrue(repository.findById(id).isPresent());
+        assertTrue(jpaRepository.findById(id.value()).isPresent());
         assertTrue(repository.findActiveById(id).isEmpty());
     }
 
@@ -114,12 +117,12 @@ class TestCaseRepositoryAdapterIntegrationTest {
     void storesDeletionInstantAsUpdatedAt() {
         TestCaseId id = storedTestCase("PII 유출 차단", Severity.CRITICAL);
 
-        TestCase stored = repository.findById(id).orElseThrow();
+        TestCase stored = repository.findActiveById(id).orElseThrow();
         stored.delete(DELETED_AT);
         repository.save(stored);
         flushAndClear();
 
-        TestCase reloaded = repository.findById(id).orElseThrow();
+        TestCase reloaded = findIncludingDeletedById(id);
 
         assertEquals(DELETED_AT, reloaded.deletedAt());
         assertEquals(DELETED_AT, reloaded.updatedAt());
@@ -133,7 +136,7 @@ class TestCaseRepositoryAdapterIntegrationTest {
         target.delete(DELETED_AT);
 
         repository.save(target);
-        TestCase reloaded = repository.findById(id).orElseThrow();
+        TestCase reloaded = findIncludingDeletedById(id);
 
         assertEquals(DELETED_AT, reloaded.deletedAt());
         assertEquals(DELETED_AT, reloaded.updatedAt());
@@ -144,7 +147,7 @@ class TestCaseRepositoryAdapterIntegrationTest {
     @DisplayName("이미 논리 삭제된 TestCase 상태를 다시 저장하면 TEST_CASE_NOT_FOUND를 반환한다")
     void rejectsRepeatedDeletionWithNotFound() {
         TestCaseId id = storedTestCase("PII 유출 차단", Severity.CRITICAL);
-        TestCase target = repository.findById(id).orElseThrow();
+        TestCase target = repository.findActiveById(id).orElseThrow();
         target.delete(DELETED_AT);
         repository.save(target);
         flushAndClear();
@@ -178,7 +181,7 @@ class TestCaseRepositoryAdapterIntegrationTest {
         TestCaseId second = storedTestCase("두 번째", Severity.HIGH);
         TestCaseId deleted = storedTestCase("삭제 대상", Severity.MEDIUM);
 
-        TestCase target = repository.findById(deleted).orElseThrow();
+        TestCase target = repository.findActiveById(deleted).orElseThrow();
         target.delete(DELETED_AT);
         repository.save(target);
         flushAndClear();
@@ -194,7 +197,7 @@ class TestCaseRepositoryAdapterIntegrationTest {
         storedTestCase("첫 번째", Severity.LOW);
         TestCaseId deleted = storedTestCase("삭제 대상", Severity.MEDIUM);
 
-        TestCase target = repository.findById(deleted).orElseThrow();
+        TestCase target = repository.findActiveById(deleted).orElseThrow();
         target.delete(DELETED_AT);
         repository.save(target);
         flushAndClear();
@@ -220,16 +223,16 @@ class TestCaseRepositoryAdapterIntegrationTest {
     void savesMixedNewAndStoredTestCases() {
         TestCaseId storedId = storedTestCase("이전 이름", Severity.LOW);
 
-        TestCase stored = repository.findById(storedId).orElseThrow();
+        TestCase stored = repository.findActiveById(storedId).orElseThrow();
         stored.changeDefinition("새 이름", null, null, null, null, UPDATED_AT);
         TestCase added = newTestCase(repository.nextIdentity(), "새로 추가", Severity.HIGH);
 
         repository.saveAll(List.of(stored, added));
         flushAndClear();
 
-        assertEquals("새 이름", repository.findById(storedId).orElseThrow().name());
-        assertEquals(UPDATED_AT, repository.findById(storedId).orElseThrow().updatedAt());
-        assertTrue(repository.findById(added.id()).isPresent());
+        assertEquals("새 이름", repository.findActiveById(storedId).orElseThrow().name());
+        assertEquals(UPDATED_AT, repository.findActiveById(storedId).orElseThrow().updatedAt());
+        assertTrue(repository.findActiveById(added.id()).isPresent());
         assertEquals(2L, repository.countActiveByTestSuiteId(suiteId));
     }
 
@@ -262,6 +265,12 @@ class TestCaseRepositoryAdapterIntegrationTest {
                 severity,
                 "PII",
                 CREATED_AT);
+    }
+
+    private TestCase findIncludingDeletedById(TestCaseId id) {
+        return jpaRepository.findById(id.value())
+                .map(TestCaseEntityMapper::toDomain)
+                .orElseThrow();
     }
 
     private void flushAndClear() {
