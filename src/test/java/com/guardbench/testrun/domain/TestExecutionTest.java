@@ -5,19 +5,31 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.time.Instant;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class TestExecutionTest {
 
+    private static final Instant STARTED_AT = Instant.parse("2026-08-25T00:00:00Z");
+    private static final Instant COMPLETED_AT = Instant.parse("2026-08-25T00:00:01Z");
+
     @Test
-    @DisplayName("SUCCEEDED 실행은 ActualResult만 가진다")
-    void succeededExecutionContainsOnlyActualResult() {
-        TestExecution execution = TestExecution.succeeded(executionId(TargetType.BASELINE), new ActualResult(Action.ALLOW));
+    @DisplayName("SUCCEEDED 실행은 ActualResult와 Application Clock lifecycle 시각만 가진다")
+    void succeededExecutionContainsActualResultAndApplicationTimeline() {
+        TestExecution execution = TestExecution.succeeded(
+                executionId(TargetType.BASELINE),
+                new ActualResult(Action.ALLOW),
+                STARTED_AT,
+                COMPLETED_AT
+        );
 
         assertEquals(TestExecutionStatus.SUCCEEDED, execution.status());
         assertEquals(new ActualResult(Action.ALLOW), execution.actualResult());
         assertNull(execution.error());
+        assertEquals(STARTED_AT, execution.startedAt());
+        assertEquals(COMPLETED_AT, execution.completedAt());
     }
 
     @Test
@@ -28,11 +40,18 @@ class TestExecutionTest {
                 "Provider is temporarily unavailable."
         );
 
-        TestExecution execution = TestExecution.failed(executionId(TargetType.CANDIDATE), error);
+        TestExecution execution = TestExecution.failed(
+                executionId(TargetType.CANDIDATE),
+                error,
+                STARTED_AT,
+                COMPLETED_AT
+        );
 
         assertEquals(TestExecutionStatus.FAILED, execution.status());
         assertNull(execution.actualResult());
         assertEquals(error, execution.error());
+        assertEquals(STARTED_AT, execution.startedAt());
+        assertEquals(COMPLETED_AT, execution.completedAt());
     }
 
     @Test
@@ -45,18 +64,53 @@ class TestExecutionTest {
 
         assertThrows(
                 IllegalArgumentException.class,
-                () -> TestExecution.timedOut(executionId(TargetType.CANDIDATE), wrongError)
+                () -> TestExecution.timedOut(
+                        executionId(TargetType.CANDIDATE),
+                        wrongError,
+                        STARTED_AT,
+                        COMPLETED_AT
+                )
         );
     }
 
     @Test
-    @DisplayName("NOT_STARTED 실행은 ActualResult와 오류를 모두 가지지 않는다")
-    void notStartedExecutionContainsNeitherResultNorError() {
+    @DisplayName("terminal 실행은 Application Clock 시작과 종료 시각을 모두 요구한다")
+    void rejectsTerminalExecutionWithoutApplicationTimeline() {
+        assertThrows(
+                NullPointerException.class,
+                () -> TestExecution.succeeded(
+                        executionId(TargetType.BASELINE),
+                        new ActualResult(Action.ALLOW),
+                        null,
+                        COMPLETED_AT
+                )
+        );
+    }
+
+    @Test
+    @DisplayName("종료 시각이 시작 시각보다 앞선 terminal 실행은 생성할 수 없다")
+    void rejectsTerminalExecutionCompletedBeforeStarted() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> TestExecution.failed(
+                        executionId(TargetType.BASELINE),
+                        new TestExecutionError(TestExecutionErrorCode.PROVIDER_UNAVAILABLE, "Provider is unavailable."),
+                        COMPLETED_AT,
+                        STARTED_AT
+                )
+        );
+    }
+
+    @Test
+    @DisplayName("NOT_STARTED 실행은 ActualResult, 오류와 lifecycle 시각을 모두 가지지 않는다")
+    void notStartedExecutionContainsNeitherResultErrorNorTimeline() {
         TestExecution execution = TestExecution.notStarted(executionId(TargetType.BASELINE));
 
         assertEquals(TestExecutionStatus.NOT_STARTED, execution.status());
         assertNull(execution.actualResult());
         assertNull(execution.error());
+        assertNull(execution.startedAt());
+        assertNull(execution.completedAt());
     }
 
     @Test
