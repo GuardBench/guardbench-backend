@@ -1,7 +1,12 @@
 package com.guardbench.testrun.application.port.out;
 
+import java.time.DateTimeException;
 import java.time.Instant;
 import java.util.UUID;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Outbox 이벤트의 불변 스냅샷 값이다.
@@ -17,6 +22,8 @@ public record OutboxEventRecord(
         Instant createdAt,
         Instant publishedAt
 ) {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     public static final String STATUS_PENDING = "PENDING";
     public static final String STATUS_PUBLISHED = "PUBLISHED";
@@ -34,6 +41,7 @@ public record OutboxEventRecord(
         if (payload == null || payload.isBlank()) {
             throw new IllegalArgumentException("payload must not be blank");
         }
+        validatePayload(eventId, eventType, schemaVersion, payload);
         if (deduplicationKey == null || deduplicationKey.isBlank()) {
             throw new IllegalArgumentException("deduplicationKey must not be blank");
         }
@@ -48,6 +56,51 @@ public record OutboxEventRecord(
         }
         if (STATUS_PUBLISHED.equals(status) && publishedAt == null) {
             throw new IllegalArgumentException("PUBLISHED event must have publishedAt");
+        }
+    }
+
+    private static void validatePayload(UUID eventId, String eventType, int schemaVersion, String payload) {
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(payload);
+            if (root == null || !root.isObject()) {
+                throw new IllegalArgumentException("payload must be a JSON object");
+            }
+            requireText(root, "eventId");
+            requireText(root, "eventType");
+            requireText(root, "occurredAt");
+            if (!eventId.toString().equals(root.get("eventId").textValue())
+                    || !eventType.equals(root.get("eventType").textValue())
+                    || !root.has("schemaVersion") || root.get("schemaVersion").asInt() != schemaVersion) {
+                throw new IllegalArgumentException("payload header must match Outbox event fields");
+            }
+            Instant.parse(root.get("occurredAt").textValue());
+            requirePositiveLong(root, "testRunId");
+            switch (eventType) {
+                case "TestRunRequested" -> { }
+                case "TestExecutionRequested", "TestExecutionCompleted" -> {
+                    requirePositiveLong(root, "snapshotId");
+                    String targetType = requireText(root, "targetType");
+                    if (!"BASELINE".equals(targetType) && !"CANDIDATE".equals(targetType)) {
+                        throw new IllegalArgumentException("payload targetType must be BASELINE or CANDIDATE");
+                    }
+                }
+                default -> throw new IllegalArgumentException("unsupported eventType: " + eventType);
+            }
+        } catch (JacksonException | DateTimeException exception) {
+            throw new IllegalArgumentException("payload must be a valid v1 event JSON", exception);
+        }
+    }
+
+    private static String requireText(JsonNode root, String field) {
+        if (!root.has(field) || !root.get(field).isTextual() || root.get(field).textValue().isBlank()) {
+            throw new IllegalArgumentException("payload " + field + " must be a nonblank string");
+        }
+        return root.get(field).textValue();
+    }
+
+    private static void requirePositiveLong(JsonNode root, String field) {
+        if (!root.has(field) || !root.get(field).canConvertToLong() || root.get(field).longValue() <= 0) {
+            throw new IllegalArgumentException("payload " + field + " must be a positive integer");
         }
     }
 

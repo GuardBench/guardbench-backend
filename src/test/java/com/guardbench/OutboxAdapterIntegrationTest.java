@@ -2,6 +2,7 @@ package com.guardbench;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
@@ -25,8 +26,10 @@ import com.guardbench.testsupport.PostgresTestConfiguration;
 class OutboxAdapterIntegrationTest {
 
     private static final Instant BASE = Instant.parse("2026-08-25T00:00:00Z");
-    private static final String SAMPLE_PAYLOAD = """
-            {"eventId":"00000000-0000-0000-0000-000000000001","eventType":"TestRunRequested","schemaVersion":1,"testRunId":1,"occurredAt":"2026-08-25T00:00:00Z"}""";
+    private static String payload(UUID eventId, long testRunId) {
+        return "{\"eventId\":\"" + eventId + "\",\"eventType\":\"TestRunRequested\",\"schemaVersion\":1,\"testRunId\":"
+                + testRunId + ",\"occurredAt\":\"2026-08-25T00:00:00Z\"}";
+    }
 
     @Autowired
     private OutboxPort outboxPort;
@@ -40,11 +43,34 @@ class OutboxAdapterIntegrationTest {
     }
 
     @Test
-    @DisplayName("PENDING 이벤트를 저장하고 findPendingBatch로 조회한다")
+    @DisplayName("payload header가 Outbox 열 값과 다르면 이벤트를 만들 수 없다")
+    void rejectsPayloadHeaderMismatch() {
+        UUID eventId = UUID.randomUUID();
+
+        assertThrows(IllegalArgumentException.class, () -> OutboxEventRecord.pending(
+                eventId,
+                "TestRunRequested",
+                payload(UUID.randomUUID(), 1),
+                "TestRunRequested:1",
+                BASE));
+    }
+
+    @Test
+    @DisplayName("실행 이벤트 payload에 snapshotId 또는 targetType이 없으면 이벤트를 만들 수 없다")
+    void rejectsExecutionPayloadWithoutRequiredFields() {
+        UUID eventId = UUID.randomUUID();
+        String missingTarget = "{\"eventId\":\"" + eventId
+                + "\",\"eventType\":\"TestExecutionRequested\",\"schemaVersion\":1,\"testRunId\":1,\"snapshotId\":2,\"occurredAt\":\"2026-08-25T00:00:00Z\"}";
+
+        assertThrows(IllegalArgumentException.class, () -> OutboxEventRecord.pending(
+                eventId, "TestExecutionRequested", missingTarget, "TestExecutionRequested:2:BASELINE", BASE));
+    }
+
+    @Test
     void savePendingEvent_andFindBatch() {
         UUID eventId = UUID.randomUUID();
         OutboxEventRecord event = OutboxEventRecord.pending(
-                eventId, "TestRunRequested", SAMPLE_PAYLOAD, "TestRunRequested:1", BASE);
+                eventId, "TestRunRequested", payload(eventId, 1), "TestRunRequested:1", BASE);
         outboxPort.save(event);
 
         List<OutboxEventRecord> batch = outboxPort.findPendingBatch(10);
@@ -61,8 +87,8 @@ class OutboxAdapterIntegrationTest {
         UUID eventId2 = UUID.randomUUID();
         String dedupKey = "TestRunRequested:42";
 
-        outboxPort.save(OutboxEventRecord.pending(eventId1, "TestRunRequested", SAMPLE_PAYLOAD, dedupKey, BASE));
-        outboxPort.save(OutboxEventRecord.pending(eventId2, "TestRunRequested", SAMPLE_PAYLOAD, dedupKey, BASE));
+        outboxPort.save(OutboxEventRecord.pending(eventId1, "TestRunRequested", payload(eventId1, 42), dedupKey, BASE));
+        outboxPort.save(OutboxEventRecord.pending(eventId2, "TestRunRequested", payload(eventId2, 42), dedupKey, BASE));
 
         List<OutboxEventRecord> batch = outboxPort.findPendingBatch(10);
         assertEquals(1, batch.size());
@@ -74,7 +100,7 @@ class OutboxAdapterIntegrationTest {
     void markPublished_updatesStatus() {
         UUID eventId = UUID.randomUUID();
         outboxPort.save(OutboxEventRecord.pending(
-                eventId, "TestRunRequested", SAMPLE_PAYLOAD, "TestRunRequested:99", BASE));
+                eventId, "TestRunRequested", payload(eventId, 99), "TestRunRequested:99", BASE));
 
         outboxPort.markPublished(eventId);
 
@@ -96,9 +122,9 @@ class OutboxAdapterIntegrationTest {
         UUID eventId1 = UUID.randomUUID();
         UUID eventId2 = UUID.randomUUID();
         outboxPort.save(OutboxEventRecord.pending(
-                eventId1, "TestRunRequested", SAMPLE_PAYLOAD, "TestRunRequested:100", BASE));
+                eventId1, "TestRunRequested", payload(eventId1, 100), "TestRunRequested:100", BASE));
         outboxPort.save(OutboxEventRecord.pending(
-                eventId2, "TestRunRequested", SAMPLE_PAYLOAD, "TestRunRequested:101", BASE.plusSeconds(1)));
+                eventId2, "TestRunRequested", payload(eventId2, 101), "TestRunRequested:101", BASE.plusSeconds(1)));
 
         // 첫 번째 조회가 1개를 lock
         List<OutboxEventRecord> first = outboxPort.findPendingBatch(1);
