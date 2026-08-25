@@ -16,7 +16,7 @@
 | 코드 리뷰 | 현재 Issue, PR diff, 관련 APPROVED 계약 | [에이전트 코드 리뷰](ai-development/review.md) |
 | API 구현 | [API 안내](api/README.md), [OpenAPI](api/openapi.yaml) | 오류·응답·DTO 컨벤션 |
 | 도메인 구현 | [핵심 모델](domain/core-model.md), [평가 계약](domain/evaluation-contract.md), [ADR 0006](decisions/0006-independent-domain-contract-boundaries.md) | 경계 변경 시 [ADR 안내](decisions/README.md), 패키지 구조 |
-| 영속성·인프라 | 관련 승인 Issue와 [ADR 안내](decisions/README.md) | 시스템 개요, DRAFT 인프라는 참고만 사용 |
+| 영속성·인프라 | 관련 승인 Issue와 [ADR 안내](decisions/README.md) | 시스템 개요, DRAFT 인프라는 참고만 사용, Provider Adapter는 [계약 맵](contracts/README.md)과 [Bedrock Guardrails Adapter 설계 근거](integrations/bedrock-guardrails-adapter.md) |
 | 문서·결정 | 관련 계약과 [ADR 안내](decisions/README.md) | [ADR 템플릿](decisions/template.md) |
 
 ## 상태 정의
@@ -36,6 +36,7 @@
 | 아키텍처 | [시스템 개요](architecture/system-overview.md) | APPROVED | Backend | 2026-08-23 | [도메인 모델 정의](https://app.notion.com/p/3c0eeed6b62d81b48c03ed6034440936) |
 | 아키텍처 | [인프라](architecture/infrastructure.md) | DRAFT | Infra | 2026-08-24 | [인프라 구성 설계](https://app.notion.com/p/3c0eeed6b62d81269f60e1c69fbf9fcc) |
 | 계약 라우팅 | [비동기 TestRun](contracts/README.md) | DRAFT | Backend | 2026-08-25 | 없음 |
+| 통합 | [Bedrock Guardrails Adapter 설계 근거](integrations/bedrock-guardrails-adapter.md) | APPROVED | Backend | 2026-08-25 | 없음 |
 | 결정 | [ADR 안내](decisions/README.md) | APPROVED | Team | 2026-08-23 | 없음 |
 | 결정 | [ADR 0001: 도메인 타입 소유권과 Aggregate 경계](decisions/0001-domain-type-ownership-and-aggregate-boundaries.md) | APPROVED | Backend | 2026-08-24 | 없음 |
 | 결정 | [ADR 0002: PostgreSQL 영속성 계약과 물리 ERD](decisions/0002-postgresql-persistence-contract.md) | APPROVED | Backend | 2026-08-24 | 없음 |
