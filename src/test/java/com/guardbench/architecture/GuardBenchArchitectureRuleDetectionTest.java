@@ -4,6 +4,7 @@ import static com.guardbench.architecture.GuardBenchArchitectureRules.COMMON_DOM
 import static com.guardbench.architecture.GuardBenchArchitectureRules.DOMAIN_DEPENDENCIES;
 import static com.guardbench.architecture.GuardBenchArchitectureRules.PACKAGE_BY_DOMAIN;
 import static com.guardbench.architecture.GuardBenchArchitectureRules.TESTRUN_DEPENDENCIES;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.tngtech.archunit.core.domain.JavaClasses;
@@ -50,6 +51,28 @@ class GuardBenchArchitectureRuleDetectionTest {
         assertViolation(TESTRUN_DEPENDENCIES, fixture, "TestDefinitionMarker");
     }
 
+    @Test
+    @DisplayName("testrun Presentation에서 다른 Bounded Context로 향하는 의존을 탐지한다")
+    void dependencyDirectionRuleDetectsTestRunPresentationToAnotherBoundedContext() {
+        JavaClasses fixture = importer.importPackages(
+                "com.guardbench.testrun.presentation.architecturefixture",
+                "com.guardbench.evaluation.domain.architecturefixture"
+        );
+
+        assertViolation(TESTRUN_DEPENDENCIES, fixture, "EvaluationMarker");
+    }
+
+    @Test
+    @DisplayName("승인된 Integration Adapter 패키지의 경계 간 의존은 위반으로 보지 않는다")
+    void dependencyDirectionRuleAllowsApprovedIntegrationAdapter() {
+        JavaClasses fixture = importer.importPackages(
+                "com.guardbench.testrun.infrastructure.integration.architecturefixture",
+                "com.guardbench.evaluation.domain.architecturefixture"
+        );
+
+        assertNoViolation(TESTRUN_DEPENDENCIES, fixture);
+    }
+
 
     @Test
     @DisplayName("common.domain의 타입을 Domain 소유권 위반으로 탐지한다")
@@ -57,6 +80,16 @@ class GuardBenchArchitectureRuleDetectionTest {
         JavaClasses fixture = importer.importPackages("com.guardbench.common.domain.architecturefixture");
 
         assertViolation(COMMON_DOMAIN_TYPES, fixture, "stores a domain type under common");
+    }
+
+    private static void assertNoViolation(ArchRule rule, JavaClasses classes) {
+        EvaluationResult result = rule.evaluate(classes);
+
+        assertFalse(
+                result.hasViolation(),
+                () -> "Expected no violation for rule '" + rule.getDescription() + "' but was:\n"
+                        + result.getFailureReport()
+        );
     }
 
     private static void assertViolation(ArchRule rule, JavaClasses classes, String expectedMessage) {

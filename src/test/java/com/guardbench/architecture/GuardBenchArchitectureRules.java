@@ -77,16 +77,14 @@ final class GuardBenchArchitectureRules {
             .allowEmptyShould(true);
 
     static final ArchRule TESTRUN_DEPENDENCIES = noClasses()
-            .that().resideInAnyPackage(
-                    "com.guardbench.testrun.domain..",
-                    "com.guardbench.testrun.application.."
-            )
+            .that().resideInAPackage("com.guardbench.testrun..")
+            .and().resideOutsideOfPackage("com.guardbench.testrun.infrastructure.integration..")
             .should().dependOnClassesThat().resideInAnyPackage(
                     "com.guardbench.testdefinition..",
                     "com.guardbench.evaluation..",
                     "com.guardbench.guardrail.."
             )
-            .as("testrun Domain and Application Core must not depend on other bounded contexts")
+            .as("testrun must not depend on other bounded contexts outside its integration adapters")
             .allowEmptyShould(true);
 
     static final ArchRule EVALUATION_DEPENDENCIES = noClasses()

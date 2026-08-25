@@ -48,12 +48,32 @@ class GuardBenchArchitectureTest {
     }
 
     @Test
-    @DisplayName("최상위 도메인 간 의존은 ADR 0006 경계를 따른다")
-    void topLevelDomainDependenciesFollowAdr0006() {
+    @DisplayName("testdefinition은 하위 Bounded Context 패키지에 의존하지 않는다")
+    void testDefinitionDoesNotDependOnDownstreamContexts() {
         TESTDEFINITION_DEPENDENCIES.check(productionClasses);
+    }
+
+    @Test
+    @DisplayName("testrun은 Integration Adapter 밖에서 다른 Bounded Context 패키지에 의존하지 않는다")
+    void testRunDependsOnOtherContextsOnlyInsideIntegrationAdapters() {
         TESTRUN_DEPENDENCIES.check(productionClasses);
+    }
+
+    @Test
+    @DisplayName("evaluation은 guardrail 패키지에 의존하지 않는다")
+    void evaluationDoesNotDependOnGuardrail() {
         EVALUATION_DEPENDENCIES.check(productionClasses);
+    }
+
+    @Test
+    @DisplayName("guardrail은 evaluation 패키지에 의존하지 않는다")
+    void guardrailDoesNotDependOnEvaluation() {
         GUARDRAIL_DEPENDENCIES.check(productionClasses);
+    }
+
+    @Test
+    @DisplayName("common은 도메인 패키지에 의존하지 않는다")
+    void commonDoesNotDependOnDomainPackages() {
         COMMON_DEPENDENCIES.check(productionClasses);
     }
 
