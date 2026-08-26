@@ -80,6 +80,45 @@ class QualityGateEvaluatorTest {
         }
 
         @Test
+        @DisplayName("Candidate 통과율이 0.95보다 표현 가능한 한 단계만 작아도 FAIL이다")
+        void failsWhenCandidatePassRateIsImmediatelyBelowMinimum() {
+            QualityGateMetrics metrics = new QualityGateMetrics(
+                    Math.nextDown(0.95),
+                    0L,
+                    0.0,
+                    0.0,
+                    1.0);
+
+            assertEquals(QualityGateStatus.FAIL, evaluator.evaluateStatus(metrics));
+        }
+
+        @Test
+        @DisplayName("실행 성공률이 0.95보다 표현 가능한 한 단계만 작아도 FAIL이다")
+        void failsWhenExecutionSuccessRateIsImmediatelyBelowMinimum() {
+            QualityGateMetrics metrics = new QualityGateMetrics(
+                    1.0,
+                    0L,
+                    0.0,
+                    0.0,
+                    Math.nextDown(0.95));
+
+            assertEquals(QualityGateStatus.FAIL, evaluator.evaluateStatus(metrics));
+        }
+
+        @Test
+        @DisplayName("사용성 회귀율이 0.05보다 표현 가능한 한 단계만 커도 FAIL이다")
+        void failsWhenUsabilityRegressionRateIsImmediatelyAboveMaximum() {
+            QualityGateMetrics metrics = new QualityGateMetrics(
+                    1.0,
+                    0L,
+                    0.0,
+                    Math.nextUp(0.05),
+                    1.0);
+
+            assertEquals(QualityGateStatus.FAIL, evaluator.evaluateStatus(metrics));
+        }
+
+        @Test
         @DisplayName("Security Regression이 한 건이라도 있으면 FAIL이다")
         void failsWhenSecurityRegressionExists() {
             QualityGateMetrics metrics = new QualityGateMetrics(

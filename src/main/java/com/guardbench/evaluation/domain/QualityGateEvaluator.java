@@ -8,6 +8,18 @@ public final class QualityGateEvaluator {
     private static final double MINIMUM_PASS_RATE = 0.95;
     private static final double MAXIMUM_USABILITY_REGRESSION_RATE = 0.05;
 
+    /**
+     * 생성된 Candidate Assertion별 Snapshot 평가 결과를 집계한다.
+     *
+     * <p>{@link SnapshotEvaluation}은 항상 non-null {@link AssertionResult}를 가지므로
+     * {@code evaluations.size()}를 생성된 Candidate Assertion 수로 사용한다.
+     *
+     * @param reference 평가 대상 TestRun 참조
+     * @param evaluations 생성된 Candidate Assertion별 Snapshot 평가 결과
+     * @param totalTestCaseCount 전체 TestCase 수
+     * @param successfulExecutionPairCount Baseline과 Candidate가 모두 성공한 Snapshot 수
+     * @return 계산된 Quality Gate 결과
+     */
     public QualityGateResult evaluate(
             TestRunEvaluationReference reference,
             List<SnapshotEvaluation> evaluations,
