@@ -107,12 +107,16 @@ public class FinalizeTestRunService {
             return FinalizationOutcome.notReady();
         }
 
-        // ADR 0005: Snapshot이 모두 준비되고 모든 pair가 terminal일 때만 최종화한다.
+        // ADR 0005 4단계: Snapshot이 모두 준비되고 모든 pair가 terminal일 때만 최종화한다.
         // 일부만 끝난 시점에 Quality Gate를 먼저 저장하면 TestRun이 RUNNING에 잔류할 수 있다.
-        if (facts.snapshotFacts().size() != facts.testCaseCount()) {
-            return FinalizationOutcome.notReady();
-        }
-        if (!facts.snapshotFacts().stream().allMatch(SnapshotExecutionFact::pairTerminal)) {
+        // 미완료 시에도 목록·상세 조회 진행률 계약을 만족시키기 위해 같은 잠금 트랜잭션에서
+        // 절대 진행도를 먼저 갱신한 뒤 NotReady로 반환한다.
+        boolean snapshotsReady = facts.snapshotFacts().size() == facts.testCaseCount();
+        boolean allPairsTerminal = facts.snapshotFacts().stream().allMatch(SnapshotExecutionFact::pairTerminal);
+        if (!snapshotsReady || !allPairsTerminal) {
+            if (snapshotsReady) {
+                finalizeTestRunPort.updateProgress(testRunId);
+            }
             return FinalizationOutcome.notReady();
         }
 

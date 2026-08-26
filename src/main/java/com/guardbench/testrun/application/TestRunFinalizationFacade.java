@@ -18,6 +18,7 @@ import com.guardbench.testrun.domain.TestExecutionStatus;
 import com.guardbench.testrun.domain.TestRun;
 import com.guardbench.testrun.domain.TestRunExecutionSummary;
 import com.guardbench.testrun.domain.TestRunId;
+import com.guardbench.testrun.domain.TestRunStatus;
 import com.guardbench.testrun.domain.repository.TestCaseSnapshotRepository;
 import com.guardbench.testrun.domain.repository.TestExecutionRepository;
 import com.guardbench.testrun.domain.repository.TestRunRepository;
@@ -138,6 +139,34 @@ public class TestRunFinalizationFacade {
 
         Instant completedAt = clock.instant();
         testRun.finish(summary, completedAt);
+        testRunRepository.save(testRun);
+    }
+
+    /**
+     * TestRun이 아직 RUNNING인 부분 완료 시점에 절대 진행도를 갱신한다.
+     *
+     * <p>ADR 0005 4단계: 모든 pair가 terminal이 아니어도 처리 완료된 pair 수만큼
+     * {@code processed_test_case_count}를 갱신해 목록·상세 조회의 진행률 계약을 만족시킨다.
+     * {@link #lockAndLoadFinalizationFacts}가 획득한 같은 행 잠금 트랜잭션에서 호출해야 한다.
+     *
+     * <p>RUNNING이 아니면 아무 것도 하지 않는다. 이미 FINISHED로 전이된 뒤 재전달된
+     * 완료 메시지가 진행도를 되돌리지 않도록 한다.
+     *
+     * @param testRunId TestRun scalar ID
+     */
+    public void requestProgressUpdate(long testRunId) {
+        TestRun testRun = testRunRepository.findById(new TestRunId(testRunId))
+                .orElseThrow(() -> new IllegalStateException(
+                        "TestRun not found for progress update. testRunId=" + testRunId));
+
+        if (testRun.status() != TestRunStatus.RUNNING) {
+            return;
+        }
+
+        List<SnapshotExecutionPair> pairs = buildPairsForFinalization(testRunId);
+        TestRunExecutionSummary summary = TestRunExecutionSummary.from(pairs);
+
+        testRun.updateProgress(summary, clock.instant());
         testRunRepository.save(testRun);
     }
 

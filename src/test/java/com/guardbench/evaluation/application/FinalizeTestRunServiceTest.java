@@ -159,7 +159,7 @@ class FinalizeTestRunServiceTest {
     class ReadinessScenario {
 
         @Test
-        @DisplayName("실행 결과가 아직 없는 pair가 있으면 최종화하지 않는다")
+        @DisplayName("실행 결과가 아직 없는 pair가 있으면 최종화하지 않지만 진행도는 갱신한다")
         void notReadyWhenPairHasNoExecutionYet() {
             loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
                     succeededPair(10L, "BLOCK", "BLOCK", "BLOCK"),
@@ -173,10 +173,11 @@ class FinalizeTestRunServiceTest {
             assertEquals(0, qualityGateResultRepo.savedResults().size());
             assertEquals(0, snapshotEvaluationRepo.newlySavedCount());
             assertEquals(0, finalizeTestRunPort.callCount());
+            assertEquals(1, finalizeTestRunPort.progressUpdateCallCount());
         }
 
         @Test
-        @DisplayName("Snapshot이 TestCase 수만큼 준비되지 않았으면 최종화하지 않는다")
+        @DisplayName("Snapshot이 TestCase 수만큼 준비되지 않았으면 최종화도 진행도 갱신도 하지 않는다")
         void notReadyWhenSnapshotsIncomplete() {
             loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(3, List.of(
                     succeededPair(10L, "BLOCK", "BLOCK", "BLOCK")
@@ -187,6 +188,7 @@ class FinalizeTestRunServiceTest {
             assertInstanceOf(FinalizationOutcome.NotReady.class, outcome);
             assertEquals(0, qualityGateResultRepo.savedResults().size());
             assertEquals(0, finalizeTestRunPort.callCount());
+            assertEquals(0, finalizeTestRunPort.progressUpdateCallCount());
         }
 
         @Test
@@ -347,16 +349,23 @@ class FinalizeTestRunServiceTest {
         private int callCount;
         private String lastOutcomeCode;
         private int lastProcessedTestCaseCount;
+        private int progressUpdateCallCount;
 
         int callCount() { return callCount; }
         String lastOutcomeCode() { return lastOutcomeCode; }
         int lastProcessedTestCaseCount() { return lastProcessedTestCaseCount; }
+        int progressUpdateCallCount() { return progressUpdateCallCount; }
 
         @Override
         public void finalize(long testRunId, String executionOutcomeCode, int processedTestCaseCount, int testCaseCount) {
             callCount++;
             lastOutcomeCode = executionOutcomeCode;
             lastProcessedTestCaseCount = processedTestCaseCount;
+        }
+
+        @Override
+        public void updateProgress(long testRunId) {
+            progressUpdateCallCount++;
         }
     }
 

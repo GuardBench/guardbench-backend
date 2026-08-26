@@ -44,6 +44,11 @@ class TestRunFinalizationIntegrationAdapter implements LoadTestRunExecutionFacts
         testRunFinalizationFacade.requestFinish(testRunId, executionOutcomeCode, processedTestCaseCount, testCaseCount);
     }
 
+    @Override
+    public void updateProgress(long testRunId) {
+        testRunFinalizationFacade.requestProgressUpdate(testRunId);
+    }
+
     private static TestRunExecutionFacts toEvaluationFacts(TestRunFinalizationFacts source) {
         var snapshotFacts = source.snapshotFacts().stream()
                 .map(TestRunFinalizationIntegrationAdapter::toEvaluationSnapshotFact)
