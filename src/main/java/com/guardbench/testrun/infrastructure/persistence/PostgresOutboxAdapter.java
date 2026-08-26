@@ -4,6 +4,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -58,14 +59,19 @@ class PostgresOutboxAdapter implements OutboxPort {
     }
 
     @Override
-    public void markPublished(UUID eventId) {
+    public void markPublished(Collection<UUID> eventIds) {
+        if (eventIds.isEmpty()) {
+            return;
+        }
+        String placeholders = eventIds.stream().map(id -> "?::uuid").collect(java.util.stream.Collectors.joining(","));
+        Object[] args = eventIds.stream().map(UUID::toString).toArray();
         jdbcTemplate.update(
                 """
                 UPDATE outbox_event
                 SET status = 'PUBLISHED', published_at = clock_timestamp()
-                WHERE event_id = ?::uuid AND status = 'PENDING'
-                """,
-                eventId.toString()
+                WHERE event_id IN (%s) AND status = 'PENDING'
+                """.formatted(placeholders),
+                args
         );
     }
 

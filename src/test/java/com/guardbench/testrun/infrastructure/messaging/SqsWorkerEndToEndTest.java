@@ -224,7 +224,7 @@ class SqsWorkerEndToEndTest {
                     new com.guardbench.testrun.application.port.out.OutboxPort() {
                         @Override public void save(com.guardbench.testrun.application.port.out.OutboxEventRecord event) {}
                         @Override public java.util.List<com.guardbench.testrun.application.port.out.OutboxEventRecord> findPendingBatch(int batchSize) { return java.util.List.of(); }
-                        @Override public void markPublished(java.util.UUID eventId) {}
+                        @Override public void markPublished(java.util.Collection<java.util.UUID> eventIds) {}
                     },
                     new com.guardbench.testrun.domain.repository.TestExecutionRepository() {
                         @Override public void save(com.guardbench.testrun.domain.TestExecution execution) {}
@@ -265,7 +265,7 @@ class SqsWorkerEndToEndTest {
                     new com.guardbench.testrun.application.port.out.OutboxPort() {
                         @Override public void save(com.guardbench.testrun.application.port.out.OutboxEventRecord event) {}
                         @Override public java.util.List<com.guardbench.testrun.application.port.out.OutboxEventRecord> findPendingBatch(int batchSize) { return java.util.List.of(); }
-                        @Override public void markPublished(java.util.UUID eventId) {}
+                        @Override public void markPublished(java.util.Collection<java.util.UUID> eventIds) {}
                     },
                     Runnable::run,
                     Clock.fixed(Instant.parse("2026-08-25T10:00:00Z"), ZoneOffset.UTC)

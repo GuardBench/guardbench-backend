@@ -1,16 +1,29 @@
 package com.guardbench.testrun.application;
 
+import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 
 import org.springframework.transaction.annotation.Transactional;
 
 import com.guardbench.testrun.application.messaging.TestRunQueue;
+import com.guardbench.testrun.application.port.out.OutboxEventRecord;
 import com.guardbench.testrun.application.port.out.OutboxPort;
+import com.guardbench.testrun.application.port.out.PublishBatchResult;
 import com.guardbench.testrun.application.port.out.SqsPublishPort;
+import com.guardbench.testrun.application.port.out.SqsPublishPort.PublishBatchEntry;
 
 /**
  * PENDING Outbox를 ADR 0005의 event type별 SQS queue로 발행한다.
- * SQS 발행에 실패한 event는 PENDING으로 남겨 다음 poll에서 같은 eventId로 재발행한다.
+ *
+ * <p>ADR 0005: 잠근 batch를 SQS {@code SendMessageBatch}로 발행하고 성공 항목만
+ * {@code PUBLISHED}로 전환한다. 한 항목의 발행 실패가 같은 batch의 나머지 항목
+ * 처리를 막지 않는다. SQS {@code SendMessageBatch}는 queue당 최대 10개 항목을
+ * 지원하므로 이벤트를 목적 queue별로 그룹핑해 10개 단위 청크로 전송한다.
+ * 발행에 실패한 event는 PENDING으로 남겨 다음 poll에서 같은 eventId로 재발행한다.
  *
  * <p>{@link #publishPending(int)}는 하나의 트랜잭션으로 실행된다.
  * {@code findPendingBatch}의 {@code SELECT ... FOR UPDATE SKIP LOCKED} row lock을
@@ -21,6 +34,9 @@ import com.guardbench.testrun.application.port.out.SqsPublishPort;
  * <p>스케줄러 등 외부 호출자가 이 메서드를 직접 호출해야 트랜잭션 프록시가 적용된다.
  */
 public class OutboxPublisher {
+
+    /** SQS SendMessageBatch가 queue당 지원하는 최대 항목 수. */
+    private static final int SQS_BATCH_LIMIT = 10;
 
     private final OutboxPort outboxPort;
     private final SqsPublishPort sqsPublishPort;
@@ -35,14 +51,47 @@ public class OutboxPublisher {
         if (batchSize <= 0) {
             throw new IllegalArgumentException("batchSize must be positive");
         }
+
+        List<OutboxEventRecord> pending = outboxPort.findPendingBatch(batchSize);
+        if (pending.isEmpty()) {
+            return 0;
+        }
+
+        Map<TestRunQueue, List<OutboxEventRecord>> byQueue = groupByQueue(pending);
+
         int publishedCount = 0;
-        for (var event : outboxPort.findPendingBatch(batchSize)) {
-            TestRunQueue queue = TestRunQueue.forEventType(event.eventType());
-            if (sqsPublishPort.publish(queue, event.payload())) {
-                outboxPort.markPublished(event.eventId());
-                publishedCount++;
-            }
+        for (var entry : byQueue.entrySet()) {
+            publishedCount += publishToQueue(entry.getKey(), entry.getValue());
         }
         return publishedCount;
+    }
+
+    private int publishToQueue(TestRunQueue queue, List<OutboxEventRecord> events) {
+        int publishedCount = 0;
+        for (int start = 0; start < events.size(); start += SQS_BATCH_LIMIT) {
+            List<OutboxEventRecord> chunk = events.subList(start, Math.min(start + SQS_BATCH_LIMIT, events.size()));
+            List<PublishBatchEntry> entries = chunk.stream()
+                    .map(event -> new PublishBatchEntry(event.eventId(), event.payload()))
+                    .toList();
+
+            PublishBatchResult result = sqsPublishPort.publishBatch(queue, entries);
+
+            List<UUID> succeededIds = chunk.stream()
+                    .map(OutboxEventRecord::eventId)
+                    .filter(result::succeeded)
+                    .toList();
+            outboxPort.markPublished(succeededIds);
+            publishedCount += succeededIds.size();
+        }
+        return publishedCount;
+    }
+
+    private static Map<TestRunQueue, List<OutboxEventRecord>> groupByQueue(List<OutboxEventRecord> events) {
+        Map<TestRunQueue, List<OutboxEventRecord>> byQueue = new EnumMap<>(TestRunQueue.class);
+        for (OutboxEventRecord event : events) {
+            TestRunQueue queue = TestRunQueue.forEventType(event.eventType());
+            byQueue.computeIfAbsent(queue, ignored -> new ArrayList<>()).add(event);
+        }
+        return byQueue;
     }
 }

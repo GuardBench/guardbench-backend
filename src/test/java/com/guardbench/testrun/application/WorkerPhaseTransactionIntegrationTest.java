@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -175,7 +176,7 @@ class WorkerPhaseTransactionIntegrationTest {
         return new OutboxPort() {
             @Override public void save(OutboxEventRecord event) { }
             @Override public List<OutboxEventRecord> findPendingBatch(int batchSize) { return List.of(); }
-            @Override public void markPublished(UUID eventId) { }
+            @Override public void markPublished(Collection<UUID> eventIds) { }
         };
     }
 
@@ -206,7 +207,7 @@ class WorkerPhaseTransactionIntegrationTest {
 
         @Override public List<OutboxEventRecord> findPendingBatch(int batchSize) { return List.of(); }
 
-        @Override public void markPublished(UUID eventId) { }
+        @Override public void markPublished(Collection<UUID> eventIds) { }
     }
 
     private static final class StubResolutionClaimPort implements ResolutionClaimPort {

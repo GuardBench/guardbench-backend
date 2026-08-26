@@ -424,7 +424,7 @@ class ResolveTestRunServiceTest {
         }
 
         @Override
-        public void markPublished(UUID eventId) {
+        public void markPublished(java.util.Collection<UUID> eventIds) {
             // not used in resolution tests
         }
     }

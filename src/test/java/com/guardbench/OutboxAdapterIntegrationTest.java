@@ -104,7 +104,7 @@ class OutboxAdapterIntegrationTest {
         outboxPort.save(OutboxEventRecord.pending(
                 eventId, "TestRunRequested", payload(eventId, 99), "TestRunRequested:99", BASE));
 
-        outboxPort.markPublished(eventId);
+        outboxPort.markPublished(java.util.List.of(eventId));
 
         List<OutboxEventRecord> pending = outboxPort.findPendingBatch(10);
         assertTrue(pending.isEmpty());
