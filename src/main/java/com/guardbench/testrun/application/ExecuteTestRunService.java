@@ -16,6 +16,7 @@ import com.guardbench.testrun.application.port.out.GuardrailProviderException;
 import com.guardbench.testrun.application.port.out.LoadExecutionContextPort;
 import com.guardbench.testrun.application.port.out.OutboxEventRecord;
 import com.guardbench.testrun.application.port.out.OutboxPort;
+import com.guardbench.testrun.application.port.out.TransactionalPhasePort;
 import com.guardbench.testrun.domain.ActualResult;
 import com.guardbench.testrun.domain.TargetType;
 import com.guardbench.testrun.domain.TestCaseSnapshotId;
@@ -39,11 +40,11 @@ import com.guardbench.testrun.domain.repository.TestExecutionRepository;
  *   <li>실행 컨텍스트(Snapshot input + guardrail version) 로드</li>
  *   <li>Guardrail Provider 호출 (DB 트랜잭션 밖)</li>
  *   <li>claim 소유 재검증</li>
- *   <li>terminal TestExecution + TestExecutionCompleted Outbox 원자적 저장</li>
+ *   <li>terminal TestExecution + TestExecutionCompleted Outbox 원자적 저장 (persistence phase 트랜잭션)</li>
  * </ol>
  *
- * <p>Provider 호출은 {@code @Transactional} 바깥에서 수행되므로
- * 이 서비스에는 트랜잭션 어노테이션을 적용하지 않는다.
+ * <p>Provider 호출은 트랜잭션 밖에서 수행해야 하므로 메서드 전체를 감싸지 않고
+ * {@link TransactionalPhasePort}로 마지막 저장 phase만 트랜잭션 경계로 선언한다.
  */
 public class ExecuteTestRunService {
 
@@ -54,6 +55,7 @@ public class ExecuteTestRunService {
     private final LoadExecutionContextPort loadExecutionContextPort;
     private final GuardrailExecutionPort guardrailExecutionPort;
     private final OutboxPort outboxPort;
+    private final TransactionalPhasePort transactionalPhasePort;
     private final Clock clock;
 
     public ExecuteTestRunService(
@@ -62,6 +64,7 @@ public class ExecuteTestRunService {
             LoadExecutionContextPort loadExecutionContextPort,
             GuardrailExecutionPort guardrailExecutionPort,
             OutboxPort outboxPort,
+            TransactionalPhasePort transactionalPhasePort,
             Clock clock
     ) {
         this.executionClaimPort = Objects.requireNonNull(executionClaimPort);
@@ -69,6 +72,7 @@ public class ExecuteTestRunService {
         this.loadExecutionContextPort = Objects.requireNonNull(loadExecutionContextPort);
         this.guardrailExecutionPort = Objects.requireNonNull(guardrailExecutionPort);
         this.outboxPort = Objects.requireNonNull(outboxPort);
+        this.transactionalPhasePort = Objects.requireNonNull(transactionalPhasePort);
         this.clock = Objects.requireNonNull(clock);
     }
 
@@ -124,12 +128,14 @@ public class ExecuteTestRunService {
             return ExecutionOutcome.CLAIM_LOST_AFTER_EXECUTION;
         }
 
-        // Terminal TestExecution + Outbox 원자 저장
+        // Terminal TestExecution + Outbox 원자 저장 (persistence phase 트랜잭션)
         TestExecution terminalExecution = buildTerminalExecution(
                 executionId, normalization, startedAt, completedAt
         );
-        testExecutionRepository.save(terminalExecution);
-        outboxPort.save(completedEvent(context.testRunId(), snapshotId, targetTypeCode, completedAt));
+        transactionalPhasePort.runInTransaction(() -> {
+            testExecutionRepository.save(terminalExecution);
+            outboxPort.save(completedEvent(context.testRunId(), snapshotId, targetTypeCode, completedAt));
+        });
 
         return ExecutionOutcome.EXECUTED;
     }

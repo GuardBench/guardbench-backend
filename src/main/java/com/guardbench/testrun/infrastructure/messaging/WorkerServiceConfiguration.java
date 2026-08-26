@@ -16,6 +16,7 @@ import com.guardbench.testrun.application.port.out.LoadSnapshotIdsByTestRunPort;
 import com.guardbench.testrun.application.port.out.OutboxPort;
 import com.guardbench.testrun.application.port.out.ResolutionClaimPort;
 import com.guardbench.testrun.application.port.out.SaveNotEvaluatedQualityGatePort;
+import com.guardbench.testrun.application.port.out.TransactionalPhasePort;
 import com.guardbench.testrun.domain.repository.TestExecutionRepository;
 import com.guardbench.testrun.domain.repository.TestRunRepository;
 
@@ -27,6 +28,9 @@ import com.guardbench.testrun.domain.repository.TestRunRepository;
  *
  * <p>{@link ResolveTestRunService}와 {@link ExecuteTestRunService}는
  * {@code new}로 조립되는 plain class로, 기존 Repository/Port/Clock 빈을 주입받는다.
+ *
+ * <p>두 서비스는 외부 Provider 호출을 사이에 두고 여러 persistence phase를 수행하므로
+ * 메서드 전체 트랜잭션 대신 {@link TransactionalPhasePort}로 phase 경계를 주입받는다.
  */
 @Configuration
 @ConditionalOnProperty(name = "guardbench.worker.enabled", havingValue = "true")
@@ -41,6 +45,7 @@ class WorkerServiceConfiguration {
             OutboxPort outboxPort,
             TestExecutionRepository testExecutionRepository,
             SaveNotEvaluatedQualityGatePort saveNotEvaluatedQualityGatePort,
+            TransactionalPhasePort transactionalPhasePort,
             Clock clock
     ) {
         return new ResolveTestRunService(
@@ -51,6 +56,7 @@ class WorkerServiceConfiguration {
                 outboxPort,
                 testExecutionRepository,
                 saveNotEvaluatedQualityGatePort,
+                transactionalPhasePort,
                 clock
         );
     }
@@ -62,6 +68,7 @@ class WorkerServiceConfiguration {
             LoadExecutionContextPort loadExecutionContextPort,
             GuardrailExecutionPort guardrailExecutionPort,
             OutboxPort outboxPort,
+            TransactionalPhasePort transactionalPhasePort,
             Clock clock
     ) {
         return new ExecuteTestRunService(
@@ -70,6 +77,7 @@ class WorkerServiceConfiguration {
                 loadExecutionContextPort,
                 guardrailExecutionPort,
                 outboxPort,
+                transactionalPhasePort,
                 clock
         );
     }

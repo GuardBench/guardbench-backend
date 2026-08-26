@@ -67,7 +67,7 @@ class ExecuteTestRunServiceTest {
         outboxPort = new FakeOutboxPort();
         service = new ExecuteTestRunService(
                 claimPort, executionRepository, contextPort,
-                guardrailPort, outboxPort, FIXED_CLOCK
+                guardrailPort, outboxPort, new InlineTransactionalPhase(), FIXED_CLOCK
         );
     }
 

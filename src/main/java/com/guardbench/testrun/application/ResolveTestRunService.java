@@ -17,6 +17,7 @@ import com.guardbench.testrun.application.port.out.OutboxEventRecord;
 import com.guardbench.testrun.application.port.out.OutboxPort;
 import com.guardbench.testrun.application.port.out.ResolutionClaimPort;
 import com.guardbench.testrun.application.port.out.SaveNotEvaluatedQualityGatePort;
+import com.guardbench.testrun.application.port.out.TransactionalPhasePort;
 import com.guardbench.testrun.domain.TestExecution;
 import com.guardbench.testrun.domain.TestExecutionId;
 import com.guardbench.testrun.domain.TestCaseSnapshotId;
@@ -37,14 +38,17 @@ import com.guardbench.testrun.domain.repository.TestRunRepository;
  * <p>처리 순서:
  * <ol>
  *   <li>resolution claim 선점</li>
- *   <li>QUEUED → PREPARING 전환 (DB 트랜잭션)</li>
+ *   <li>QUEUED → PREPARING 전환 (persistence phase 트랜잭션)</li>
  *   <li>Candidate DRAFT materialization (DB 트랜잭션 밖)</li>
  *   <li>claim 소유 재검증</li>
- *   <li>PREPARING → RUNNING + fan-out Outbox 원자적 저장 (DB 트랜잭션)</li>
+ *   <li>PREPARING → RUNNING + fan-out Outbox 원자적 저장 (persistence phase 트랜잭션)</li>
  * </ol>
  *
  * <p>materialization 실패 시 모든 TestExecution을 NOT_STARTED로 저장하고
- * TestRun을 FINISHED/ERROR로 종결한다.
+ * TestRun을 FINISHED/ERROR로 종결한다. 이 종결도 하나의 트랜잭션으로 수행한다.
+ *
+ * <p>외부 Provider 호출은 트랜잭션 밖에서 수행해야 하므로
+ * 메서드 전체가 아니라 {@link TransactionalPhasePort}로 phase 단위 경계를 선언한다.
  */
 public class ResolveTestRunService {
 
@@ -57,6 +61,7 @@ public class ResolveTestRunService {
     private final OutboxPort outboxPort;
     private final TestExecutionRepository testExecutionRepository;
     private final SaveNotEvaluatedQualityGatePort saveNotEvaluatedQualityGatePort;
+    private final TransactionalPhasePort transactionalPhasePort;
     private final Clock clock;
 
     public ResolveTestRunService(
@@ -67,6 +72,7 @@ public class ResolveTestRunService {
             OutboxPort outboxPort,
             TestExecutionRepository testExecutionRepository,
             SaveNotEvaluatedQualityGatePort saveNotEvaluatedQualityGatePort,
+            TransactionalPhasePort transactionalPhasePort,
             Clock clock
     ) {
         this.resolutionClaimPort = Objects.requireNonNull(resolutionClaimPort);
@@ -76,6 +82,7 @@ public class ResolveTestRunService {
         this.outboxPort = Objects.requireNonNull(outboxPort);
         this.testExecutionRepository = Objects.requireNonNull(testExecutionRepository);
         this.saveNotEvaluatedQualityGatePort = Objects.requireNonNull(saveNotEvaluatedQualityGatePort);
+        this.transactionalPhasePort = Objects.requireNonNull(transactionalPhasePort);
         this.clock = Objects.requireNonNull(clock);
     }
 
@@ -106,11 +113,13 @@ public class ResolveTestRunService {
         UUID claimToken = acquired.claimToken();
         int attemptCount = acquired.attemptCount();
 
-        // QUEUED → PREPARING 전환
+        // QUEUED → PREPARING 전환 (persistence phase 트랜잭션)
         if (testRun.status() == TestRunStatus.QUEUED) {
-            Instant now = clock.instant();
-            testRun.beginPreparing(now);
-            testRunRepository.save(testRun);
+            Instant preparingAt = clock.instant();
+            transactionalPhasePort.runInTransaction(() -> {
+                testRun.beginPreparing(preparingAt);
+                testRunRepository.save(testRun);
+            });
         }
 
         // Materialization (DB 트랜잭션 밖, 외부 호출)
@@ -130,16 +139,18 @@ public class ResolveTestRunService {
             return ResolutionOutcome.CLAIM_LOST_AFTER_MATERIALIZATION;
         }
 
-        // PREPARING → RUNNING + fan-out Outbox 원자적 저장
+        // PREPARING → RUNNING + fan-out Outbox 원자적 저장 (persistence phase 트랜잭션)
         Instant now = clock.instant();
-        testRun.beginRunning(materializedVersion.version(), now);
-        testRunRepository.save(testRun);
+        transactionalPhasePort.runInTransaction(() -> {
+            testRun.beginRunning(materializedVersion.version(), now);
+            testRunRepository.save(testRun);
 
-        List<Long> snapshotIds = loadSnapshotIdsPort.loadSnapshotIdsByTestRunId(testRunId);
-        for (long snapshotId : snapshotIds) {
-            outboxPort.save(executionRequestedEvent(testRunId, snapshotId, TargetTypeCode.BASELINE, now));
-            outboxPort.save(executionRequestedEvent(testRunId, snapshotId, TargetTypeCode.CANDIDATE, now));
-        }
+            List<Long> snapshotIds = loadSnapshotIdsPort.loadSnapshotIdsByTestRunId(testRunId);
+            for (long snapshotId : snapshotIds) {
+                outboxPort.save(executionRequestedEvent(testRunId, snapshotId, TargetTypeCode.BASELINE, now));
+                outboxPort.save(executionRequestedEvent(testRunId, snapshotId, TargetTypeCode.CANDIDATE, now));
+            }
+        });
 
         return ResolutionOutcome.RESOLVED;
     }
@@ -153,22 +164,24 @@ public class ResolveTestRunService {
         long testRunId = testRun.id().value();
         Instant now = clock.instant();
 
-        List<Long> snapshotIds = loadSnapshotIdsPort.loadSnapshotIdsByTestRunId(testRunId);
-        for (long snapshotId : snapshotIds) {
-            TestCaseSnapshotId sid = new TestCaseSnapshotId(snapshotId);
-            testExecutionRepository.save(
-                    TestExecution.notStarted(new TestExecutionId(sid, TargetType.BASELINE))
-            );
-            testExecutionRepository.save(
-                    TestExecution.notStarted(new TestExecutionId(sid, TargetType.CANDIDATE))
-            );
-        }
+        // ADR 0004: 세 쓰기를 하나의 트랜잭션으로 묶어 원자적으로 종결한다.
+        transactionalPhasePort.runInTransaction(() -> {
+            List<Long> snapshotIds = loadSnapshotIdsPort.loadSnapshotIdsByTestRunId(testRunId);
+            for (long snapshotId : snapshotIds) {
+                TestCaseSnapshotId sid = new TestCaseSnapshotId(snapshotId);
+                testExecutionRepository.save(
+                        TestExecution.notStarted(new TestExecutionId(sid, TargetType.BASELINE))
+                );
+                testExecutionRepository.save(
+                        TestExecution.notStarted(new TestExecutionId(sid, TargetType.CANDIDATE))
+                );
+            }
 
-        // ADR 0004: NOT_EVALUATED QualityGateResult을 같은 트랜잭션에서 원자적 저장
-        saveNotEvaluatedQualityGatePort.saveNotEvaluated(testRunId);
+            saveNotEvaluatedQualityGatePort.saveNotEvaluated(testRunId);
 
-        testRun.failPreparation(now);
-        testRunRepository.save(testRun);
+            testRun.failPreparation(now);
+            testRunRepository.save(testRun);
+        });
 
         return ResolutionOutcome.MATERIALIZATION_FAILED_TERMINAL;
     }

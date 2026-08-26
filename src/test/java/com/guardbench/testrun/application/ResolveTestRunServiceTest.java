@@ -74,7 +74,7 @@ class ResolveTestRunServiceTest {
         service = new ResolveTestRunService(
                 claimPort, testRunRepository, materializationPort,
                 loadSnapshotIdsPort, outboxPort, executionRepository,
-                saveNotEvaluatedPort, FIXED_CLOCK
+                saveNotEvaluatedPort, new InlineTransactionalPhase(), FIXED_CLOCK
         );
     }
 

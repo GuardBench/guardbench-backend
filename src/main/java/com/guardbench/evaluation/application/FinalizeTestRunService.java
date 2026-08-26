@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import org.springframework.transaction.annotation.Transactional;
+
 import com.guardbench.evaluation.application.port.out.FinalizeTestRunPort;
 import com.guardbench.evaluation.application.port.out.LoadTestRunExecutionFactsPort;
 import com.guardbench.evaluation.application.port.out.TestRunExecutionFacts;
@@ -68,9 +70,14 @@ public class FinalizeTestRunService {
      * <p>이미 FINISHED이고 QualityGateResult가 존재하면 기존 결과를 반환하는 멱등 성공이다.
      * 재계산하거나 덮어쓰지 않는다.
      *
+     * <p>ADR 0004: readiness 확인, 평가 저장, Quality Gate 저장, TestRun FINISHED 전환을
+     * 하나의 트랜잭션으로 실행한다. 외부 Provider 호출이 없는 경로이므로
+     * 진입 메서드 전체를 트랜잭션 경계로 선언한다.
+     *
      * @param testRunId TestRun scalar ID
      * @return 최종화 결과
      */
+    @Transactional
     public FinalizationOutcome finalize(long testRunId) {
         TestRunEvaluationReference reference = new TestRunEvaluationReference(testRunId);
 

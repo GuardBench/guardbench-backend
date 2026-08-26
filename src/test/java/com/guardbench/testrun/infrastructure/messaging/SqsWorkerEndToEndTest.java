@@ -231,6 +231,7 @@ class SqsWorkerEndToEndTest {
                         @Override public java.util.Optional<com.guardbench.testrun.domain.TestExecution> findById(com.guardbench.testrun.domain.TestExecutionId id) { return java.util.Optional.empty(); }
                     },
                     testRunId -> {},
+                    Runnable::run,
                     Clock.fixed(Instant.parse("2026-08-25T10:00:00Z"), ZoneOffset.UTC)
             );
             this.fixedOutcome = fixedOutcome;
@@ -266,6 +267,7 @@ class SqsWorkerEndToEndTest {
                         @Override public java.util.List<com.guardbench.testrun.application.port.out.OutboxEventRecord> findPendingBatch(int batchSize) { return java.util.List.of(); }
                         @Override public void markPublished(java.util.UUID eventId) {}
                     },
+                    Runnable::run,
                     Clock.fixed(Instant.parse("2026-08-25T10:00:00Z"), ZoneOffset.UTC)
             );
             this.fixedOutcome = fixedOutcome;
