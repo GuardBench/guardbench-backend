@@ -23,3 +23,17 @@ spring:
     deserialization:
       # 알 수 없는 Request Body 필드는 무시하지 않고 VALIDATION_ERROR로 거부한다.
       fail-on-unknown-properties: true
+
+# SQS 런타임 설정 (DefaultCredentialsProvider 체인 사용, Spring Cloud AWS 없음)
+# SQS 빈 활성화: guardbench.sqs.enabled=true일 때만 SqsClient를 생성한다.
+guardbench:
+  sqs:
+    enabled: ${SQS_ENABLED:false}
+    region: ${AWS_REGION:ap-northeast-2}
+    endpoint-override: ${SQS_ENDPOINT_OVERRIDE:}
+    polling:
+      max-messages: 10
+      wait-time-seconds: 20
+      visibility-timeout-seconds: 30
+  worker:
+    enabled: ${WORKER_ENABLED:false}
