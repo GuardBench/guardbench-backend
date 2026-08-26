@@ -1,0 +1,23 @@
+package com.guardbench.testdefinition.presentation.validation;
+
+import java.lang.annotation.Documented;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+import jakarta.validation.Constraint;
+import jakarta.validation.Payload;
+
+@Documented
+@Constraint(validatedBy = TestCaseUpdateReqValidator.class)
+@Target(ElementType.TYPE)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface ValidTestCaseUpdate {
+
+    String message() default "수정할 값이 최소 하나 필요합니다.";
+
+    Class<?>[] groups() default {};
+
+    Class<? extends Payload>[] payload() default {};
+}
