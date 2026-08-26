@@ -2,293 +2,288 @@
 
 > Status: APPROVED
 > Owner: Infra
-> Last reviewed: 2026-08-26
+> Last reviewed: 2026-08-27
 > Canonical source: GitHub
 > Origin: [Notion 인프라 구성 설계](https://app.notion.com/p/3c0eeed6b62d81269f60e1c69fbf9fcc)
-> Approved by: [GitHub Issue #87](https://github.com/GuardBench/guardbench-backend/issues/87)
+> Approved by: Issue #87 요청자의 2026-08-27 배포 결정
 
-이 문서는 GuardBench MVP를 처음 배포할 때 적용할 AWS 물리 인프라 기준이다. 실제 리소스를 만드는 IaC와 배포 실행은 후속 구현 Issue에서 다룬다. 공개 API, Domain 경계, DB 스키마와 [ADR 0005](../decisions/0005-async-test-run-execution-contract.md)·[ADR 0008](../decisions/0008-async-testrun-persistence-contract.md)의 메시지·claim·Outbox 계약은 변경하지 않는다.
+이 문서는 GuardBench MVP를 **현재 구현 그대로 최초 배포**하기 위한 AWS 물리 인프라 계약이다. 실제 Terraform 변경과 AWS 적용은 `GuardBench/guardbench-iac`에서 수행하며, 공개 API·Domain·DB schema와 [ADR 0005](../decisions/0005-async-test-run-execution-contract.md)·[ADR 0008](../decisions/0008-async-testrun-persistence-contract.md)의 메시지·claim·Outbox 의미는 변경하지 않는다.
 
-## 결정 요약
+## 확인한 배포 기준
 
-| 항목 | MVP 결정 |
+2026-08-27에 다음 revision을 직접 확인했다.
+
+| 저장소 | 확인 revision | 배포와 관련된 사실 |
+| --- | --- | --- |
+| `GuardBench/guardbench-backend` | `73022a6` (`dev`) | 하나의 Spring Boot 프로세스가 HTTP API, Outbox Publisher와 세 Queue consumer를 모두 실행할 수 있다. Worker 역할 선택기는 없다. |
+| `GuardBench/guardbench-frontend` | `adc1ee6` (`main`) | React/Vite 정적 SPA이며 현재 화면 데이터는 mock이다. `main` push 시 `guardbench-dev-frontend` S3와 CloudFront `E1PVL0Z78B1HMR`에 배포하도록 선언돼 있다. |
+| `GuardBench/guardbench-iac` | `5b7f421` (`dev`) | Terraform source에 S3·CloudFront·ALB·ECR·ECS·VPC Endpoint가 정의돼 있다. RDS와 SQS 정의는 없고 ECS 정의는 구현되지 않은 역할 분리를 가정한다. |
+
+프론트엔드의 최근 GitHub Actions 실패는 3시간 유효한 임시 AWS credential이 만료된 결과이며 인프라 구성 결함이 아니다. 기존 S3·CloudFront 배포는 정상 운영 대상으로 간주하고 그대로 보존한다. Terraform 적용 전에는 기존 resource와 state를 대조하고 unmanaged resource만 import한다.
+
+### AWS 실제 리소스 현황
+
+같은 날 `ap-northeast-2` 계정을 읽기 전용으로 조회한 결과는 다음과 같다. Resource ID와 계정 번호는 환경별 운영 정보이므로 이 아키텍처 계약에 고정하지 않고 Terraform state와 배포 runbook에서 관리한다.
+
+| 구분 | 실제 상태 | 최초 배포 처리 |
+| --- | --- | --- |
+| `guardbench-dev-vpc` | `10.1.0.0/16`, public/private subnet 각 2개가 배포됨 | 그대로 재사용, 재생성 금지 |
+| VPC Endpoint | S3, ECR API/DKR, Logs, SSM, Monitoring, SQS, Bedrock/Runtime 배포됨 | 그대로 재사용하고 Secrets Manager Endpoint만 추가 |
+| Security Group | ALB, API, Worker, RDS, VPC Endpoint용 SG가 배포됨 | API SG를 단일 App Service에 재사용, Worker SG는 미사용 보존 |
+| `guardbench-dev-alb` | internet-facing, active, HTTP 80 listener가 배포됨 | 그대로 재사용하고 ingress만 축소 |
+| `guardbench-dev-api-tg` | HTTP 8080, target type `ip`, health path `/health` | 그대로 재사용하고 health path 수정 |
+| 기존 CloudFront | S3 origin과 `/api/*` ALB origin이 배포됨 | 그대로 재사용하고 API origin protocol/policy 수정 |
+| ECS·ECR·SQS | 배포된 resource 없음 | 이번 최초 배포에서 신규 생성 |
+| GuardBench RDS | 배포된 resource 없음 | 이번 최초 배포에서 신규 생성 |
+
+별도 VPC에 있는 `kclee-app` RDS는 PostgreSQL 18.3이며 GuardBench 전용 resource가 아니다. VPC Peering으로 연결하거나 GuardBench DB로 재사용하지 않는다.
+
+## 최초 배포 결정
+
+| 항목 | 결정 |
 | --- | --- |
-| AWS Region | 서울 `ap-northeast-2` 단일 Region |
-| 환경 | `dev`, `prod`를 별도 AWS 계정과 별도 VPC로 분리 |
-| 네트워크 | 2개 AZ의 public/app-private/db-isolated subnet, 환경당 NAT Gateway 1개 |
-| RDS | PostgreSQL 16, Single-AZ, `db.t4g.micro`(dev) / `db.t4g.small`(prod) |
-| ECS | Fargate의 API, Orchestrator, Executor Service; Publisher는 API 프로세스의 background component |
-| SQS | Standard Queue 3개와 전용 DLQ 3개, visibility 30초, `maxReceiveCount=5` |
-| Secret | 자격 증명은 AWS Secrets Manager, AWS 접근은 ECS Task Role |
-| 관측성 | CloudWatch Logs·Metrics·Alarms와 환경별 SNS 알림 Topic |
+| 최초 배포 환경 | 기존 프론트와 연결되는 `dev` 한 개 |
+| Region | 서울 `ap-northeast-2` |
+| Frontend | 기존 S3 + CloudFront OAC 유지 |
+| Backend 진입점 | 같은 CloudFront의 `/api/*` → public ALB HTTP listener → private ECS |
+| Backend runtime | Fargate `guardbench-dev-app` Service 하나, desired/min/max `1/1/1` |
+| Database | GuardBench VPC에 RDS PostgreSQL 16.14 신규 생성, Single-AZ `db.t4g.micro`, gp3 20 GiB |
+| Messaging | SQS Standard source Queue 3개와 전용 DLQ 3개 |
+| Secret | RDS managed master secret를 Secrets Manager에서 ECS 환경변수로 주입 |
+| Outbound | NAT Gateway 없이 SQS·Bedrock·ECR·Logs·Secrets Manager VPC Endpoint 사용 |
+| 관측성 | CloudWatch native metric, application text log metric filter와 SNS alarm |
 
-### 승인 계약 정합성
+`prod`는 최초 배포 범위가 아니다. 만들 때는 별도 Terraform state key, 별도 VPC, RDS, Queue, Secret, ECS Cluster와 Log Group을 사용하며 dev resource를 공유하지 않는다. 현재 하나뿐인 `infra/terraform.tfstate`를 prod와 함께 사용하지 않는다.
 
-- ADR 0005의 세 Standard Queue, `(snapshotId, targetType)` 작업 단위, API 내 Publisher, 15초 Provider timeout, 30초 visibility, 45초 claim lease와 `maxReceiveCount=5`를 유지한다.
-- ADR 0008의 `PENDING/PUBLISHED` Outbox와 `SKIP LOCKED` 점유를 유지하고 운영 편의를 위한 새 상태나 컬럼을 추가하지 않는다.
-- 물리 배포 위치와 초기 운영값만 확정하므로 ADR 0005·0008을 supersede할 새 ADR은 필요하지 않다.
-
-## 리전과 환경 분리
-
-- Bedrock Runtime과 Guardrails `ApplyGuardrail`을 지원하는 `ap-northeast-2`를 주 Region으로 사용한다.
-- `dev`와 `prod`는 같은 AWS Organization 아래 별도 AWS 계정으로 분리한다. VPC, RDS, ECS Cluster, Queue, Secret과 로그를 공유하지 않는다.
-- 리소스 이름은 `guardbench-{env}-{resource}` 형식을 사용하고 모든 리소스에 `Project=GuardBench`, `Environment={env}`, `ManagedBy=IaC` 태그를 붙인다.
-- MVP에는 상시 `staging`을 두지 않는다. 부하 시험이나 배포 리허설은 `dev`에 prod와 같은 Task Definition을 일시 적용하고, 독립적인 상시 검증 환경이 필요해질 때 별도 Issue로 `staging` 계정을 추가한다.
-- Region 장애를 위한 multi-region, cross-region DB 복제와 DR 자동화는 MVP 범위가 아니다. RDS snapshot을 이용한 수동 복구를 기본으로 한다.
-
-계정 분리는 prod 오조작과 dev 자격 증명 유출의 영향 범위를 줄이는 대신, 배포 Role과 비용 추적 구성이 두 벌 필요하다. MVP에서도 prod 데이터와 권한의 격리를 비용 절감보다 우선한다.
-
-## VPC와 네트워크 경계
-
-각 환경은 `10.0.0.0/16`처럼 서로 겹치지 않는 CIDR의 VPC 하나를 소유한다. 정확한 CIDR은 IaC Issue에서 조직의 기존 대역과 충돌하지 않도록 선택한다.
+## 실행 가능한 전체 topology
 
 ```text
-Internet
-  │ HTTPS 443
+Browser
+  │ HTTPS
   ▼
-Internet Gateway
-  │
-  ▼
-Application Load Balancer
-  ├─ public subnet AZ-a
-  └─ public subnet AZ-c
-          │ HTTP 8080, ALB SG만 허용
-          ▼
-API ECS Service ───────────────┐
-app-private subnet AZ-a/AZ-c   │ PostgreSQL 5432
-                               ▼
-Orchestrator ECS Service ───▶ Amazon RDS PostgreSQL
-app-private subnet AZ-a/AZ-c   db-isolated subnet AZ-a/AZ-c
-                               ▲
-Executor ECS Service ──────────┘
-app-private subnet AZ-a/AZ-c
-          │ HTTPS 443
-          ▼
-NAT Gateway 1개 → SQS·Bedrock·Secrets Manager·ECR·CloudWatch
+기존 CloudFront Distribution
+  ├─ /*       → 기존 private S3 bucket (OAC)
+  └─ /api/*   → HTTP :80
+                  ▼
+             public ALB
+                  │ HTTP :8080, ALB SG만 허용
+                  ▼
+             ECS Fargate Service: guardbench-dev-app (desired 1)
+             ├─ Spring MVC HTTP API
+             ├─ Outbox Publisher
+             ├─ gb-run-resolve consumer
+             ├─ gb-workitems consumer
+             ├─ gb-run-finalize consumer
+             └─ Bedrock control/runtime adapter
+                  │
+                  ├─ PostgreSQL :5432 → private RDS
+                  └─ HTTPS :443 → VPC Endpoints
+                       ├─ SQS
+                       ├─ Bedrock / Bedrock Runtime
+                       ├─ ECR API / ECR DKR / S3 Gateway
+                       ├─ CloudWatch Logs
+                       └─ Secrets Manager
 ```
 
-### Subnet과 route
+현재 `WORKER_ENABLED=true`는 세 Queue adapter와 세 polling scheduler를 한꺼번에 등록한다. 따라서 Orchestrator와 Executor를 별도 ECS Service로 배포하면 두 Service가 모두 세 Queue를 소비한다. 최초 배포는 물리 Service 하나에 논리 역할을 함께 배치해 이 문제를 피하며, 역할별 Service 분리는 worker 역할 선택기가 구현·검증된 뒤 수행한다.
 
-- AZ 두 곳에 public, app-private, db-isolated subnet을 각각 하나씩 둔다.
-- public subnet은 Internet Gateway route를 가지며 ALB와 NAT Gateway만 배치한다.
-- ECS Task는 app-private subnet에서 public IP 없이 실행한다. 두 app-private subnet의 기본 outbound route는 환경당 NAT Gateway 한 개를 향한다.
-- db-isolated subnet은 인터넷 기본 route를 갖지 않는다. 두 AZ의 subnet을 RDS DB subnet group으로 묶고 RDS의 `PubliclyAccessible`은 `false`다.
-- MVP는 비용을 줄이기 위해 NAT Gateway를 한 개만 둔다. 해당 AZ 장애 시 외부 AWS API 호출이 멈출 수 있다는 위험을 수용하고, prod 가용성 요구가 생기면 AZ별 NAT 또는 필요한 VPC endpoint로 전환한다.
-- ALB listener는 80 요청을 443으로 redirect하고, ACM 인증서를 사용하는 443 listener만 API Target Group으로 전달한다.
+## 네트워크와 CloudFront
+
+### VPC와 subnet
+
+- 이미 배포된 `guardbench-dev-vpc` (`10.1.0.0/16`)를 수정 없이 재사용한다.
+- 이미 배포된 `ap-northeast-2a`, `ap-northeast-2c`의 public subnet `10.1.1.0/24`, `10.1.2.0/24`를 재사용한다.
+- 같은 AZ의 기존 private subnet `10.1.10.0/24`, `10.1.20.0/24`를 ECS Task, 신규 RDS DB subnet group과 Interface Endpoint에 재사용한다.
+- public subnet은 Internet Gateway default route를 가지며 ALB만 배치한다.
+- private subnet은 Internet/NAT default route를 갖지 않는다. AWS API 접근은 VPC Endpoint로만 한다.
+- RDS는 `PubliclyAccessible=false`이고 ECS Task에도 public IP를 할당하지 않는다.
+
+기존 IaC의 SQS, Bedrock, Bedrock Runtime, ECR API, ECR DKR, CloudWatch Logs Interface Endpoint와 S3 Gateway Endpoint를 유지한다. RDS managed secret 주입을 위해 Secrets Manager Interface Endpoint를 추가한다. SSM Parameter Store를 사용하지 않으면 기존 SSM·CloudWatch Monitoring Endpoint는 최초 배포 필수 항목이 아니므로 비용을 확인한 뒤 제거할 수 있다.
+
+### CloudFront와 ALB 연결
+
+기존 CloudFront의 정적 파일 behavior는 유지하고 `/api/*` behavior만 다음과 같이 고친다.
+
+- cache policy는 `CachingDisabled`를 사용한다.
+- origin request policy는 `AllViewerExceptHostHeader`를 사용해 query string, cookie, `Content-Type`, `Authorization`, `Idempotency-Key`를 백엔드에 전달한다.
+- backend origin은 ALB DNS이고 `origin_protocol_policy=http-only`, port `80`이다.
+- CloudFront 기본 인증서를 유지하므로 Browser는 계속 HTTPS만 사용한다.
+- Frontend는 별도 API hostname 대신 상대 경로 `/api/v1/...`를 호출한다. 같은 origin이므로 최초 배포에 application CORS 설정은 필요하지 않다.
+
+현재 IaC의 `https-only` CloudFront origin과 HTTP-only ALB listener 조합은 동작하지 않는다. ALB DNS에 대응하는 ACM 인증서와 custom domain이 없으므로 최초 배포에서는 CloudFront-to-ALB 구간만 HTTP를 수용한다. ALB port 80 ingress는 인터넷 전체가 아니라 AWS managed prefix list `com.amazonaws.global.cloudfront.origin-facing`으로 제한한다.
+
+ALB Target Group은 port `8080`, protocol `HTTP`, target type `ip`를 사용한다. 현재 애플리케이션에는 `/health` endpoint와 Actuator dependency가 없으므로 health check는 공개된 `GET /api/v1/test-suites`, matcher `200`, interval `30초`, timeout `5초`, healthy/unhealthy threshold `2`로 설정한다. 이 검사는 애플리케이션과 DB 연결을 함께 확인한다.
 
 ### Security Group
 
-| Security Group | Inbound | Outbound |
-| --- | --- | --- |
-| `gb-{env}-alb-sg` | 인터넷의 TCP 443, redirect용 TCP 80 | `api-sg`의 TCP 8080 |
-| `gb-{env}-api-sg` | `alb-sg`의 TCP 8080만 | `db-sg`의 TCP 5432, NAT를 통한 TCP 443 |
-| `gb-{env}-worker-sg` | 없음 | `db-sg`의 TCP 5432, NAT를 통한 TCP 443 |
-| `gb-{env}-db-sg` | `api-sg`, `worker-sg`의 TCP 5432만 | 응답 traffic만 |
+| 기존 Security Group | 최초 배포 용도 | Inbound | Outbound |
+| --- | --- | --- | --- |
+| `guardbench-dev-alb-sg` | ALB | CloudFront origin-facing prefix list의 TCP 80 | API SG의 TCP 8080 |
+| `guardbench-dev-api-sg` | 단일 App ECS Service | ALB SG의 TCP 8080 | RDS SG의 TCP 5432, Endpoint SG의 TCP 443 |
+| `guardbench-dev-rds-sg` | 신규 GuardBench RDS | API SG의 TCP 5432 | 응답 traffic |
+| `guardbench-dev-vpce-sg` | 기존·신규 Interface Endpoint | API SG의 TCP 443 | 응답 traffic |
 
-- Orchestrator와 Executor는 `worker-sg`를 공유하되 IAM Task Role은 분리한다.
-- SSH port와 광범위한 내부 CIDR inbound 규칙을 열지 않는다.
-- AWS API 접근은 장기 access key가 아니라 Service별 최소 권한 ECS Task Role을 사용한다.
+기존 `guardbench-dev-worker-sg`는 최초 배포에서 연결하지 않고 state에 보존한다. RDS·Endpoint SG에서 Worker SG를 허용하는 ingress, ALB SG의 인터넷 전체 80/443 ingress와 API SG의 `0.0.0.0/0:443` egress는 위 표의 rule로 교체한다. 기존 SG 자체는 삭제·교체하지 않는다.
 
-## Amazon RDS for PostgreSQL
+## RDS PostgreSQL
 
-애플리케이션의 로컬·통합 테스트가 `postgres:16-alpine`을 사용하므로 RDS도 PostgreSQL major 16으로 맞춘다. 최초 IaC는 결정 시점의 서울 Region 지원 minor인 `16.14`를 사용한다. `AutoMinorVersionUpgrade=true`로 RDS가 지정한 안정 minor를 maintenance window에 적용하되 major upgrade는 별도 호환성 검증과 승인 없이 수행하지 않는다.
-
-| 설정 | `dev` | `prod` |
-| --- | ---: | ---: |
-| Instance class | `db.t4g.micro` (2 vCPU, 1 GiB) | `db.t4g.small` (2 vCPU, 2 GiB) |
-| Availability | Single-AZ | Single-AZ |
-| Storage | gp3 20 GiB, autoscaling 최대 100 GiB | gp3 20 GiB, autoscaling 최대 100 GiB |
-| Automated backup retention | 1일 | 7일 |
-| Deletion protection | 끔 | 켬 |
-| 삭제 시 final snapshot | 선택 | 필수 |
-
-- storage encryption은 RDS용 AWS managed KMS key를 사용하고 PostgreSQL 연결은 TLS를 강제한다.
-- backup window는 `18:00-19:00 UTC`, maintenance window는 일요일 `19:00-20:00 UTC`로 분리한다.
-- prod 삭제 시 automated backup을 보존 기간 동안 유지하고, 별도의 final snapshot을 만든다. 분기마다 prod 계정 안의 외부 연결이 차단된 임시 DB로 snapshot 복구 절차를 검증하고 검증 직후 삭제한다.
-- Single-AZ와 burstable instance는 초기 비용을 낮추지만 장애 복구와 지속 부하에 약하다. CPU credit, connection, memory 또는 복구 시간 목표가 임계값을 반복해서 넘으면 먼저 `db.t4g.medium` 또는 Multi-AZ 전환을 검토한다.
-
-## ECS Cluster와 Service
-
-환경마다 Fargate 전용 ECS Cluster 하나를 두고 동일한 애플리케이션 image를 역할별 Task Definition으로 실행한다. 역할은 Spring profile 또는 명시적 실행 mode로 분리하며 별도 코드베이스를 만들지 않는다.
-
-| 환경 | ECS Service | 역할 | Task CPU / Memory | 최소 / 최대 Task |
-| --- | --- | --- | ---: | ---: |
-| dev | API | HTTP API와 Outbox Publisher | 0.5 vCPU / 1 GiB | 1 / 1 |
-| dev | Orchestrator | `gb-run-resolve`, `gb-run-finalize` 소비 | 0.5 vCPU / 1 GiB | 0 / 1 |
-| dev | Executor | `gb-workitems` 소비와 Bedrock 호출 | 0.5 vCPU / 1 GiB | 0 / 2 |
-| prod | API | HTTP API와 Outbox Publisher | 0.5 vCPU / 1 GiB | 1 / 2 |
-| prod | Orchestrator | `gb-run-resolve`, `gb-run-finalize` 소비 | 0.5 vCPU / 1 GiB | 1 / 2 |
-| prod | Executor | `gb-workitems` 소비와 Bedrock 호출 | 0.5 vCPU / 1 GiB | 1 / 4 |
-
-- Fargate Linux platform version은 `LATEST`, CPU architecture는 애플리케이션 image가 검증된 `X86_64`로 시작한다. Graviton 전환은 image와 부하 시험 뒤 별도 변경으로 다룬다.
-- rolling deployment는 `minimumHealthyPercent=100`, `maximumPercent=200`을 사용한다. prod API 최소 1개라는 결정은 완전한 무중단이나 AZ 장애 허용을 보장하지 않는다.
-- API만 ALB Target Group에 등록한다. Worker Service에는 inbound listener나 public IP를 두지 않는다.
-- 각 역할의 JDBC connection pool 상한은 Task당 10으로 시작한다. 최대 Task 수를 늘리기 전에 RDS connection 여유를 다시 계산한다.
-- API Task 최소 1개를 유지하므로 같은 프로세스의 Publisher도 계속 진행된다.
-
-### Service Auto Scaling
-
-모든 지표는 1분 주기로 평가한다. scale-out cooldown은 60초, scale-in cooldown은 300초다.
-
-| Service | Target tracking 기준 | 초기 목표값 |
-| --- | --- | ---: |
-| API | `ECSServiceAverageCPUUtilization` | 60% |
-| API | `ECSServiceAverageMemoryUtilization` | 70% |
-| Orchestrator | `(resolve visible + finalize visible) / max(running task, 1)` | Task당 5개 |
-| Executor | `workitems visible / max(running task, 1)` | Task당 2개 |
-
-- Queue 소비자는 단순 queue length가 아니라 backlog per task metric math를 사용한다.
-- dev Worker는 최소 0이므로 첫 workload metric 한 건 뒤 1개부터 기동하는 cold start를 허용한다.
-- 여러 target tracking policy가 적용된 API는 어느 하나가 scale-out을 요구하면 확장하고 모든 policy가 scale-in을 허용할 때만 축소한다.
-- 목표값과 최대 Task 수는 초기 운영값이다. 부하 시험과 실제 처리 시간으로 조정하되 ADR 0005의 작업 단위, timeout과 claim 의미는 바꾸지 않는다.
-
-## SQS Queue와 DLQ
-
-환경마다 다음 Standard Queue와 각각의 전용 Standard DLQ를 만든다.
-
-| Source Queue | Event | DLQ |
-| --- | --- | --- |
-| `guardbench-{env}-gb-run-resolve` | `TestRunRequested` | 같은 이름에 `-dlq` suffix |
-| `guardbench-{env}-gb-workitems` | `TestExecutionRequested` | 같은 이름에 `-dlq` suffix |
-| `guardbench-{env}-gb-run-finalize` | `TestExecutionCompleted` | 같은 이름에 `-dlq` suffix |
-
-세 Source Queue에 동일한 초기 resource parameter를 적용한다.
-
-`TestExecutionRequested` 한 건은 ADR 0005대로 `(snapshotId, targetType)` 하나만 처리한다. 별도 메시지 chunk를 만들거나 TestRun 전체를 한 메시지로 묶지 않는다.
-
-| 설정 | 값 | 근거 |
-| --- | ---: | --- |
-| Queue type | Standard | 중복·역순을 Application 멱등성으로 흡수 |
-| Visibility timeout | 30초 | ADR 0005 초기값 |
-| Message retention | 4일 | 단기 장애 복구 여유 |
-| Receive wait time | 20초 | empty polling 감소 |
-| Delivery delay | 0초 | Outbox 발행 직후 처리 |
-| DLQ `maxReceiveCount` | 5회 | ADR 0005 초기값 |
-| DLQ retention | 14일 | Source보다 길게 보존해 수동 분석·redrive |
-| Encryption | SSE-SQS | 별도 KMS key 운영 없이 at-rest 암호화 |
-
-- redrive policy는 Source마다 자기 DLQ 하나를 지정하고, DLQ의 redrive allow policy는 해당 Source ARN만 허용한다.
-- 실행 재시도 시 Application은 약 5초 뒤 보이도록 visibility를 조정할 수 있다. heartbeat는 사용하지 않으며 execution claim lease 45초와 Provider 전체 timeout 15초는 ADR 0005 값을 유지한다.
-- Queue payload에 입력, 결과, credential, Provider 원문 오류를 넣지 않는다.
-- DLQ alarm이 발생하면 consumer를 무조건 재시작하거나 메시지를 수정하지 않는다. 원인을 고치고 메시지 계약을 확인한 다음 AWS DLQ redrive로 원 Source에 저속 재전달하며, 처리 완료와 DLQ 감소를 함께 확인한다. 기존 Domain ID·claim·Outbox 멱등 규칙을 그대로 적용한다.
-
-## Outbox Publisher 배포와 운영값
-
-Publisher는 별도 ECS Service나 sidecar가 아니라 API Spring Boot 프로세스의 HTTP 요청 경로와 분리된 background component로 실행한다. API가 2개로 확장되어 Publisher도 여러 개가 되더라도 `SELECT ... FOR UPDATE SKIP LOCKED`로 batch 점유를 분리한다.
-
-| 항목 | 초기값 |
+| 설정 | dev 최초값 |
 | --- | ---: |
-| 정상 polling 간격 | 1초 |
-| DB 조회 batch | 10개 |
-| SQS 발행 | Queue별 `SendMessageBatch`, 요청당 최대 10개 |
-| SDK retry | AWS SDK standard retry mode, 최대 3회 |
-| batch 전체 실패 backoff | 5초부터 지수 증가, 최대 60초, jitter 적용 |
-| `PENDING` 보존 | 발행될 때까지 삭제하지 않음 |
-| `PUBLISHED` 보존 | MVP 동안 삭제하지 않음 |
+| Engine | PostgreSQL `16.14`, auto minor upgrade 켬 |
+| Instance | Single-AZ `db.t4g.micro` |
+| Storage | encrypted gp3 20 GiB, autoscaling 최대 100 GiB |
+| Database / user | `guardbench` / `guardbench` |
+| Backup retention | 1일 |
+| Deletion protection | 끔 |
+| 삭제 시 final snapshot | 최초 dev는 선택 |
 
-- 성공 항목만 `PUBLISHED`로 변경하고 실패 항목은 `PENDING`으로 남긴다. `PROCESSING`, `DEAD`, attempt와 next-attempt 컬럼은 추가하지 않는다.
-- `PUBLISHED` 자동 cleanup은 ADR 0005의 MVP Non-Goal을 유지한다. table 크기를 월 1회 확인하고, 저장 비용이나 query 성능이 문제로 관측되면 보존 기간과 cleanup을 새 운영 Issue에서 결정한다.
-- 별도 Publisher Service는 API와 독립적으로 확장·배포할 수 있지만 최소 Task와 배포 단위가 늘어난다. MVP에서는 이미 항상 실행되는 API Task를 활용하는 편이 단순하며 ADR 0005의 결정을 유지한다.
+- DB subnet group은 두 private subnet으로 구성하고 TCP 5432는 기존 API SG에서만 허용한다.
+- 다른 VPC의 `kclee-app`과 VPC Peering을 만들지 않는다. 기존 `guardbench-dev-rds-sg`를 연결한 GuardBench 전용 RDS를 현재 VPC에 새로 만든다.
+- `manage_master_user_password=true`로 RDS가 password를 생성·회전 가능한 Secrets Manager secret으로 관리하게 한다. password를 tfvars, Terraform output, GitHub secret이나 Task Definition 평문에 넣지 않는다.
+- 현재 Flyway가 애플리케이션 시작 시 V1·V2 migration을 실행하므로 최초 Task가 schema를 생성한다. 별도 migration container는 만들지 않는다.
+- JDBC URL은 `jdbc:postgresql://{rds-endpoint}:5432/guardbench?sslmode=require`를 사용한다.
+- 하나의 Task만 실행하므로 기본 Hikari pool을 그대로 사용한다. Task 수를 늘리기 전 pool 상한과 RDS connection 한도를 함께 결정한다.
 
-## Secret과 IAM
+## ECS image와 단일 Service
 
-- Secret 저장소는 AWS Secrets Manager를 사용한다. Parameter Store `SecureString`을 secret 저장소로 병행하지 않는다.
-- `guardbench/{env}/database/application`에는 애플리케이션 DB 사용자 이름과 password만 저장한다. RDS master credential은 별도 Secret으로 두고 ECS Task Role이 읽지 못하게 한다.
-- TestRun이 참조하는 Guardrail ID와 version은 credential이 아니므로 기존 입력·DB 계약에 따라 저장한다. 배포 Region 같은 non-secret 값만 Task Definition 환경 설정으로 관리한다. AWS access key는 저장하지 않고 Orchestrator·Executor Task Role의 임시 자격 증명을 사용한다.
-- Secret ARN만 Task Definition에 기록하고 값은 source, image, 로그와 CI output에 남기지 않는다. ECS execution role은 필요한 Secret ARN의 `GetSecretValue`만 허용한다.
-- MVP의 application DB password는 90일마다 수동 회전한다. 새 값 적용, ECS 강제 재배포와 health 확인, 이전 값 폐기의 순서와 담당자를 운영 runbook에 기록한다. Lambda 기반 자동 rotation은 IaC와 운영 절차가 추가되므로 후속 범위다.
-- API Task Role은 Publisher가 사용하는 세 Queue의 `SendMessage`만, Orchestrator와 Executor Task Role은 자신이 소비하는 Queue의 receive/delete/visibility 권한만 갖는다. Bedrock version 생성 권한은 Orchestrator, `ApplyGuardrail` 권한은 Executor에만 부여한다.
+백엔드 저장소에는 Dockerfile이 없다. Spring Boot Gradle plugin의 `bootBuildImage`로 Java 21 OCI image를 만들고 ECR에 Git commit SHA tag로 push한다.
 
-## CloudWatch 로그, 지표와 경보
+```bash
+./gradlew clean check bootBuildImage --imageName={account}.dkr.ecr.ap-northeast-2.amazonaws.com/guardbench-dev:{git-sha}
+docker push {account}.dkr.ecr.ap-northeast-2.amazonaws.com/guardbench-dev:{git-sha}
+```
 
-### Log Group
+- ECR tag는 immutable로 설정하고 Task Definition은 `latest`가 아니라 검증한 commit SHA 또는 image digest를 사용한다.
+- Fargate Task는 Linux `X86_64`, CPU `512`, memory `1024 MiB`, container port `8080`이다.
+- ECS Service desired/min/max는 모두 1이며 Service Auto Scaling은 사용하지 않는다. 현재 역할이 결합돼 있어 Queue backlog나 CPU로 Task를 늘리면 API·Publisher·모든 consumer가 함께 늘기 때문이다.
+- rolling deployment는 `minimumHealthyPercent=100`, `maximumPercent=200`, deployment circuit breaker rollback을 사용한다.
+- Log Group `/ecs/guardbench-dev/app`을 Task 전에 만들고 14일 보존한다.
 
-| Log Group | 내용 | dev / prod 보존 |
-| --- | --- | ---: |
-| `/guardbench/{env}/api` | HTTP API와 `component=outbox-publisher` 로그 | 14일 / 30일 |
-| `/guardbench/{env}/orchestrator` | resolution·finalization 소비 로그 | 14일 / 30일 |
-| `/guardbench/{env}/executor` | 실행 claim·Bedrock 결과 요약 로그 | 14일 / 30일 |
+### Task 환경변수
 
-- Log Group은 Task 시작 전에 IaC로 만들고 retention과 encryption을 명시한다. 무기한 기본 보존을 사용하지 않는다.
-- JSON 구조화 로그에 `environment`, `service`, `testRunId`, `eventId`, `eventType`, `snapshotId`, `targetType`, `executionStatus`, `durationMs`를 필요한 범위에서 기록한다.
-- 테스트 입력, ActualResult 전문, Guardrail 설정 전문, Secret, ARN, SDK 예외 원문은 기록하지 않는다.
-
-### 최소 지표와 alarm
-
-Application custom metric namespace는 `GuardBench/{env}`다. 모든 prod alarm과 핵심 dev alarm은 `guardbench-{env}-ops` SNS Topic으로 전달한다.
-
-| 대상 | Alarm 조건 | 평가 |
+| 이름 | 값 또는 주입원 | 이유 |
 | --- | --- | --- |
-| 각 DLQ | `ApproximateNumberOfMessagesVisible >= 1` | 1분 1회 |
-| `gb-run-resolve` | oldest message age `>= 60초` | 1분 3회 연속 |
-| `gb-workitems` | oldest message age `>= 120초` | 1분 3회 연속 |
-| `gb-run-finalize` | oldest message age `>= 60초` | 1분 3회 연속 |
-| Orchestrator backlog | visible 합계가 최대 처리 목표 `10개` 초과 | 1분 5회 연속 |
-| Executor backlog | visible이 최대 처리 목표 `8개` 초과 | 1분 5회 연속 |
-| Outbox | `OutboxOldestPendingAgeSeconds >= 60` | 1분 3회 연속 |
-| Outbox | `OutboxPendingCount >= 100` | 1분 5회 연속 |
-| TestRun | `PREPARING >= 120초` 또는 `RUNNING >= 10분`인 Run 1개 이상 | 1분 3회 연속 |
-| Worker 오류 | consumer 기술 실패 또는 unsupported message 1건 이상 | 5분 1회 |
-| Worker retry | retry 10건 초과 | 5분 2회 연속 |
-| ECS Service | CPU `>= 85%` 또는 memory `>= 85%` | 1분 10회 연속 |
-| prod ECS Service | Running Task가 설정된 최소값 미만 | 1분 2회 연속 |
-| RDS | CPU `>= 80%`, connection `>= 80%`, free memory `< 256 MiB` 중 하나 | 5분 3회 연속 |
-| RDS storage | free storage `< 10 GiB` | 5분 1회 |
-| ALB | healthy host 0 또는 5xx 비율 `>= 1%`이면서 요청 20건 이상 | 1분 5회 연속 |
+| `SERVER_PORT` | `8080` | ALB Target Group과 일치 |
+| `SPRING_DOCKER_COMPOSE_ENABLED` | `false` | ECS에서 로컬 compose lifecycle 비활성화 |
+| `SPRING_DATASOURCE_URL` | RDS JDBC URL | PostgreSQL 연결 |
+| `SPRING_DATASOURCE_USERNAME` | RDS managed secret의 `username` | ECS secret JSON key 주입 |
+| `SPRING_DATASOURCE_PASSWORD` | RDS managed secret의 `password` | ECS secret JSON key 주입 |
+| `AWS_REGION` | `ap-northeast-2` | SQS·Bedrock client Region |
+| `SQS_ENABLED` | `true` | SQS client와 Outbox Publisher 활성화 |
+| `WORKER_ENABLED` | `true` | 세 Queue consumer와 Bedrock adapter 활성화 |
+| `SPRING_TASK_SCHEDULING_POOL_SIZE` | `4` | 세 long-poll scheduler와 Outbox Publisher를 서로 막지 않게 실행 |
+| `GUARDBENCH_SQS_QUEUE_URLS_RESOLVE` | resolve Queue URL | startup의 `GetQueueUrl` 호출 제거 |
+| `GUARDBENCH_SQS_QUEUE_URLS_WORK_ITEMS` | work-items Queue URL | startup의 `GetQueueUrl` 호출 제거 |
+| `GUARDBENCH_SQS_QUEUE_URLS_RUN_FINALIZE` | finalize Queue URL | startup의 `GetQueueUrl` 호출 제거 |
 
-- Dashboard에는 Source/DLQ queue length와 age, ECS running task와 처리 시간, Outbox count/age, TestRun 상태별 체류 시간, retry·duplicate·영구 실패 수, RDS와 ALB 상태를 함께 표시한다.
-- alarm 임계값은 최초 배포 기준값이다. 낮은 트래픽에서 생기는 오탐과 실제 p95 처리 시간을 한 달간 관찰한 뒤 변경 근거와 전후 값을 운영 Issue에 남긴다.
-- DLQ 유입이나 PENDING Outbox를 TestExecution 실패로 변환하지 않는다. alarm 후 원인을 복구하고 승인된 재발행·redrive 절차를 따른다.
+현재 scheduled method는 Queue별 3개와 Publisher 1개다. Spring 기본 scheduling pool 1개로 배포하면 long polling이 Publisher까지 막으므로 pool을 4로 고정한다. Queue URL 세 개는 secret이 아니며 Task Definition 환경변수로 직접 넣는다. 명시적 URL을 모두 주입하므로 application Task Role에 `sqs:GetQueueUrl`은 필요하지 않다.
 
-## 선택하지 않은 대안과 트레이드오프
+## SQS와 현재 runtime 동작
 
-### PostgreSQL 18 또는 Aurora PostgreSQL
+| Source Queue | Payload | DLQ |
+| --- | --- | --- |
+| `guardbench-dev-gb-run-resolve` | `TestRunRequested` | 같은 이름 + `-dlq` |
+| `guardbench-dev-gb-workitems` | `TestExecutionRequested` | 같은 이름 + `-dlq` |
+| `guardbench-dev-gb-run-finalize` | `TestExecutionCompleted` | 같은 이름 + `-dlq` |
 
-최신 major와 Aurora의 확장성보다 현재 개발·Testcontainers 기준인 PostgreSQL 16과의 일치, 작은 운영 표면을 우선한다. major upgrade와 Aurora 전환은 호환성·부하·복구 요구가 생길 때 별도로 결정한다.
+세 Source Queue는 Standard, SSE-SQS, visibility timeout `30초`, retention `4일`, receive wait time `20초`, delivery delay `0초`다. 각 DLQ는 retention `14일`, `maxReceiveCount=5`이며 자기 Source ARN만 redrive를 허용한다.
 
-### Multi-AZ RDS와 AZ별 NAT
+현재 consumer는 한 번에 최대 10개를 받고, 결과 DB commit 뒤 `DeleteMessage`한다. nack에는 `ChangeMessageVisibility`를 호출하지 않으므로 ADR 0005의 약 5초 조기 재시도 대신 현재 visibility가 끝나는 약 30초 뒤 재전달된다. 이는 최초 배포의 알려진 복구 지연으로 수용하고, 15초 Provider timeout보다 visibility를 짧게 낮추지는 않는다.
 
-가용성은 높아지지만 MVP 초기 고정 비용이 커진다. 현재는 Single-AZ RDS와 NAT 한 개의 장애 위험을 명시적으로 수용하고 backup·alarm·수동 복구를 갖춘다.
+Outbox Publisher는 같은 Task 안에서 1초 fixed delay, batch 10으로 `SendMessageBatch`를 호출한다. 실패 항목은 `PENDING`에 남아 다음 1초 주기에 다시 시도되며 현재 구현에는 지수 backoff가 없다. `PUBLISHED` 자동 정리도 하지 않는다.
 
-### dev·staging·prod 상시 운영
+## IAM
 
-release rehearsal 격리는 좋아지지만 사용량이 적은 단계에서 RDS·NAT·ECS 운영 세트가 하나 더 생긴다. dev/prod만 상시 운영하고 필요할 때 동일 IaC로 임시 검증 환경을 만든다.
+### Task execution role
 
-### 별도 Outbox Publisher Service
+- ECR image pull과 CloudWatch Logs 전송에 `AmazonECSTaskExecutionRolePolicy`를 사용한다.
+- RDS managed secret 하나에만 `secretsmanager:GetSecretValue`를 허용한다.
+- customer-managed KMS key를 선택한 경우에만 해당 key의 `kms:Decrypt`를 추가한다.
 
-독립 배포와 scale-to-zero가 가능하지만 최소 Task와 장애 지점이 늘어난다. Publisher 경쟁 제어가 이미 DB에 있으므로 API background component를 선택한다.
+### Application task role
 
-### Parameter Store만 사용
+단일 Task가 현재 모든 역할을 수행하므로 다음 권한을 하나의 role에 부여한다.
 
-비용은 낮지만 DB credential lifecycle과 audit 목적에 특화된 Secrets Manager를 선택한다. non-secret 설정에만 일반 환경 설정을 사용한다.
+- 세 Source Queue ARN: `sqs:SendMessage`, `sqs:ReceiveMessage`, `sqs:DeleteMessage`
+- 실제 Guardrail resource: `bedrock:CreateGuardrailVersion`, `bedrock:ApplyGuardrail`
 
-## 후속 구현 경계
+Queue URL을 직접 주입하므로 `sqs:GetQueueUrl`과 `Resource="*"`는 사용하지 않는다. DLQ에 애플리케이션이 직접 쓰거나 읽는 권한도 주지 않는다. AWS access key는 image, Task 환경변수와 GitHub 저장소에 두지 않는다.
 
-이 문서로 기존 미결정 사항은 모두 초기 운영값 또는 명시적인 MVP Non-Goal로 정리됐다. 후속 IaC Issue는 이 계약을 그대로 프로비저닝하고 다음을 검증해야 한다.
+## 관측성과 alarm
 
-1. dev/prod 계정·VPC 격리와 Security Group reachability
-2. RDS backup·restore, deletion protection와 TLS 연결
-3. Queue별 redrive policy, DLQ alarm과 수동 redrive
-4. Fargate Task 크기·최소/최대 수와 scale-from-zero
-5. API 다중 Publisher의 `SKIP LOCKED` 경쟁과 PENDING alarm
-6. Secret least privilege와 로그 redaction
-7. CloudWatch alarm의 SNS 전달과 runbook 연결
+현재 애플리케이션은 JSON logging과 custom CloudWatch metric을 내보내지 않는다. 최초 배포는 awslogs의 기존 text log와 AWS native metric만 사용한다.
 
-IaC 도구 선택, 실제 AWS 리소스 생성, CI/CD 변경, multi-region/DR, 자동 Outbox cleanup, stale TestRun Reconciler와 DLQ 자동 redrive는 이 문서 PR에 포함하지 않는다.
+| 대상 | Alarm |
+| --- | --- |
+| 각 DLQ | `ApproximateNumberOfMessagesVisible >= 1`, 1분 1회 |
+| resolve/finalize Queue | `ApproximateAgeOfOldestMessage >= 120초`, 1분 3회 |
+| work-items Queue | `ApproximateAgeOfOldestMessage >= 300초`, 1분 3회 |
+| ECS | `RunningTaskCount < 1`, 1분 2회; CPU 또는 memory 85% 이상, 5분 3회 |
+| ALB | `UnHealthyHostCount >= 1`, 1분 2회; healthy host 0, 1분 2회 |
+| RDS | free storage 10 GiB 미만, CPU 80% 이상 또는 free memory 256 MiB 미만 |
+| Publisher log | `Unexpected error publishing pending outbox events` 1건 이상 |
+| Worker log | `Unexpected error polling` 또는 `Malformed message` 1건 이상 |
+
+Alarm은 `guardbench-dev-ops` SNS Topic으로 보내고 실제 수신자가 subscription을 확인해야 한다. ECS Container Insights는 `RunningTaskCount`와 운영 dashboard를 위해 켠다.
+
+`OutboxOldestPendingAgeSeconds`, `OutboxPendingCount`, TestRun 체류 시간은 현재 코드가 metric을 내보내지 않아 CloudWatch alarm으로 만들 수 없다. 최초 배포에서는 아래 SQL을 배포 직후와 장애 대응 시 수동 확인하고, custom metric 또는 별도 probe 구현은 후속 관측성 Issue로 넘긴다.
+
+```sql
+select count(*) as pending_count,
+       extract(epoch from (current_timestamp - min(created_at))) as oldest_pending_seconds
+from outbox_event
+where status = 'PENDING';
+```
+
+이 query는 V2 migration의 `outbox_event(status, created_at)` 계약과 일치한다. 입력, ActualResult, Guardrail 설정 전문, secret과 SDK 예외의 credential 값은 로그에 남기지 않는다.
+
+## 기존 IaC에서 반드시 고칠 항목
+
+`guardbench-iac`의 현재 `dev`에 다음 변경이 모두 반영돼야 최초 backend 배포가 가능하다.
+
+1. 기존 S3·CloudFront·VPC·subnet·Endpoint·SG·ALB·Target Group을 state와 대조하고 import 또는 보존한다. 신규 resource로 교체하지 않는다.
+2. CloudFront API origin을 `http-only`로 고치고 API cache/origin request policy를 위 계약대로 설정한다.
+3. ALB health path `/health`를 `/api/v1/test-suites`로 바꾸고 port 80 ingress를 CloudFront origin-facing prefix list로 제한한다.
+4. RDS PostgreSQL, Secrets Manager Endpoint, SQS Source/DLQ 6개와 redrive policy를 추가한다.
+5. 기존 source의 API/Orchestrator/Executor 세 Task Definition과 Service를 단일 `app` 정의로 바꾸고, 실제로 존재하지 않는 ECS resource를 신규 생성한다.
+6. Task Definition에 RDS secret, Queue URL과 위 환경변수를 넣고 execution/application role을 실제 ARN으로 제한한다.
+7. `latest` image와 mutable ECR tag를 제거하고 배포할 image SHA로 새 Task Definition revision을 만든다.
+8. CloudWatch alarm, log metric filter와 SNS Topic을 추가한다.
+
+기존 Terraform에는 RDS·SQS가 없고 private subnet에 default route도 없으므로, 이 변경 없이 ECS Service부터 만들면 application startup 또는 메시지 처리가 실패한다.
+
+## 최초 배포 순서와 통과 조건
+
+1. Terraform state backup, `state list`, AWS 실제 resource를 대조하고 기존 network·frontend·ALB resource가 state에 없을 때만 import한다.
+2. `terraform fmt`, `validate`, `plan` 결과에서 기존 VPC, subnet, Endpoint, SG, S3, CloudFront, ALB와 Target Group의 삭제·교체가 없음을 확인한다.
+3. 기존 네트워크 rule과 ALB·CloudFront behavior를 수정하고 RDS, Queue, Secret Endpoint, IAM, ECR을 신규 생성한다.
+4. backend `dev`의 `clean check bootBuildImage`가 성공한 commit SHA image를 ECR에 push한다.
+5. 해당 image를 가리키는 단일 Task Definition과 ECS Service를 배포한다. Flyway V1·V2 성공과 ALB healthy target 1개를 확인한다.
+6. CloudFront URL에서 `GET /api/v1/test-suites`가 200이고, create/update API의 JSON body와 `Idempotency-Key`가 전달되는지 확인한다.
+7. TestRun 한 건을 접수해 `resolve → workitems → finalize`, terminal DB 결과, Source Queue 감소와 DLQ 0을 확인한다.
+8. Publisher/Worker log metric filter와 SNS test alarm이 실제 수신되는지 확인한다.
+
+프론트 정적 asset을 다시 배포할 때는 3시간 유효한 임시 AWS credential을 갱신한 뒤 기존 workflow를 실행한다. GitHub OIDC role 전환은 자격 증명 갱신을 자동화하는 후속 개선이며 backend 최초 배포의 차단 조건이 아니다.
+
+## 의도적으로 보류한 항목
+
+- Orchestrator/Executor 별도 ECS Service와 역할별 IAM
+- Queue backlog 기반 Service Auto Scaling과 scale-to-zero
+- custom domain, ACM을 이용한 CloudFront-to-ALB HTTPS
+- prod stack 생성과 multi-account 분리
+- JSON structured logging과 application custom metric
+- Outbox cleanup, 지수 backoff, 약 5초 조기 재전달과 stale TestRun reconciler
+- backend/frontend 완전 자동 배포 workflow
+- Multi-AZ RDS, NAT Gateway와 multi-region DR
+
+이 항목은 최초 dev 배포를 막지 않는다. 역할 선택기나 application metric처럼 코드 변경이 필요한 항목을 Terraform만으로 구현한 것으로 간주하지 않는다.
 
 ## 참고 자료
 
-- [AWS Well-Architected: Separate workloads using accounts](https://docs.aws.amazon.com/wellarchitected/latest/framework/sec_securely_operate_multi_accounts.html)
-- [Amazon Bedrock endpoints and quotas](https://docs.aws.amazon.com/general/latest/gr/bedrock.html)
-- [Amazon RDS for PostgreSQL release calendar](https://docs.aws.amazon.com/AmazonRDS/latest/PostgreSQLReleaseNotes/postgresql-release-calendar.html)
-- [Amazon RDS for PostgreSQL automatic minor upgrades](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_UpgradeDBInstance.PostgreSQL.Minor.html)
-- [Amazon RDS in a VPC](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_VPC.WorkingWithRDSInstanceinaVPC.html)
-- [Amazon RDS backup retention](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_WorkingWithAutomatedBackups.BackupRetention.html)
-- [Amazon ECS Fargate task CPU and memory](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-tasks-services.html)
-- [Amazon ECS service auto scaling](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service-auto-scaling.html)
+- [Amazon ECS task definition parameters](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html)
+- [Amazon ECS task execution IAM role](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_execution_IAM_role.html)
+- [CloudFront managed origin request policies](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-origin-request-policies.html)
+- [CloudFront managed prefix list](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/LocationsOfEdgeServers.html#managed-prefix-list)
+- [Amazon RDS managed master password](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-secrets-manager.html)
 - [Amazon SQS visibility timeout](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html)
 - [Amazon SQS dead-letter queues](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html)
-- [Amazon SQS long polling](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-short-and-long-polling.html)
-- [Amazon SQS SSE-SQS](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-configure-sqs-sse-queue.html)
-- [AWS Systems Manager guidance for credential storage](https://docs.aws.amazon.com/systems-manager/latest/userguide/parameter-store-policies.html)
-- [CloudWatch Logs retention](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/Working-with-log-groups-and-streams.html)
