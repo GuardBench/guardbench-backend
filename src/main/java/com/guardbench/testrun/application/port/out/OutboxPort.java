@@ -1,5 +1,6 @@
 package com.guardbench.testrun.application.port.out;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -20,7 +21,10 @@ public interface OutboxPort {
     List<OutboxEventRecord> findPendingBatch(int batchSize);
 
     /**
-     * 지정된 이벤트를 PUBLISHED 상태로 전환한다.
+     * 지정된 이벤트들을 PUBLISHED 상태로 전환한다.
+     *
+     * <p>ADR 0005: SQS {@code SendMessageBatch}로 발행에 성공한 항목만 전달해야 한다.
+     * 빈 컬렉션이면 아무 것도 하지 않는다.
      */
-    void markPublished(UUID eventId);
+    void markPublished(Collection<UUID> eventIds);
 }

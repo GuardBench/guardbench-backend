@@ -16,13 +16,13 @@ public record ChangeResult(
         }
     }
 
-    static ChangeResult comparable(ChangeType changeType) {
+    public static ChangeResult comparable(ChangeType changeType) {
         return new ChangeResult(
                 ComparabilityStatus.COMPARABLE,
                 Objects.requireNonNull(changeType, "Change type must not be null"));
     }
 
-    static ChangeResult notComparable() {
+    public static ChangeResult notComparable() {
         return new ChangeResult(ComparabilityStatus.NOT_COMPARABLE, null);
     }
 }

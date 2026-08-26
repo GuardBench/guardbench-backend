@@ -96,6 +96,13 @@ final class CreateTestRunFakeAdapters
     }
 
     @Override
+    public List<TestCaseSnapshot> findAllByTestRunId(TestRunId testRunId) {
+        return snapshotsById.values().stream()
+                .filter(s -> s.testRunId().equals(testRunId))
+                .toList();
+    }
+
+    @Override
     public void save(TestCaseSnapshot snapshot) {
         snapshotsById.put(snapshot.id().value(), snapshot);
     }
@@ -111,7 +118,7 @@ final class CreateTestRunFakeAdapters
     }
 
     @Override
-    public void markPublished(UUID eventId) {
+    public void markPublished(java.util.Collection<UUID> eventIds) {
         // 접수 흐름 검증에는 사용하지 않는다.
     }
 
