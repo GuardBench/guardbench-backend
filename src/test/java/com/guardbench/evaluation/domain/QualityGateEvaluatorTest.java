@@ -3,6 +3,7 @@ package com.guardbench.evaluation.domain;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -14,6 +15,7 @@ class QualityGateEvaluatorTest {
 
     private static final TestRunEvaluationReference REFERENCE =
             new TestRunEvaluationReference(1L);
+    private static final Instant CREATED_AT = Instant.parse("2026-08-26T00:00:00Z");
     private final QualityGateEvaluator evaluator = new QualityGateEvaluator();
 
     @Nested
@@ -31,7 +33,7 @@ class QualityGateEvaluatorTest {
                     notComparableEvaluation(5L, AssertionStatus.FAIL));
 
             QualityGateMetrics metrics = evaluator.evaluate(
-                    REFERENCE, evaluations, 10L, 6L).metrics();
+                    REFERENCE, evaluations, 10L, 6L, CREATED_AT).metrics();
 
             assertEquals(0.6, metrics.candidateAssertionPassRate());
             assertEquals(1L, metrics.securityRegressionCount());
@@ -58,12 +60,13 @@ class QualityGateEvaluatorTest {
                     ChangeType.USABILITY_REGRESSION));
 
             QualityGateResult result = evaluator.evaluate(
-                    REFERENCE, evaluations, 20L, 19L);
+                    REFERENCE, evaluations, 20L, 19L, CREATED_AT);
 
             assertEquals(QualityGateStatus.PASS, result.status());
             assertEquals(0.95, result.metrics().candidateAssertionPassRate());
             assertEquals(0.05, result.metrics().usabilityRegressionRate());
             assertEquals(0.95, result.metrics().testExecutionSuccessRate());
+            assertEquals(CREATED_AT, result.createdAt());
         }
 
         @Test
@@ -139,10 +142,11 @@ class QualityGateEvaluatorTest {
                     notComparableEvaluation(2L, AssertionStatus.FAIL));
 
             QualityGateResult result = evaluator.evaluate(
-                    REFERENCE, evaluations, 2L, 1L);
+                    REFERENCE, evaluations, 2L, 1L, CREATED_AT);
 
             assertEquals(QualityGateStatus.NOT_EVALUATED, result.status());
             assertNull(result.metrics());
+            assertEquals(CREATED_AT, result.createdAt());
         }
     }
 
@@ -153,7 +157,8 @@ class QualityGateEvaluatorTest {
         return new SnapshotEvaluation(
                 new SnapshotEvaluationReference(reference),
                 new AssertionResult(assertionStatus),
-                ChangeResult.comparable(changeType));
+                ChangeResult.comparable(changeType),
+                CREATED_AT);
     }
 
     private static SnapshotEvaluation assertionOnlyEvaluation(
@@ -162,7 +167,8 @@ class QualityGateEvaluatorTest {
         return new SnapshotEvaluation(
                 new SnapshotEvaluationReference(reference),
                 new AssertionResult(assertionStatus),
-                null);
+                null,
+                CREATED_AT);
     }
 
     private static SnapshotEvaluation notComparableEvaluation(
@@ -171,6 +177,7 @@ class QualityGateEvaluatorTest {
         return new SnapshotEvaluation(
                 new SnapshotEvaluationReference(reference),
                 new AssertionResult(assertionStatus),
-                ChangeResult.notComparable());
+                ChangeResult.notComparable(),
+                CREATED_AT);
     }
 }

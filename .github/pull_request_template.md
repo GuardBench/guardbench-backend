@@ -55,7 +55,10 @@ Closes #
 ## 작성자 확인
 
 - [ ] Issue 전용 worktree와 agent/{issue-number}-{slug} 브랜치에서 작업했습니다. 예외가 있다면 위에 설명했습니다.
-- [ ] Issue의 범위와 Non-Goals를 다시 확인했습니다.
+- [ ] Issue의 범위와 Non-Goals를 다시 확인했고, 변경된 파일이 Issue 범위와 일치함을 점검했습니다.
+- [ ] 독립 검토 가능한 리뷰 단위 커밋(Domain/Port, Adapter, Test, Docs)으로 분리하여 로컬 커밋했습니다.
 - [ ] APPROVED 계약을 지켰고 DRAFT·미결정이나 계약 변경은 승인 근거를 연결했습니다.
+- [ ] push 직전 커밋 로그(`git log`), 파일 통계(`git diff --stat`), committed diff 범위를 검증했습니다.
 - [ ] 전체 diff·commit·검증 결과를 확인했고 실패나 미검증을 기록했습니다.
+- [ ] 현재 PR/Issue와 무관한 이슈, 다른 worktree, 다른 커밋을 대화 및 설명에 불필요하게 언급하지 않았습니다.
 - [ ] 비밀 정보, 자격 증명, 개인정보 또는 운영 데이터를 포함하지 않았습니다.

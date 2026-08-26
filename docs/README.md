@@ -35,6 +35,7 @@
 | API | [API 안내](api/README.md) · [OpenAPI](api/openapi.yaml) | APPROVED | Backend | 2026-08-24 | [API 명세서](https://app.notion.com/p/3c0eeed6b62d805dac0be8db487b1359) |
 | 아키텍처 | [시스템 개요](architecture/system-overview.md) | APPROVED | Backend | 2026-08-23 | [도메인 모델 정의](https://app.notion.com/p/3c0eeed6b62d81b48c03ed6034440936) |
 | 아키텍처 | [인프라](architecture/infrastructure.md) | DRAFT | Infra | 2026-08-24 | [인프라 구성 설계](https://app.notion.com/p/3c0eeed6b62d81269f60e1c69fbf9fcc) |
+| 아키텍처 | [TestRun Persistence 구현 인덱스](architecture/testrun-persistence.md) | DRAFT | Backend | 2026-08-26 | 없음 |
 | 계약 라우팅 | [비동기 TestRun](contracts/README.md) | DRAFT | Backend | 2026-08-25 | 없음 |
 | 통합 | [Bedrock Guardrails Adapter 설계 근거](integrations/bedrock-guardrails-adapter.md) | APPROVED | Backend | 2026-08-25 | 없음 |
 | 결정 | [ADR 안내](decisions/README.md) | APPROVED | Team | 2026-08-23 | 없음 |
@@ -48,6 +49,7 @@
 | 결정 | [ADR 0008: 비동기 TestRun 물리 멱등성·claim·Outbox 계약](decisions/0008-async-testrun-persistence-contract.md) | APPROVED | Backend | 2026-08-25 | 없음 |
 | 결정 | [ADR 0009: TestCase 논리 삭제의 동시 요청 처리](decisions/0009-testcase-soft-delete-concurrency.md) | APPROVED | Backend | 2026-08-25 | 없음 |
 | AI 개발 | [작업 워크플로](ai-development/workflow.md) | APPROVED | Team | 2026-08-24 | 현재 대화에서 승격 |
+| AI 개발 | [Backend CI와 dev Merge Gate](ai-development/backend-ci-merge-gate.md) | DRAFT | Backend | 2026-08-26 | 없음 |
 | AI 개발 | [코드 리뷰](ai-development/review.md) | APPROVED | Team | 2026-08-24 | PR #20·#23 사례와 Issue #33 |
 
 ## 개발 컨벤션

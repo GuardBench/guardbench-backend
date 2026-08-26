@@ -16,6 +16,7 @@
 - GitHub와 Notion이 충돌하면 GitHub를 우선하고 차이를 보고한다.
 - 공개 API, DB, 의존성 또는 아키텍처 변경은 사전 확인한다.
 - 기존 미커밋 변경을 보존한다. 출처가 불명확한 변경을 되돌리지 않는다.
+- 현재 Issue/PR와 무관한 이슈, 다른 worktree, 다른 커밋을 대화 및 리뷰에서 끌어오지 않는다. 관련성이 필요할 때는 현재 Issue와의 관계를 먼저 명시한다.
 
 ## DDD Aggregate와 Context 경계
 
@@ -28,6 +29,10 @@
 
 - Issue 하나당 별도 worktree와 `agent/{issue-number}-{slug}` 브랜치를 사용한다.
 - Issue에 명시된 에이전트 권한을 확인한다. 커밋이 허용된 경우에만 관련 테스트를 실행한 뒤 논리적 단위로 로컬 커밋한다.
+- Domain/Port, Persistence Adapter, 테스트, 문서 등 독립적으로 검토 가능한 변경은 기본적으로 별도 커밋으로 분리한다. 다수 파일 단일 커밋이 필요한 경우 커밋 전에 이유와 리뷰 단위를 사용자에게 제시한다.
+- 커밋 전에 현재 Issue 범위와 변경 파일이 일치하는지 `git status` 및 staged diff로 점검한다.
+- push 전에 commit log, 파일 통계(`git diff --stat`), staged/committed diff 범위를 반드시 확인하고 보고한다.
+- 이미 push된 커밋을 분리/재구성해야 할 때는 branch/worktree 격리 여부와 `force-with-lease` 필요성 및 위험성을 명확히 안내한다.
 - push, PR 생성, 병합, force push는 사람의 명시적 승인 없이 수행하지 않는다.
 - 검증하지 않은 결과를 완료했다고 표현하지 않는다.
 
