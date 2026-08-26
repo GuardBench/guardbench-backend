@@ -35,5 +35,9 @@ guardbench:
       max-messages: 10
       wait-time-seconds: 20
       visibility-timeout-seconds: 30
+    outbox:
+      # 발행 트랜잭션이 PENDING row lock을 SQS 전송 동안 유지하므로 batch는 작게 유지한다.
+      batch-size: 10
+      delay-ms: 1000
   worker:
     enabled: ${WORKER_ENABLED:false}

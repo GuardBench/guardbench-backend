@@ -17,7 +17,9 @@ public record SqsProperties(
         /** 각 Queue URL을 직접 지정할 때 사용한다. null이면 Queue 이름으로 조회한다. */
         QueueUrls queueUrls,
         /** Polling 설정 */
-        Polling polling
+        Polling polling,
+        /** Outbox 발행 설정 */
+        Outbox outbox
 ) {
 
     public SqsProperties {
@@ -27,6 +29,9 @@ public record SqsProperties(
         if (polling == null) {
             polling = new Polling(10, 20, 30);
         }
+        if (outbox == null) {
+            outbox = new Outbox(10);
+        }
     }
 
     public record QueueUrls(
@@ -34,6 +39,23 @@ public record SqsProperties(
             String workItems,
             String runFinalize
     ) {}
+
+    /**
+     * Outbox 발행 설정이다.
+     *
+     * <p>발행 트랜잭션이 PENDING row lock을 SQS 전송 동안 유지하므로
+     * batch size는 lock 보유 시간을 제한할 수 있도록 작게 유지한다.
+     */
+    public record Outbox(
+            /** 한 번의 발행 트랜잭션에서 처리하는 최대 event 수. */
+            int batchSize
+    ) {
+        public Outbox {
+            if (batchSize <= 0) {
+                batchSize = 10;
+            }
+        }
+    }
 
     public record Polling(
             /** 한 번에 가져오는 최대 메시지 수 (1–10). */
