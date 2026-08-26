@@ -23,6 +23,6 @@ class TestRunRepositoryAdapter implements TestRunRepository {
 
     @Override
     public void save(TestRun testRun) {
-        repository.save(TestRunPersistenceMapper.toEntity(testRun));
+        repository.saveAndFlush(TestRunPersistenceMapper.toEntity(testRun));
     }
 }

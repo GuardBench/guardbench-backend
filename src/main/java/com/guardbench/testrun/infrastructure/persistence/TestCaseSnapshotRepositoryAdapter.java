@@ -23,6 +23,6 @@ class TestCaseSnapshotRepositoryAdapter implements TestCaseSnapshotRepository {
 
     @Override
     public void save(TestCaseSnapshot snapshot) {
-        repository.save(TestRunPersistenceMapper.toEntity(snapshot));
+        repository.saveAndFlush(TestRunPersistenceMapper.toEntity(snapshot));
     }
 }
