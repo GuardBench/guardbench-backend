@@ -1,0 +1,75 @@
+package com.guardbench.testrun.application.port.out;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
+import com.guardbench.testrun.domain.Action;
+import com.guardbench.testrun.domain.Severity;
+import com.guardbench.testrun.domain.TestExecutionStatus;
+
+public record TestRunResultListCriteria(
+        String nameContains,
+        String inputContains,
+        String category,
+        Action expectedAction,
+        Severity severity,
+        TestExecutionStatus baselineExecutionStatus,
+        TestExecutionStatus candidateExecutionStatus,
+        String assertionStatusCode,
+        String comparabilityStatusCode,
+        String changeTypeCode,
+        List<SortOrder<TestRunResultSortField>> sort,
+        PageCriteria page) {
+    private static final List<SortOrder<TestRunResultSortField>> DEFAULT_SORT = List.of(
+            SortOrder.asc(TestRunResultSortField.SNAPSHOT_ID));
+
+    public TestRunResultListCriteria {
+        requireNonBlankIfPresent(nameContains, "nameContains");
+        requireNonBlankIfPresent(inputContains, "inputContains");
+        requireNonBlankIfPresent(category, "category");
+        validateCode(assertionStatusCode, "assertionStatusCode", "PASS", "FAIL");
+        validateCode(comparabilityStatusCode, "comparabilityStatusCode", "COMPARABLE", "NOT_COMPARABLE");
+        validateCode(changeTypeCode, "changeTypeCode", "NO_CHANGE", "SECURITY_REGRESSION",
+                "USABILITY_REGRESSION", "IMPROVEMENT", "POLICY_BEHAVIOR_CHANGED");
+        Objects.requireNonNull(page, "page must not be null");
+        sort = normalizeSort(sort);
+    }
+
+    public static TestRunResultListCriteria firstPage() {
+        return new TestRunResultListCriteria(null, null, null, null, null, null, null, null, null,
+                null, List.of(), PageCriteria.firstPage());
+    }
+
+    private static List<SortOrder<TestRunResultSortField>> normalizeSort(
+            List<SortOrder<TestRunResultSortField>> requested) {
+        Objects.requireNonNull(requested, "sort must not be null");
+        if (requested.isEmpty()) {
+            return DEFAULT_SORT;
+        }
+        if (requested.stream().anyMatch(order -> order.field() == TestRunResultSortField.SNAPSHOT_ID)) {
+            return List.copyOf(requested);
+        }
+        List<SortOrder<TestRunResultSortField>> stable = new ArrayList<>(requested);
+        stable.add(SortOrder.asc(TestRunResultSortField.SNAPSHOT_ID));
+        return List.copyOf(stable);
+    }
+
+    private static void requireNonBlankIfPresent(String value, String field) {
+        if (value != null && value.isBlank()) {
+            throw new IllegalArgumentException(field + " must not be blank");
+        }
+    }
+
+    private static void validateCode(String value, String field, String... allowed) {
+        if (value == null) {
+            return;
+        }
+        for (String code : allowed) {
+            if (code.equals(value)) {
+                return;
+            }
+        }
+        throw new IllegalArgumentException("unsupported " + field + "=" + value);
+    }
+}
