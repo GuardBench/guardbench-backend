@@ -15,7 +15,8 @@ public record TestSuiteCreateReq(
         @ContractNotBlank(message = "이름은 필수입니다.") String name,
         String description,
         @Size(max = 100, message = "초기 TestCase는 최대 100개까지 허용합니다.")
-        List<@Valid TestCaseCreateReq> testCases) {
+        List<@NotNull(message = "TestCase는 null일 수 없습니다.")
+                @Valid TestCaseCreateReq> testCases) {
 
     public TestSuiteCreateCommand toCommand() {
         List<TestCaseCreateCommand> commands = testCases == null

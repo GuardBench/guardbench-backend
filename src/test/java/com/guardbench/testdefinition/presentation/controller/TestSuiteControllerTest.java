@@ -99,6 +99,23 @@ class TestSuiteControllerTest {
                     .andExpect(jsonPath("$.data.errors[*].field")
                             .value(hasItem("testCases[0].name")));
         }
+
+        @Test
+        @DisplayName("초기 TestCase의 null 요소는 인덱스 경로로 Validation 오류를 반환한다")
+        void rejectsNullInitialTestCaseElement() throws Exception {
+            mockMvc.perform(post(BASE)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                      "name": "Suite",
+                                      "testCases": [null]
+                                    }
+                                    """))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.data.code").value("VALIDATION_ERROR"))
+                    .andExpect(jsonPath("$.data.errors[*].field")
+                            .value(hasItem("testCases[0]")));
+        }
     }
 
     @Nested
