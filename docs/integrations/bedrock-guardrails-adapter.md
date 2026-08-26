@@ -6,7 +6,7 @@
 > Canonical source: GitHub
 > Origin: Issue #17, PR #58 리뷰 반영
 
-이 문서는 #17의 Port와 Normalizer가 실제 Amazon Bedrock API/Java SDK 계약을 어떻게 반영하는지 기록한다. 이 문서 자체는 운영 인프라나 AWS 자격 증명을 승인하지 않으며, 실제 SDK dependency와 concrete Adapter 구현 전의 설계 근거다.
+이 문서는 #17의 Port와 Normalizer, concrete Adapter가 실제 Amazon Bedrock API/Java SDK 계약을 어떻게 반영하는지 기록한다. 이 문서는 운영 인프라나 AWS 자격 증명을 승인하지 않으며, SDK client의 Spring credentials/region 조립과 실제 AWS E2E는 별도 범위다.
 
 `ApplyGuardrail`은 foundation model 호출과 분리된 독립 평가 API다. 따라서 GuardBench가 평가할 입력 텍스트를 직접 전달하며, 모델 ID나 모델 응답을 요청하지 않는다. #17의 Candidate 경로에서는 먼저 DRAFT를 숫자 버전으로 materialize한 뒤 그 버전을 평가하지만, API 자체는 사전 구성된 Guardrail의 `DRAFT` 버전을 직접 평가하는 것도 허용한다.
 
@@ -67,19 +67,22 @@ ApplyGuardrailRequest의 `content`는 필수이며 `source`는 `INPUT` 또는 `O
 
 ### 응답 정규화
 
-판정은 `action` 값만 사용한다.
+AWS top-level `action`만으로는 hard block과 masking을 구분할 수 없다. `GUARDRAIL_INTERVENED`는 AWS에서 두 결과 모두에 사용된다. 따라서 Bedrock Adapter는 `INTERVENTIONS` scope의 structured assessment action만 내부적으로 allowlist 분류하고, raw provider 내용 없이 provider-independent binary action을 Port에 전달한다.
 
-| AWS action | TestRun 결과 |
+| AWS 응답 조건 | TestRun 결과 |
 | --- | --- |
-| `NONE` | ActualResult(`ALLOW`) |
-| `GUARDRAIL_INTERVENED` | ActualResult(`BLOCK`) |
-| null/unknown | `PROVIDER_RESPONSE_INVALID` |
+| top-level `NONE` | ActualResult(`ALLOW`) |
+| `GUARDRAIL_INTERVENED` + assessment에 `BLOCKED` 하나 이상 | ActualResult(`BLOCK`) |
+| `GUARDRAIL_INTERVENED` + `BLOCKED` 없이 `ANONYMIZED` 하나 이상 | ActualResult(`ALLOW`) |
+| `GUARDRAIL_INTERVENED` + 알 수 없는/누락된 structured policy action | `PROVIDER_RESPONSE_INVALID` |
 
-`action`이 없거나 알 수 없는 값이면 `PROVIDER_RESPONSE_INVALID`로 실패 처리하고 `ActualResult`를 만들지 않는다. `GuardrailResultNormalizer.java`는 이 매핑만 수행하며 다른 응답 필드를 판정에 사용하지 않는다.
+`BLOCKED`와 `ANONYMIZED`가 함께 있으면 실제 흐름을 거부하는 `BLOCKED`를 우선한다. `ANONYMIZED`는 Guardrail 처리 뒤 흐름이 계속되는 현재 MVP의 binary `ALLOW`로 축약한다. 이로 인해 no-intervention ALLOW와 masked ALLOW를 Evaluation이 구분하거나, masking 자체를 기대값으로 검증하지는 않는다. 그런 redaction correctness와 별도 masking 기대값은 후속 계약 범위다.
 
-`guardrailCoverage`와 `textCharacters`는 AWS API에서 optional이므로 실행 성공/실패의 조건으로 두지 않는다. 값이 누락되거나 `guarded != total`이어도 그 자체만으로 유효한 `action`을 실패로 바꾸지 않는다. guarded/total 숫자는 추후 내부 telemetry 후보로만 검토하며, MVP evaluator와 `GuardrailExecutionResult`에는 포함하지 않는다.
+`GuardrailResultNormalizer.java`는 Adapter가 이미 만든 `ALLOW` 또는 `BLOCK`만 Domain ActualResult로 변환한다. Adapter가 AWS raw `action`, assessment, output을 Port에 전달하지 않으므로, null/unknown provider response나 분류 불가 intervention은 `PROVIDER_RESPONSE_INVALID`로 실패 처리하고 ActualResult를 만들지 않는다.
 
-실제 응답에는 `actionReason`, `assessments`, `outputs`, `usage`, `coverage`가 포함될 수 있지만 MVP Core의 판정 입력은 action뿐이다. `actionReason`, `assessments`, `outputs`와 assessment 내 match/regex/custom word/PII 값, ARN, provider raw error, 원문 content는 Port·Domain·DB·API·일반 로그 어디에도 전달하거나 저장하지 않는다. `usage`와 guardrail processing latency는 raw text 없이 수치 메트릭으로만, 별도 telemetry 계약이 승인된 뒤에 추가한다. 정책 family의 allowlisted summary도 별도 계약 없이는 추가하지 않는다.
+`guardrailCoverage`와 `textCharacters`는 AWS API에서 optional이므로 실행 성공/실패의 조건으로 두지 않는다. 값이 누락되거나 `guarded != total`이어도 그 자체만으로 유효한 action을 실패로 바꾸지 않는다. guarded/total 숫자는 추후 내부 telemetry 후보로만 검토하며, MVP evaluator와 `GuardrailExecutionResult`에는 포함하지 않는다.
+
+실제 응답에는 `actionReason`, `assessments`, `outputs`, `usage`, `coverage`가 포함될 수 있지만 Adapter는 위 allowlisted action code만 내부적으로 읽는다. `actionReason`, assessment 내 match/regex/custom word/PII 값, output text, ARN, provider raw error, 원문 content는 Port·Domain·DB·API·일반 로그 어디에도 전달하거나 저장하지 않는다. `usage`와 guardrail processing latency는 raw text 없이 수치 메트릭으로만, 별도 telemetry 계약이 승인된 뒤에 추가한다. 정책 family의 allowlisted summary도 별도 계약 없이는 추가하지 않는다.
 
 ## 오류와 timeout 매핑
 
@@ -97,18 +100,17 @@ DB commit, SQS publish/ack 같은 기술 실패는 이 Adapter에서 TestExecuti
 
 ## 현재 구현과 후속 범위
 
-현재 PR #58에는 다음만 구현되어 있다.
+현재 PR에는 다음을 구현한다.
 
-- 소비자 소유 materialization/execution Port
-- provider-independent request/result/failure value contract
+- 소비자 소유 materialization/execution Port와 provider-independent request/result/failure value contract
 - action과 failure code를 Core 결과로 바꾸는 Normalizer
-- 실제 AWS 호출 없이 실행하는 단위 테스트
+- `guardrail/infrastructure/bedrock`의 `BedrockClient`/`BedrockRuntimeClient` concrete Adapter
+- AWS SDK request·response·exception mock 단위 테스트
+- `software.amazon.awssdk:bedrock:2.54.3`, `software.amazon.awssdk:bedrockruntime:2.54.3` production dependency
 
 아직 구현하지 않은 항목:
 
-- `software.amazon.awssdk:bedrock` 및 `bedrockruntime` production dependency
-- `BedrockClient`/`BedrockRuntimeClient` concrete Adapter
-- AWS SDK model/exception mock 테스트
+- Spring credentials/region 및 SDK client bean 조립
 - 실제 AWS credential을 이용한 E2E
 - version 제약 세 계층(`openapi.yaml`·`ck_test_run_versions`·Guardrail Port) 정렬과 거부 값을 `TARGET_CONFIGURATION_INVALID`로 정규화하는 변환은 #18의 Worker orchestration에서 처리한다
 - `guardrailIdentifier`에 AWS Pattern 검증을 도입할지는 Port 계약을 좁히는 결정이므로 별도 판단이 필요하다

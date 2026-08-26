@@ -15,10 +15,10 @@ import org.junit.jupiter.api.Test;
 class GuardrailResultNormalizerTest {
 
     @Test
-    @DisplayName("ApplyGuardrail의 NONE은 ALLOW ActualResult로 정규화된다")
-    void normalizesNoneActionToAllow() {
+    @DisplayName("Adapter의 ALLOW 결과는 ALLOW ActualResult로 정규화된다")
+    void normalizesAdapterAllowActionToAllow() {
         GuardrailExecutionNormalization normalized = GuardrailResultNormalizer.normalize(
-                GuardrailExecutionResult.succeeded("NONE")
+                GuardrailExecutionResult.succeeded("ALLOW")
         );
 
         assertEquals(Action.ALLOW, normalized.actualResult().action());
@@ -26,10 +26,10 @@ class GuardrailResultNormalizerTest {
     }
 
     @Test
-    @DisplayName("ApplyGuardrail의 GUARDRAIL_INTERVENED는 BLOCK ActualResult로 정규화된다")
-    void normalizesIntervenedActionToBlock() {
+    @DisplayName("Adapter의 BLOCK 결과는 BLOCK ActualResult로 정규화된다")
+    void normalizesAdapterBlockActionToBlock() {
         GuardrailExecutionNormalization normalized = GuardrailResultNormalizer.normalize(
-                GuardrailExecutionResult.succeeded("GUARDRAIL_INTERVENED")
+                GuardrailExecutionResult.succeeded("BLOCK")
         );
 
         assertEquals(Action.BLOCK, normalized.actualResult().action());
@@ -37,10 +37,10 @@ class GuardrailResultNormalizerTest {
     }
 
     @Test
-    @DisplayName("알 수 없는 Provider action은 안전한 응답 오류로 정규화된다")
+    @DisplayName("AWS raw action을 포함한 알 수 없는 Port action은 안전한 응답 오류로 정규화된다")
     void rejectsUnknownProviderAction() {
         GuardrailExecutionNormalization normalized = GuardrailResultNormalizer.normalize(
-                GuardrailExecutionResult.succeeded("FUTURE_ACTION")
+                GuardrailExecutionResult.succeeded("GUARDRAIL_INTERVENED")
         );
 
         assertNull(normalized.actualResult());
