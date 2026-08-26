@@ -93,6 +93,20 @@ final class GuardBenchArchitectureRules {
             .as("evaluation must not depend on guardrail")
             .allowEmptyShould(true);
 
+    /**
+     * ADR 0006: evaluation Integration Adapter는 testrun Application Facade만 호출한다.
+     * testrun.domain 또는 testrun.domain.repository를 직접 import하지 않는다.
+     */
+    static final ArchRule EVALUATION_TESTRUN_BOUNDARY = noClasses()
+            .that().resideInAPackage("com.guardbench.evaluation..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                    "com.guardbench.testrun.domain..",
+                    "com.guardbench.testrun.infrastructure.."
+            )
+            .as("ADR 0006: evaluation must not depend on testrun domain or infrastructure; " +
+                    "use testrun application facade via integration adapter")
+            .allowEmptyShould(true);
+
     static final ArchRule GUARDRAIL_DEPENDENCIES = noClasses()
             .that().resideInAPackage("com.guardbench.guardrail..")
             .should().dependOnClassesThat().resideInAPackage("com.guardbench.evaluation..")
