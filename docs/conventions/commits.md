@@ -4,7 +4,7 @@
 > Owner: Team
 > Last reviewed: 2026-08-26
 > Canonical source: GitHub
-> Origin: [Notion 커밋 컨벤션](https://app.notion.com/p/3c0eeed6b62d813382bdd56fd910c66e) 및 Issue #78 (PR #77 회귀 개선)
+> Origin: [Notion 커밋 컨벤션](https://app.notion.com/p/3c0eeed6b62d813382bdd56fd910c66e) 및 PR #77 회귀 개선 사례
 
 기본 형식은 `<type>[optional scope]: <description>`이다.
 

@@ -4,7 +4,7 @@
 > Owner: Team
 > Last reviewed: 2026-08-26
 > Canonical source: GitHub
-> Origin: PR #20·#23 리뷰 사례, Issue #33 및 Issue #78 (PR #77 회귀 개선)
+> Origin: PR #20·#23 리뷰 사례, Issue #33 및 PR #77 회귀 개선 사례
 
 리뷰의 목적은 중요한 결함을 빠르게 찾고 사람이 승인 여부를 판단하게 돕는 것이다. 리뷰 요청만 받았다면 파일 수정, commit, push, 승인과 병합을 하지 않는다.
 

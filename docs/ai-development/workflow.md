@@ -4,7 +4,7 @@
 > Owner: Team
 > Last reviewed: 2026-08-26
 > Canonical source: GitHub
-> Origin: 현재 팀의 에이전트 운영 논의 및 Issue #78 (PR #77 회귀 개선)
+> Origin: 현재 팀의 에이전트 운영 논의 및 PR #77 회귀 개선 사례
 
 이 문서는 GitHub Issue를 에이전트 작업으로 안전하게 전달하고 리뷰 가능한 커밋 단위를 유지하는 절차다. 저장소의 상시 규칙은 `AGENTS.md`, 기능별 요구사항은 Issue, 구현 계약은 `docs/`에 둔다.
 
