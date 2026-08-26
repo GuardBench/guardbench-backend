@@ -41,3 +41,10 @@ guardbench:
       delay-ms: 1000
   worker:
     enabled: ${WORKER_ENABLED:false}
+  # Bedrock Provider 호출 한도 (ADR 0005: 재시도 포함 전체 15초, claim lease 45초 미만)
+  bedrock:
+    region: ${AWS_REGION:ap-northeast-2}
+    endpoint-override: ${BEDROCK_ENDPOINT_OVERRIDE:}
+    api-call-timeout-ms: 15000
+    api-call-attempt-timeout-ms: 5000
+    max-attempts: 3
