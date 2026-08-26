@@ -5,6 +5,7 @@ import static com.guardbench.architecture.GuardBenchArchitectureRules.COMMON_DOM
 import static com.guardbench.architecture.GuardBenchArchitectureRules.DOMAIN_DEPENDENCIES;
 import static com.guardbench.architecture.GuardBenchArchitectureRules.DOMAIN_TYPE_OWNERSHIP;
 import static com.guardbench.architecture.GuardBenchArchitectureRules.EVALUATION_DEPENDENCIES;
+import static com.guardbench.architecture.GuardBenchArchitectureRules.EVALUATION_TESTRUN_BOUNDARY;
 import static com.guardbench.architecture.GuardBenchArchitectureRules.GUARDRAIL_DEPENDENCIES;
 import static com.guardbench.architecture.GuardBenchArchitectureRules.PACKAGE_BY_DOMAIN;
 import static com.guardbench.architecture.GuardBenchArchitectureRules.TESTDEFINITION_DEPENDENCIES;
@@ -63,6 +64,12 @@ class GuardBenchArchitectureTest {
     @DisplayName("evaluation은 guardrail 패키지에 의존하지 않는다")
     void evaluationDoesNotDependOnGuardrail() {
         EVALUATION_DEPENDENCIES.check(productionClasses);
+    }
+
+    @Test
+    @DisplayName("ADR 0006: evaluation은 testrun domain/infrastructure에 의존하지 않는다")
+    void evaluationDoesNotDependOnTestRunDomainOrInfrastructure() {
+        EVALUATION_TESTRUN_BOUNDARY.check(productionClasses);
     }
 
     @Test

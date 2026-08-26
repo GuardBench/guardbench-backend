@@ -29,6 +29,7 @@ import com.guardbench.testrun.application.port.out.LoadSnapshotIdsByTestRunPort;
 import com.guardbench.testrun.application.port.out.OutboxEventRecord;
 import com.guardbench.testrun.application.port.out.OutboxPort;
 import com.guardbench.testrun.application.port.out.ResolutionClaimPort;
+import com.guardbench.testrun.application.port.out.SaveNotEvaluatedQualityGatePort;
 import com.guardbench.testrun.domain.BaselineTarget;
 import com.guardbench.testrun.domain.CandidateSource;
 import com.guardbench.testrun.domain.CandidateTarget;
@@ -58,6 +59,7 @@ class ResolveTestRunServiceTest {
     private FakeLoadSnapshotIdsPort loadSnapshotIdsPort;
     private FakeOutboxPort outboxPort;
     private FakeTestExecutionRepository executionRepository;
+    private FakeSaveNotEvaluatedQualityGatePort saveNotEvaluatedPort;
     private ResolveTestRunService service;
 
     @BeforeEach
@@ -68,9 +70,11 @@ class ResolveTestRunServiceTest {
         loadSnapshotIdsPort = new FakeLoadSnapshotIdsPort();
         outboxPort = new FakeOutboxPort();
         executionRepository = new FakeTestExecutionRepository();
+        saveNotEvaluatedPort = new FakeSaveNotEvaluatedQualityGatePort();
         service = new ResolveTestRunService(
                 claimPort, testRunRepository, materializationPort,
-                loadSnapshotIdsPort, outboxPort, executionRepository, FIXED_CLOCK
+                loadSnapshotIdsPort, outboxPort, executionRepository,
+                saveNotEvaluatedPort, FIXED_CLOCK
         );
     }
 
@@ -210,7 +214,7 @@ class ResolveTestRunServiceTest {
         }
 
         @Test
-        @DisplayName("attempt 한도 초과 시 모든 execution NOT_STARTED + TestRun FINISHED/ERROR로 종결한다")
+        @DisplayName("attempt 한도 초과 시 모든 execution NOT_STARTED + NOT_EVALUATED QualityGate + TestRun FINISHED/ERROR로 종결한다")
         void terminalFailure() {
             TestRun testRun = queuedTestRun(TEST_RUN_ID, 2);
             testRunRepository.store(testRun);
@@ -232,6 +236,10 @@ class ResolveTestRunServiceTest {
             for (TestExecution exec : executionRepository.savedExecutions()) {
                 assertEquals(TestExecutionStatus.NOT_STARTED, exec.status());
             }
+
+            // ADR 0004: NOT_EVALUATED QualityGateResult도 같은 트랜잭션에서 저장되었다
+            assertTrue(saveNotEvaluatedPort.wasCalled(TEST_RUN_ID),
+                    "NOT_EVALUATED QualityGateResult must be saved atomically with FINISHED/ERROR");
         }
     }
 
@@ -438,6 +446,19 @@ class ResolveTestRunServiceTest {
         @Override
         public void save(TestExecution execution) {
             executions.add(execution);
+        }
+    }
+
+    private static final class FakeSaveNotEvaluatedQualityGatePort implements SaveNotEvaluatedQualityGatePort {
+        private final List<Long> savedTestRunIds = new ArrayList<>();
+
+        boolean wasCalled(long testRunId) {
+            return savedTestRunIds.contains(testRunId);
+        }
+
+        @Override
+        public void saveNotEvaluated(long testRunId) {
+            savedTestRunIds.add(testRunId);
         }
     }
 

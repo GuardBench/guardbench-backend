@@ -96,6 +96,13 @@ final class CreateTestRunFakeAdapters
     }
 
     @Override
+    public List<TestCaseSnapshot> findAllByTestRunId(TestRunId testRunId) {
+        return snapshotsById.values().stream()
+                .filter(s -> s.testRunId().equals(testRunId))
+                .toList();
+    }
+
+    @Override
     public void save(TestCaseSnapshot snapshot) {
         snapshotsById.put(snapshot.id().value(), snapshot);
     }

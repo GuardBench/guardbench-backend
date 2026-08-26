@@ -16,6 +16,7 @@ import com.guardbench.testrun.application.port.out.LoadSnapshotIdsByTestRunPort;
 import com.guardbench.testrun.application.port.out.OutboxEventRecord;
 import com.guardbench.testrun.application.port.out.OutboxPort;
 import com.guardbench.testrun.application.port.out.ResolutionClaimPort;
+import com.guardbench.testrun.application.port.out.SaveNotEvaluatedQualityGatePort;
 import com.guardbench.testrun.domain.TestExecution;
 import com.guardbench.testrun.domain.TestExecutionId;
 import com.guardbench.testrun.domain.TestCaseSnapshotId;
@@ -55,6 +56,7 @@ public class ResolveTestRunService {
     private final LoadSnapshotIdsByTestRunPort loadSnapshotIdsPort;
     private final OutboxPort outboxPort;
     private final TestExecutionRepository testExecutionRepository;
+    private final SaveNotEvaluatedQualityGatePort saveNotEvaluatedQualityGatePort;
     private final Clock clock;
 
     public ResolveTestRunService(
@@ -64,6 +66,7 @@ public class ResolveTestRunService {
             LoadSnapshotIdsByTestRunPort loadSnapshotIdsPort,
             OutboxPort outboxPort,
             TestExecutionRepository testExecutionRepository,
+            SaveNotEvaluatedQualityGatePort saveNotEvaluatedQualityGatePort,
             Clock clock
     ) {
         this.resolutionClaimPort = Objects.requireNonNull(resolutionClaimPort);
@@ -72,6 +75,7 @@ public class ResolveTestRunService {
         this.loadSnapshotIdsPort = Objects.requireNonNull(loadSnapshotIdsPort);
         this.outboxPort = Objects.requireNonNull(outboxPort);
         this.testExecutionRepository = Objects.requireNonNull(testExecutionRepository);
+        this.saveNotEvaluatedQualityGatePort = Objects.requireNonNull(saveNotEvaluatedQualityGatePort);
         this.clock = Objects.requireNonNull(clock);
     }
 
@@ -145,7 +149,7 @@ public class ResolveTestRunService {
             return ResolutionOutcome.MATERIALIZATION_FAILED_RETRYABLE;
         }
 
-        // 영구 실패: 모든 execution NOT_STARTED + TestRun FINISHED/ERROR
+        // 영구 실패: 모든 execution NOT_STARTED + QualityGateResult NOT_EVALUATED + TestRun FINISHED/ERROR
         long testRunId = testRun.id().value();
         Instant now = clock.instant();
 
@@ -159,6 +163,9 @@ public class ResolveTestRunService {
                     TestExecution.notStarted(new TestExecutionId(sid, TargetType.CANDIDATE))
             );
         }
+
+        // ADR 0004: NOT_EVALUATED QualityGateResult을 같은 트랜잭션에서 원자적 저장
+        saveNotEvaluatedQualityGatePort.saveNotEvaluated(testRunId);
 
         testRun.failPreparation(now);
         testRunRepository.save(testRun);
