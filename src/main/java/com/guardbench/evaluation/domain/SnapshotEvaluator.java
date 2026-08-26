@@ -1,5 +1,6 @@
 package com.guardbench.evaluation.domain;
 
+import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -16,9 +17,11 @@ public final class SnapshotEvaluator {
             EvaluationAction expectedAction,
             EvaluationAction baselineAction,
             EvaluationAction candidateAction,
-            boolean comparisonConditionsSatisfied) {
+            boolean comparisonConditionsSatisfied,
+            Instant createdAt) {
         Objects.requireNonNull(reference, "Snapshot evaluation reference must not be null");
         Objects.requireNonNull(expectedAction, "Expected action must not be null");
+        Objects.requireNonNull(createdAt, "Snapshot evaluation createdAt must not be null");
 
         if (candidateAction == null) {
             return Optional.empty();
@@ -31,7 +34,7 @@ public final class SnapshotEvaluator {
                 candidateAction,
                 comparisonConditionsSatisfied);
 
-        return Optional.of(new SnapshotEvaluation(reference, assertion, change));
+        return Optional.of(new SnapshotEvaluation(reference, assertion, change, createdAt));
     }
 
     private ChangeResult evaluateChange(

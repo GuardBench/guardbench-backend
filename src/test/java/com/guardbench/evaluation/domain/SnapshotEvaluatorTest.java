@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -18,6 +19,7 @@ class SnapshotEvaluatorTest {
 
     private static final SnapshotEvaluationReference REFERENCE =
             new SnapshotEvaluationReference(1L);
+    private static final Instant CREATED_AT = Instant.parse("2026-08-26T00:00:00Z");
     private final SnapshotEvaluator evaluator = new SnapshotEvaluator();
 
     @Nested
@@ -38,12 +40,14 @@ class SnapshotEvaluatorTest {
                     expected,
                     baseline,
                     candidate,
-                    true).orElseThrow();
+                    true,
+                    CREATED_AT).orElseThrow();
 
             assertEquals(assertionStatus, evaluation.assertionResult().status());
             assertEquals(ComparabilityStatus.COMPARABLE,
                     evaluation.changeResult().comparabilityStatus());
             assertEquals(changeType, evaluation.changeResult().changeType());
+            assertEquals(CREATED_AT, evaluation.createdAt());
         }
     }
 
@@ -59,7 +63,8 @@ class SnapshotEvaluatorTest {
                     EvaluationAction.BLOCK,
                     EvaluationAction.BLOCK,
                     null,
-                    true);
+                    true,
+                    CREATED_AT);
 
             assertTrue(evaluation.isEmpty());
         }
@@ -72,7 +77,8 @@ class SnapshotEvaluatorTest {
                     EvaluationAction.BLOCK,
                     null,
                     EvaluationAction.BLOCK,
-                    true).orElseThrow();
+                    true,
+                    CREATED_AT).orElseThrow();
 
             assertEquals(AssertionStatus.PASS, evaluation.assertionResult().status());
             assertNull(evaluation.changeResult());
@@ -86,7 +92,8 @@ class SnapshotEvaluatorTest {
                     EvaluationAction.BLOCK,
                     EvaluationAction.BLOCK,
                     EvaluationAction.ALLOW,
-                    false).orElseThrow();
+                    false,
+                    CREATED_AT).orElseThrow();
 
             assertEquals(
                     ComparabilityStatus.NOT_COMPARABLE,

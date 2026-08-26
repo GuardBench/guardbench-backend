@@ -1,5 +1,6 @@
 package com.guardbench.evaluation.domain;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 
@@ -24,9 +25,11 @@ public final class QualityGateEvaluator {
             TestRunEvaluationReference reference,
             List<SnapshotEvaluation> evaluations,
             long totalTestCaseCount,
-            long successfulExecutionPairCount) {
+            long successfulExecutionPairCount,
+            Instant createdAt) {
         Objects.requireNonNull(reference, "TestRun evaluation reference must not be null");
         Objects.requireNonNull(evaluations, "Snapshot evaluations must not be null");
+        Objects.requireNonNull(createdAt, "Quality Gate createdAt must not be null");
         if (totalTestCaseCount <= 0) {
             throw new IllegalArgumentException("Total TestCase count must be positive");
         }
@@ -45,7 +48,8 @@ public final class QualityGateEvaluator {
             return new QualityGateResult(
                     reference,
                     QualityGateStatus.NOT_EVALUATED,
-                    null);
+                    null,
+                    createdAt);
         }
 
         long assertionPassCount = evaluations.stream()
@@ -66,7 +70,7 @@ public final class QualityGateEvaluator {
                 divide(usabilityRegressionCount, comparableChanges.size()),
                 divide(successfulExecutionPairCount, totalTestCaseCount));
 
-        return new QualityGateResult(reference, evaluateStatus(metrics), metrics);
+        return new QualityGateResult(reference, evaluateStatus(metrics), metrics, createdAt);
     }
 
     public QualityGateStatus evaluateStatus(QualityGateMetrics metrics) {
