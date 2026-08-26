@@ -24,6 +24,7 @@ import com.guardbench.evaluation.application.port.out.FinalizeTestRunPort;
 import com.guardbench.evaluation.application.port.out.LoadTestRunExecutionFactsPort;
 import com.guardbench.evaluation.application.port.out.TestRunExecutionFacts;
 import com.guardbench.evaluation.application.port.out.TestRunExecutionFacts.SnapshotExecutionFact;
+import com.guardbench.evaluation.application.port.out.TestRunExecutionFacts.TargetExecutionFact;
 import com.guardbench.evaluation.domain.QualityGateEvaluator;
 import com.guardbench.evaluation.domain.QualityGateResult;
 import com.guardbench.evaluation.domain.QualityGateStatus;
@@ -70,12 +71,10 @@ class FinalizeTestRunServiceTest {
         @Test
         @DisplayName("모든 Baseline/Candidate가 같은 BLOCK action이면 PASS다")
         void allPassWithNoChange() {
-            List<SnapshotExecutionFact> facts = List.of(
-                    new SnapshotExecutionFact(10L, "BLOCK", "BLOCK", "BLOCK", true, true),
-                    new SnapshotExecutionFact(20L, "BLOCK", "BLOCK", "BLOCK", true, true)
-            );
-            loadFactsPort.setFacts(TEST_RUN_ID, new TestRunExecutionFacts(
-                    TEST_RUN_ID, "RUNNING", 2, 2, facts));
+            loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
+                    succeededPair(10L, "BLOCK", "BLOCK", "BLOCK"),
+                    succeededPair(20L, "BLOCK", "BLOCK", "BLOCK")
+            )));
 
             FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
 
@@ -86,39 +85,33 @@ class FinalizeTestRunServiceTest {
             assertEquals(1.0, result.metrics().candidateAssertionPassRate());
             assertEquals(0, result.metrics().securityRegressionCount());
 
-            // FinalizeTestRunPort was called
             assertEquals(1, finalizeTestRunPort.callCount());
             assertEquals("COMPLETED", finalizeTestRunPort.lastOutcomeCode());
-
-            // QualityGateResult was saved
+            assertEquals(2, finalizeTestRunPort.lastProcessedTestCaseCount());
             assertEquals(1, qualityGateResultRepo.savedResults().size());
-
-            // SnapshotEvaluations were saved
             assertEquals(2, snapshotEvaluationRepo.savedEvaluations().size());
         }
     }
 
     @Nested
-    @DisplayName("INCOMPLETE - 부분 실행 성공")
+    @DisplayName("INCOMPLETE - 부분 실행 실패")
     class IncompleteScenario {
 
         @Test
-        @DisplayName("일부 Candidate 실패 시 outcome=INCOMPLETE이고 Quality Gate는 NOT_EVALUATED 또는 FAIL")
+        @DisplayName("일부 Candidate가 FAILED terminal이면 outcome=INCOMPLETE로 최종화한다")
         void incompleteExecution() {
-            List<SnapshotExecutionFact> facts = List.of(
-                    new SnapshotExecutionFact(10L, "BLOCK", "BLOCK", "BLOCK", true, true),
-                    new SnapshotExecutionFact(20L, "BLOCK", "BLOCK", null, true, false)
-            );
-            loadFactsPort.setFacts(TEST_RUN_ID, new TestRunExecutionFacts(
-                    TEST_RUN_ID, "RUNNING", 2, 1, facts));
+            loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
+                    succeededPair(10L, "BLOCK", "BLOCK", "BLOCK"),
+                    new SnapshotExecutionFact(20L, "BLOCK",
+                            terminal("SUCCEEDED", "BLOCK"), terminal("FAILED", null))
+            )));
 
             FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
 
             assertInstanceOf(FinalizationOutcome.Finalized.class, outcome);
-            QualityGateResult result = ((FinalizationOutcome.Finalized) outcome).result();
-            // Only 1 comparable change, so NOT_EVALUATED is also possible depending on the evaluator logic
-            assertNotNull(result);
+            assertNotNull(((FinalizationOutcome.Finalized) outcome).result());
             assertEquals("INCOMPLETE", finalizeTestRunPort.lastOutcomeCode());
+            assertEquals(2, finalizeTestRunPort.lastProcessedTestCaseCount());
         }
     }
 
@@ -129,13 +122,12 @@ class FinalizeTestRunServiceTest {
         @Test
         @DisplayName("COMPARABLE ChangeResult가 없으면 NOT_EVALUATED다")
         void notEvaluatedWhenNoComparableChanges() {
-            // Baseline 실패 → comparison conditions not satisfied → ChangeResult = NOT_COMPARABLE
-            List<SnapshotExecutionFact> facts = List.of(
-                    new SnapshotExecutionFact(10L, "BLOCK", null, "BLOCK", false, true),
-                    new SnapshotExecutionFact(20L, "BLOCK", null, "BLOCK", false, true)
-            );
-            loadFactsPort.setFacts(TEST_RUN_ID, new TestRunExecutionFacts(
-                    TEST_RUN_ID, "RUNNING", 2, 0, facts));
+            loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
+                    new SnapshotExecutionFact(10L, "BLOCK",
+                            terminal("TIMED_OUT", null), terminal("SUCCEEDED", "BLOCK")),
+                    new SnapshotExecutionFact(20L, "BLOCK",
+                            terminal("TIMED_OUT", null), terminal("SUCCEEDED", "BLOCK"))
+            )));
 
             FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
 
@@ -146,16 +138,77 @@ class FinalizeTestRunServiceTest {
         }
 
         @Test
-        @DisplayName("준비 실패 최종화에서 NOT_EVALUATED가 저장된다")
-        void preparationFailureCreatesNotEvaluated() {
-            FinalizationOutcome outcome = service.finalizePreparationFailure(TEST_RUN_ID, 3);
+        @DisplayName("모든 실행이 NOT_STARTED terminal이면 outcome=ERROR로 최종화한다")
+        void notStartedExecutionsFinalizeAsError() {
+            loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(1, List.of(
+                    new SnapshotExecutionFact(10L, "BLOCK",
+                            terminal("NOT_STARTED", null), terminal("NOT_STARTED", null))
+            )));
+
+            FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
 
             assertInstanceOf(FinalizationOutcome.Finalized.class, outcome);
-            QualityGateResult result = ((FinalizationOutcome.Finalized) outcome).result();
-            assertEquals(QualityGateStatus.NOT_EVALUATED, result.status());
-            assertNull(result.metrics());
-            assertEquals(FIXED_NOW, result.createdAt());
-            assertEquals(1, qualityGateResultRepo.savedResults().size());
+            assertEquals(QualityGateStatus.NOT_EVALUATED,
+                    ((FinalizationOutcome.Finalized) outcome).result().status());
+            assertEquals("ERROR", finalizeTestRunPort.lastOutcomeCode());
+        }
+    }
+
+    @Nested
+    @DisplayName("조기 최종화 방지")
+    class ReadinessScenario {
+
+        @Test
+        @DisplayName("실행 결과가 아직 없는 pair가 있으면 최종화하지 않는다")
+        void notReadyWhenPairHasNoExecutionYet() {
+            loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
+                    succeededPair(10L, "BLOCK", "BLOCK", "BLOCK"),
+                    new SnapshotExecutionFact(20L, "BLOCK",
+                            terminal("SUCCEEDED", "BLOCK"), TargetExecutionFact.notExecuted())
+            )));
+
+            FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
+
+            assertInstanceOf(FinalizationOutcome.NotReady.class, outcome);
+            assertEquals(0, qualityGateResultRepo.savedResults().size());
+            assertEquals(0, snapshotEvaluationRepo.newlySavedCount());
+            assertEquals(0, finalizeTestRunPort.callCount());
+        }
+
+        @Test
+        @DisplayName("Snapshot이 TestCase 수만큼 준비되지 않았으면 최종화하지 않는다")
+        void notReadyWhenSnapshotsIncomplete() {
+            loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(3, List.of(
+                    succeededPair(10L, "BLOCK", "BLOCK", "BLOCK")
+            )));
+
+            FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
+
+            assertInstanceOf(FinalizationOutcome.NotReady.class, outcome);
+            assertEquals(0, qualityGateResultRepo.savedResults().size());
+            assertEquals(0, finalizeTestRunPort.callCount());
+        }
+
+        @Test
+        @DisplayName("마지막 완료로 모든 pair가 terminal이 되면 최종화한다")
+        void finalizesWhenLastPairBecomesTerminal() {
+            loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
+                    succeededPair(10L, "BLOCK", "BLOCK", "BLOCK"),
+                    new SnapshotExecutionFact(20L, "BLOCK",
+                            terminal("SUCCEEDED", "BLOCK"), TargetExecutionFact.notExecuted())
+            )));
+            assertInstanceOf(FinalizationOutcome.NotReady.class, service.finalize(TEST_RUN_ID));
+
+            loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
+                    succeededPair(10L, "BLOCK", "BLOCK", "BLOCK"),
+                    succeededPair(20L, "BLOCK", "BLOCK", "BLOCK")
+            )));
+
+            FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
+
+            assertInstanceOf(FinalizationOutcome.Finalized.class, outcome);
+            assertEquals(1, finalizeTestRunPort.callCount());
+            assertEquals(2, finalizeTestRunPort.lastProcessedTestCaseCount());
         }
     }
 
@@ -166,7 +219,6 @@ class FinalizeTestRunServiceTest {
         @Test
         @DisplayName("이미 FINISHED이고 QualityGateResult가 있으면 기존 결과를 반환한다")
         void alreadyFinalizedReturnsExistingResult() {
-            // Pre-existing result
             QualityGateResult existing = new QualityGateResult(
                     new TestRunEvaluationReference(TEST_RUN_ID),
                     QualityGateStatus.PASS,
@@ -175,6 +227,10 @@ class FinalizeTestRunServiceTest {
                     FIXED_NOW.minusSeconds(60)
             );
             qualityGateResultRepo.preStore(existing);
+            loadFactsPort.setFacts(TEST_RUN_ID, new TestRunExecutionFacts(
+                    TEST_RUN_ID, "FINISHED", 2, List.of(
+                    succeededPair(10L, "BLOCK", "BLOCK", "BLOCK"),
+                    succeededPair(20L, "BLOCK", "BLOCK", "BLOCK"))));
 
             FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
 
@@ -182,27 +238,8 @@ class FinalizeTestRunServiceTest {
             QualityGateResult returned = ((FinalizationOutcome.AlreadyFinalized) outcome).result();
             assertEquals(existing, returned);
 
-            // No new saves
             assertEquals(1, qualityGateResultRepo.savedResults().size());
             assertEquals(0, finalizeTestRunPort.callCount());
-        }
-
-        @Test
-        @DisplayName("준비 실패 최종화도 이미 존재하면 멱등 성공이다")
-        void preparationFailureIdempotent() {
-            QualityGateResult existing = new QualityGateResult(
-                    new TestRunEvaluationReference(TEST_RUN_ID),
-                    QualityGateStatus.NOT_EVALUATED,
-                    null,
-                    FIXED_NOW.minusSeconds(30)
-            );
-            qualityGateResultRepo.preStore(existing);
-
-            FinalizationOutcome outcome = service.finalizePreparationFailure(TEST_RUN_ID, 2);
-
-            assertInstanceOf(FinalizationOutcome.AlreadyFinalized.class, outcome);
-            // 기존 결과를 재계산하지 않는다
-            assertEquals(1, qualityGateResultRepo.savedResults().size());
         }
     }
 
@@ -213,7 +250,6 @@ class FinalizeTestRunServiceTest {
         @Test
         @DisplayName("이미 평가된 Snapshot은 기존 결과를 재사용하고 재계산하지 않는다")
         void existingSnapshotEvaluationIsReused() {
-            // Pre-store one snapshot evaluation
             SnapshotEvaluation preExisting = new SnapshotEvaluation(
                     new SnapshotEvaluationReference(10L),
                     new com.guardbench.evaluation.domain.AssertionResult(
@@ -224,17 +260,14 @@ class FinalizeTestRunServiceTest {
             );
             snapshotEvaluationRepo.preStore(preExisting);
 
-            List<SnapshotExecutionFact> facts = List.of(
-                    new SnapshotExecutionFact(10L, "BLOCK", "BLOCK", "BLOCK", true, true),
-                    new SnapshotExecutionFact(20L, "BLOCK", "BLOCK", "BLOCK", true, true)
-            );
-            loadFactsPort.setFacts(TEST_RUN_ID, new TestRunExecutionFacts(
-                    TEST_RUN_ID, "RUNNING", 2, 2, facts));
+            loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
+                    succeededPair(10L, "BLOCK", "BLOCK", "BLOCK"),
+                    succeededPair(20L, "BLOCK", "BLOCK", "BLOCK")
+            )));
 
             FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
 
             assertInstanceOf(FinalizationOutcome.Finalized.class, outcome);
-            // Only 1 new evaluation saved (for snapshot 20)
             assertEquals(1, snapshotEvaluationRepo.newlySavedCount());
         }
     }
@@ -254,7 +287,7 @@ class FinalizeTestRunServiceTest {
         @DisplayName("RUNNING이 아닌 상태에서는 NotReady")
         void notReadyWhenNotRunning() {
             loadFactsPort.setFacts(TEST_RUN_ID, new TestRunExecutionFacts(
-                    TEST_RUN_ID, "PREPARING", 2, 0, List.of()));
+                    TEST_RUN_ID, "PREPARING", 2, List.of()));
 
             FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
             assertInstanceOf(FinalizationOutcome.NotReady.class, outcome);
@@ -264,11 +297,35 @@ class FinalizeTestRunServiceTest {
         @DisplayName("FINISHED인데 QualityGateResult가 없으면 InvariantViolation")
         void invariantViolationWhenFinishedWithoutResult() {
             loadFactsPort.setFacts(TEST_RUN_ID, new TestRunExecutionFacts(
-                    TEST_RUN_ID, "FINISHED", 2, 0, List.of()));
+                    TEST_RUN_ID, "FINISHED", 2, List.of()));
 
             FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
             assertInstanceOf(FinalizationOutcome.InvariantViolation.class, outcome);
         }
+    }
+
+    // ─── Fixture Helper ───────────────────────────────────────────────────────
+
+    private static TestRunExecutionFacts runningFacts(int testCaseCount, List<SnapshotExecutionFact> facts) {
+        return new TestRunExecutionFacts(TEST_RUN_ID, "RUNNING", testCaseCount, facts);
+    }
+
+    private static SnapshotExecutionFact succeededPair(
+            long snapshotId,
+            String expectedActionCode,
+            String baselineActionCode,
+            String candidateActionCode
+    ) {
+        return new SnapshotExecutionFact(
+                snapshotId,
+                expectedActionCode,
+                terminal("SUCCEEDED", baselineActionCode),
+                terminal("SUCCEEDED", candidateActionCode)
+        );
+    }
+
+    private static TargetExecutionFact terminal(String statusCode, String actionCode) {
+        return new TargetExecutionFact(true, statusCode, actionCode);
     }
 
     // ─── Fake Adapters ────────────────────────────────────────────────────────
@@ -281,7 +338,7 @@ class FinalizeTestRunServiceTest {
         }
 
         @Override
-        public Optional<TestRunExecutionFacts> load(long testRunId) {
+        public Optional<TestRunExecutionFacts> lockAndLoad(long testRunId) {
             return Optional.ofNullable(factsMap.get(testRunId));
         }
     }
@@ -289,14 +346,17 @@ class FinalizeTestRunServiceTest {
     private static final class FakeFinalizeTestRunPort implements FinalizeTestRunPort {
         private int callCount;
         private String lastOutcomeCode;
+        private int lastProcessedTestCaseCount;
 
         int callCount() { return callCount; }
         String lastOutcomeCode() { return lastOutcomeCode; }
+        int lastProcessedTestCaseCount() { return lastProcessedTestCaseCount; }
 
         @Override
         public void finalize(long testRunId, String executionOutcomeCode, int processedTestCaseCount, int testCaseCount) {
             callCount++;
             lastOutcomeCode = executionOutcomeCode;
+            lastProcessedTestCaseCount = processedTestCaseCount;
         }
     }
 

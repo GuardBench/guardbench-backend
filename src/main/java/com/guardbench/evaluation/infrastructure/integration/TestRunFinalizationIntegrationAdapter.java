@@ -9,6 +9,7 @@ import com.guardbench.evaluation.application.port.out.FinalizeTestRunPort;
 import com.guardbench.evaluation.application.port.out.LoadTestRunExecutionFactsPort;
 import com.guardbench.evaluation.application.port.out.TestRunExecutionFacts;
 import com.guardbench.evaluation.application.port.out.TestRunExecutionFacts.SnapshotExecutionFact;
+import com.guardbench.evaluation.application.port.out.TestRunExecutionFacts.TargetExecutionFact;
 import com.guardbench.testrun.application.TestRunFinalizationFacade;
 import com.guardbench.testrun.application.TestRunFinalizationFacts;
 
@@ -33,8 +34,8 @@ class TestRunFinalizationIntegrationAdapter implements LoadTestRunExecutionFacts
     }
 
     @Override
-    public Optional<TestRunExecutionFacts> load(long testRunId) {
-        return testRunFinalizationFacade.loadFinalizationFacts(testRunId)
+    public Optional<TestRunExecutionFacts> lockAndLoad(long testRunId) {
+        return testRunFinalizationFacade.lockAndLoadFinalizationFacts(testRunId)
                 .map(TestRunFinalizationIntegrationAdapter::toEvaluationFacts);
     }
 
@@ -52,7 +53,6 @@ class TestRunFinalizationIntegrationAdapter implements LoadTestRunExecutionFacts
                 source.testRunId(),
                 source.testRunStatus(),
                 source.testCaseCount(),
-                source.successfulExecutionPairCount(),
                 snapshotFacts
         );
     }
@@ -62,10 +62,13 @@ class TestRunFinalizationIntegrationAdapter implements LoadTestRunExecutionFacts
         return new SnapshotExecutionFact(
                 source.snapshotId(),
                 source.expectedActionCode(),
-                source.baselineActionCode(),
-                source.candidateActionCode(),
-                source.baselineSucceeded(),
-                source.candidateSucceeded()
+                toEvaluationTargetFact(source.baseline()),
+                toEvaluationTargetFact(source.candidate())
         );
+    }
+
+    private static TargetExecutionFact toEvaluationTargetFact(
+            TestRunFinalizationFacts.TargetExecutionFact source) {
+        return new TargetExecutionFact(source.terminal(), source.statusCode(), source.actionCode());
     }
 }

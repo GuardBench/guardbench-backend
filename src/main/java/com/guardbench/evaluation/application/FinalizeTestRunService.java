@@ -16,7 +16,6 @@ import com.guardbench.evaluation.application.port.out.TestRunExecutionFacts.Snap
 import com.guardbench.evaluation.domain.EvaluationAction;
 import com.guardbench.evaluation.domain.QualityGateEvaluator;
 import com.guardbench.evaluation.domain.QualityGateResult;
-import com.guardbench.evaluation.domain.QualityGateStatus;
 import com.guardbench.evaluation.domain.SnapshotEvaluation;
 import com.guardbench.evaluation.domain.SnapshotEvaluationReference;
 import com.guardbench.evaluation.domain.SnapshotEvaluator;
@@ -74,6 +73,8 @@ public class FinalizeTestRunService {
      * 하나의 트랜잭션으로 실행한다. 외부 Provider 호출이 없는 경로이므로
      * 진입 메서드 전체를 트랜잭션 경계로 선언한다.
      *
+     * <p>ADR 0005: 같은 트랜잭션 시작 시 TestRun 행을 잠가 동시 완료 메시지를 직렬화한다.
+     *
      * @param testRunId TestRun scalar ID
      * @return 최종화 결과
      */
@@ -81,17 +82,19 @@ public class FinalizeTestRunService {
     public FinalizationOutcome finalize(long testRunId) {
         TestRunEvaluationReference reference = new TestRunEvaluationReference(testRunId);
 
+        // ADR 0005: 판정과 저장을 직렬화하기 위해 TestRun 행 잠금을 먼저 획득한다.
+        // 잠금 이후에 Quality Gate 존재를 확인해야 동시 완료 메시지가
+        // 먼저 commit된 결과를 관찰하고 멱등 성공으로 수렴한다.
+        TestRunExecutionFacts facts = loadExecutionFactsPort.lockAndLoad(testRunId)
+                .orElse(null);
+        if (facts == null) {
+            return FinalizationOutcome.notFound();
+        }
+
         // 이미 완료된 최종화의 재호출: 멱등 성공
         Optional<QualityGateResult> existing = qualityGateResultRepository.findById(reference);
         if (existing.isPresent()) {
             return FinalizationOutcome.alreadyFinalized(existing.get());
-        }
-
-        // 실행 사실 로드
-        TestRunExecutionFacts facts = loadExecutionFactsPort.load(testRunId)
-                .orElse(null);
-        if (facts == null) {
-            return FinalizationOutcome.notFound();
         }
 
         // FINISHED인데 QualityGateResult가 없으면 불변식 위반
@@ -104,17 +107,34 @@ public class FinalizeTestRunService {
             return FinalizationOutcome.notReady();
         }
 
+        // ADR 0005: Snapshot이 모두 준비되고 모든 pair가 terminal일 때만 최종화한다.
+        // 일부만 끝난 시점에 Quality Gate를 먼저 저장하면 TestRun이 RUNNING에 잔류할 수 있다.
+        if (facts.snapshotFacts().size() != facts.testCaseCount()) {
+            return FinalizationOutcome.notReady();
+        }
+        if (!facts.snapshotFacts().stream().allMatch(SnapshotExecutionFact::pairTerminal)) {
+            return FinalizationOutcome.notReady();
+        }
+
         Instant now = clock.instant();
 
         // Snapshot 평가
         List<SnapshotEvaluation> evaluations = evaluateSnapshots(facts, now);
+
+        // 절대 개수로 진행도와 성공 pair 수를 재계산한다.
+        int processedTestCaseCount = (int) facts.snapshotFacts().stream()
+                .filter(SnapshotExecutionFact::pairTerminal)
+                .count();
+        long successfulExecutionPairCount = facts.snapshotFacts().stream()
+                .filter(SnapshotExecutionFact::pairSucceeded)
+                .count();
 
         // Quality Gate 계산
         QualityGateResult qualityGateResult = qualityGateEvaluator.evaluate(
                 reference,
                 evaluations,
                 facts.testCaseCount(),
-                facts.successfulExecutionPairCount(),
+                successfulExecutionPairCount,
                 now
         );
 
@@ -126,45 +146,11 @@ public class FinalizeTestRunService {
         finalizeTestRunPort.finalize(
                 testRunId,
                 executionOutcomeCode,
-                facts.testCaseCount(),
+                processedTestCaseCount,
                 facts.testCaseCount()
         );
 
         return FinalizationOutcome.finalized(qualityGateResult);
-    }
-
-    /**
-     * 대상 준비 실패 시 NOT_EVALUATED Quality Gate를 생성하고
-     * TestRun FINISHED/ERROR를 원자적으로 저장한다.
-     *
-     * <p>ADR 0004/0005: materialization 등 대상 준비가 실패하여 실행 불가한 경우
-     * PREPARING → FINISHED 예외 경로다.
-     *
-     * @param testRunId TestRun scalar ID
-     * @param testCaseCount 전체 TestCase 수
-     * @return 최종화 결과
-     */
-    public FinalizationOutcome finalizePreparationFailure(long testRunId, int testCaseCount) {
-        TestRunEvaluationReference reference = new TestRunEvaluationReference(testRunId);
-
-        // 이미 완료된 최종화의 재호출: 멱등 성공
-        Optional<QualityGateResult> existing = qualityGateResultRepository.findById(reference);
-        if (existing.isPresent()) {
-            return FinalizationOutcome.alreadyFinalized(existing.get());
-        }
-
-        Instant now = clock.instant();
-
-        // NOT_EVALUATED Quality Gate 저장
-        QualityGateResult notEvaluated = new QualityGateResult(
-                reference,
-                QualityGateStatus.NOT_EVALUATED,
-                null,
-                now
-        );
-        qualityGateResultRepository.save(notEvaluated);
-
-        return FinalizationOutcome.finalized(notEvaluated);
     }
 
     private List<SnapshotEvaluation> evaluateSnapshots(TestRunExecutionFacts facts, Instant now) {
@@ -186,12 +172,12 @@ public class FinalizeTestRunService {
         }
 
         EvaluationAction expectedAction = toAction(fact.expectedActionCode());
-        EvaluationAction baselineAction = fact.baselineActionCode() != null
-                ? toAction(fact.baselineActionCode()) : null;
-        EvaluationAction candidateAction = fact.candidateActionCode() != null
-                ? toAction(fact.candidateActionCode()) : null;
+        EvaluationAction baselineAction = fact.baseline().actionCode() != null
+                ? toAction(fact.baseline().actionCode()) : null;
+        EvaluationAction candidateAction = fact.candidate().actionCode() != null
+                ? toAction(fact.candidate().actionCode()) : null;
 
-        boolean comparisonConditionsSatisfied = fact.baselineSucceeded() && fact.candidateSucceeded();
+        boolean comparisonConditionsSatisfied = fact.pairSucceeded();
 
         Optional<SnapshotEvaluation> newEvaluation = snapshotEvaluator.evaluate(
                 reference,
@@ -217,16 +203,15 @@ public class FinalizeTestRunService {
 
     private static String determineOutcomeCode(TestRunExecutionFacts facts) {
         long totalExecutions = (long) facts.testCaseCount() * 2;
-        long succeededExecutions = facts.successfulExecutionPairCount() * 2;
-        // Also count individual successes from snapshot facts
-        long actualSucceeded = facts.snapshotFacts().stream()
-                .mapToLong(f -> (f.baselineSucceeded() ? 1L : 0L) + (f.candidateSucceeded() ? 1L : 0L))
+        long succeededExecutions = facts.snapshotFacts().stream()
+                .mapToLong(fact -> (fact.baseline().succeeded() ? 1L : 0L)
+                        + (fact.candidate().succeeded() ? 1L : 0L))
                 .sum();
 
-        if (actualSucceeded == totalExecutions) {
+        if (succeededExecutions == totalExecutions) {
             return "COMPLETED";
         }
-        if (actualSucceeded > 0) {
+        if (succeededExecutions > 0) {
             return "INCOMPLETE";
         }
         return "ERROR";

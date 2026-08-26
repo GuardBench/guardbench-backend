@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import com.guardbench.testrun.application.port.out.LockTestRunPort;
 import com.guardbench.testrun.domain.SnapshotExecutionPair;
 import com.guardbench.testrun.domain.TargetType;
 import com.guardbench.testrun.domain.TestCaseSnapshot;
@@ -38,27 +39,37 @@ public class TestRunFinalizationFacade {
     private final TestRunRepository testRunRepository;
     private final TestCaseSnapshotRepository snapshotRepository;
     private final TestExecutionRepository testExecutionRepository;
+    private final LockTestRunPort lockTestRunPort;
     private final Clock clock;
 
     public TestRunFinalizationFacade(
             TestRunRepository testRunRepository,
             TestCaseSnapshotRepository snapshotRepository,
             TestExecutionRepository testExecutionRepository,
+            LockTestRunPort lockTestRunPort,
             Clock clock
     ) {
         this.testRunRepository = Objects.requireNonNull(testRunRepository);
         this.snapshotRepository = Objects.requireNonNull(snapshotRepository);
         this.testExecutionRepository = Objects.requireNonNull(testExecutionRepository);
+        this.lockTestRunPort = Objects.requireNonNull(lockTestRunPort);
         this.clock = Objects.requireNonNull(clock);
     }
 
     /**
-     * 지정된 TestRun의 최종화에 필요한 실행 사실을 로드한다.
+     * 최종화 직렬화를 위해 TestRun 행 잠금을 획득한 뒤 실행 사실을 로드한다.
+     *
+     * <p>ADR 0005: 호출자의 트랜잭션 범위에서 실행되며, 잠금은 트랜잭션 종료 시 해제된다.
+     * 동시 완료 메시지는 이 잠금에서 대기하므로 readiness 확인과 최종화가 직렬화된다.
      *
      * @param testRunId TestRun scalar ID
      * @return 실행 사실, TestRun이 존재하지 않으면 empty
      */
-    public Optional<TestRunFinalizationFacts> loadFinalizationFacts(long testRunId) {
+    public Optional<TestRunFinalizationFacts> lockAndLoadFinalizationFacts(long testRunId) {
+        if (!lockTestRunPort.lockForUpdate(testRunId)) {
+            return Optional.empty();
+        }
+
         Optional<TestRun> testRunOpt = testRunRepository.findById(new TestRunId(testRunId));
         if (testRunOpt.isEmpty()) {
             return Optional.empty();
@@ -68,43 +79,15 @@ public class TestRunFinalizationFacade {
         List<TestCaseSnapshot> snapshots = snapshotRepository.findAllByTestRunId(new TestRunId(testRunId));
 
         List<TestRunFinalizationFacts.SnapshotExecutionFact> facts = new ArrayList<>();
-        long successfulPairCount = 0;
 
         for (TestCaseSnapshot snapshot : snapshots) {
             TestCaseSnapshotId snapshotId = snapshot.id();
-            TestExecutionId baselineId = new TestExecutionId(snapshotId, TargetType.BASELINE);
-            TestExecutionId candidateId = new TestExecutionId(snapshotId, TargetType.CANDIDATE);
-
-            Optional<TestExecution> baselineExec = testExecutionRepository.findById(baselineId);
-            Optional<TestExecution> candidateExec = testExecutionRepository.findById(candidateId);
-
-            boolean baselineSucceeded = baselineExec
-                    .map(e -> e.status() == TestExecutionStatus.SUCCEEDED)
-                    .orElse(false);
-            boolean candidateSucceeded = candidateExec
-                    .map(e -> e.status() == TestExecutionStatus.SUCCEEDED)
-                    .orElse(false);
-
-            String baselineActionCode = baselineExec
-                    .filter(e -> e.status() == TestExecutionStatus.SUCCEEDED)
-                    .map(e -> e.actualResult().action().name())
-                    .orElse(null);
-            String candidateActionCode = candidateExec
-                    .filter(e -> e.status() == TestExecutionStatus.SUCCEEDED)
-                    .map(e -> e.actualResult().action().name())
-                    .orElse(null);
-
-            if (baselineSucceeded && candidateSucceeded) {
-                successfulPairCount++;
-            }
 
             facts.add(new TestRunFinalizationFacts.SnapshotExecutionFact(
                     snapshotId.value(),
                     snapshot.expectedResult().action().name(),
-                    baselineActionCode,
-                    candidateActionCode,
-                    baselineSucceeded,
-                    candidateSucceeded
+                    toTargetFact(snapshotId, TargetType.BASELINE),
+                    toTargetFact(snapshotId, TargetType.CANDIDATE)
             ));
         }
 
@@ -112,9 +95,26 @@ public class TestRunFinalizationFacade {
                 testRunId,
                 testRun.status().name(),
                 testRun.testCaseCount(),
-                successfulPairCount,
                 facts
         ));
+    }
+
+    private TestRunFinalizationFacts.TargetExecutionFact toTargetFact(
+            TestCaseSnapshotId snapshotId,
+            TargetType targetType
+    ) {
+        return testExecutionRepository.findById(new TestExecutionId(snapshotId, targetType))
+                .map(TestRunFinalizationFacade::toTargetFact)
+                .orElseGet(TestRunFinalizationFacts.TargetExecutionFact::notExecuted);
+    }
+
+    private static TestRunFinalizationFacts.TargetExecutionFact toTargetFact(TestExecution execution) {
+        boolean succeeded = execution.status() == TestExecutionStatus.SUCCEEDED;
+        return new TestRunFinalizationFacts.TargetExecutionFact(
+                execution.status().isTerminal(),
+                execution.status().name(),
+                succeeded ? execution.actualResult().action().name() : null
+        );
     }
 
     /**
