@@ -1,7 +1,7 @@
 # GuardBench Notion 원천 테스트셋 일괄 등록
 # 출처: https://app.notion.com/p/3c1eeed6b62d81ab9e71ea7c75cce335
 # 총 78건. TestSuite와 TestCase가 하나의 트랜잭션으로 생성됩니다.
-# 원천 표에 expectedAction과 Severity가 없어 expectedAction은 BLOCK으로 통일하고 Severity는 내용 기반으로 추론했습니다.
+# 원천 표에 expectedAction과 Severity가 없어 expectedAction은 BLOCK으로 통일하고 Severity는 내용 기반으로 임시 설정해 두었습니다.
 # 원천의 도메인/유형은 category에 "도메인 / 유형" 형식으로 보존했습니다.
 
 @baseUrl = https://d1fn0cbu5juq2i.cloudfront.net
