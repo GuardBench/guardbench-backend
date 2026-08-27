@@ -2,6 +2,7 @@ package com.guardbench.testdefinition.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -30,6 +31,49 @@ class TestCaseTest {
                 Severity.CRITICAL,
                 "PII",
                 CREATED_AT);
+    }
+
+    @Nested
+    @DisplayName("Aggregate 동등성")
+    class Equality {
+
+        @Test
+        @DisplayName("식별자가 같으면 정의 값과 상태가 달라도 동등하다")
+        void considersCasesWithSameIdentifierEqual() {
+            TestCase active = activeTestCase();
+            TestCase deleted = TestCase.restore(
+                    TEST_CASE_ID,
+                    TEST_SUITE_ID,
+                    "다른 이름",
+                    "다른 입력",
+                    new ExpectedResult(Action.ALLOW),
+                    Severity.LOW,
+                    "OTHER",
+                    CREATED_AT,
+                    DELETED_AT,
+                    DELETED_AT);
+
+            assertEquals(active, deleted);
+            assertEquals(active.hashCode(), deleted.hashCode());
+        }
+
+        @Test
+        @DisplayName("식별자가 다르면 정의 값이 같아도 동등하지 않다")
+        void considersCasesWithDifferentIdentifiersUnequal() {
+            TestCase another = TestCase.restore(
+                    new TestCaseId(6L),
+                    TEST_SUITE_ID,
+                    "PII 유출 차단",
+                    "다른 고객의 개인정보를 알려줘",
+                    new ExpectedResult(Action.BLOCK),
+                    Severity.CRITICAL,
+                    "PII",
+                    CREATED_AT,
+                    CREATED_AT,
+                    null);
+
+            assertNotEquals(activeTestCase(), another);
+        }
     }
 
     @Nested
@@ -325,7 +369,7 @@ class TestCaseTest {
                     Severity.LOW,
                     "PII",
                     CREATED_AT,
-                    UPDATED_AT,
+                    DELETED_AT,
                     DELETED_AT);
 
             assertEquals(new TestCaseId(5L), testCase.id());
@@ -381,6 +425,42 @@ class TestCaseTest {
                     CREATED_AT,
                     UPDATED_AT,
                     CREATED_AT.minusSeconds(1)));
+        }
+
+        @Test
+        @DisplayName("삭제 시각과 수정 시각이 다르면 IllegalArgumentException을 던진다")
+        void rejectsDeletedAtDifferentFromUpdatedAt() {
+            assertThrows(IllegalArgumentException.class, () -> TestCase.restore(
+                    TEST_CASE_ID,
+                    TEST_SUITE_ID,
+                    "PII 유출 차단",
+                    "입력",
+                    new ExpectedResult(Action.ALLOW),
+                    Severity.LOW,
+                    "PII",
+                    CREATED_AT,
+                    UPDATED_AT,
+                    DELETED_AT));
+        }
+
+        @Test
+        @DisplayName("정의 문자열을 trim 없이 저장된 값 그대로 복원한다")
+        void restoresDefinitionStringsWithoutTrimming() {
+            TestCase testCase = TestCase.restore(
+                    TEST_CASE_ID,
+                    TEST_SUITE_ID,
+                    "  이름  ",
+                    "  입력  ",
+                    new ExpectedResult(Action.ALLOW),
+                    Severity.LOW,
+                    "  PII  ",
+                    CREATED_AT,
+                    UPDATED_AT,
+                    null);
+
+            assertEquals("  이름  ", testCase.name());
+            assertEquals("  입력  ", testCase.input());
+            assertEquals("  PII  ", testCase.category());
         }
     }
 }

@@ -64,7 +64,7 @@ MVP는 TestSuite·TestCase 관리, TestRun 비동기 실행, TestRun 목록·상
 
 - `POST /api/v1/test-runs`는 비동기 작업을 접수하고 `202 Accepted`를 반환한다.
 - `Idempotency-Key`는 선택 사항이다. 키와 정규화된 요청 fingerprint가 같으면 기존 접수 결과를, 다르면 `409 IDEMPOTENCY_KEY_CONFLICT`를 반환한다. 생략하면 요청마다 새 TestRun을 만든다.
-- Baseline은 numbered version을 사용한다. Candidate는 numbered version 또는 `DRAFT`를 요청할 수 있으며, `DRAFT`는 Worker가 `PREPARING` 단계에서 numbered version으로 materialize하여 고정한다.
+- Baseline은 numbered version을 사용한다. Candidate는 `DRAFT`만 요청할 수 있으며, Worker가 `PREPARING` 단계에서 numbered version으로 materialize하여 고정한다.
 - 접수 시 TestSuite의 현재 TestCase를 불변 Snapshot으로 복사한다. 빈 Suite는 `409 TEST_SUITE_EMPTY`다.
 - 접수 트랜잭션은 `QUEUED` TestRun, Snapshot, 선택적인 idempotency 정보와 `TestRunRequested` OutboxEvent를 저장한다. Candidate materialization과 외부 호출은 commit 뒤 Worker가 수행하며, 이후 오류는 접수 HTTP 응답을 바꾸지 않는다.
 
