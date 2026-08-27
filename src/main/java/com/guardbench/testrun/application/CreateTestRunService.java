@@ -6,6 +6,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +43,7 @@ import com.guardbench.testrun.domain.repository.TestRunRepository;
 @Service
 public class CreateTestRunService {
 
+    private static final Logger log = LoggerFactory.getLogger(CreateTestRunService.class);
     private static final Duration IDEMPOTENCY_TTL = Duration.ofHours(3);
 
     private final ExistsTestSuitePort existsTestSuitePort;
@@ -95,6 +98,8 @@ public class CreateTestRunService {
         }
         TestRun testRun = testRunRepository.findById(new TestRunId(existing.testRunId()))
                 .orElseThrow(() -> new ApplicationException(ApplicationErrorCode.INTERNAL_SERVER_ERROR));
+        log.info("TestRun creation reused existing request. testRunId={} testCaseCount={} status={}",
+                testRun.id().value(), testRun.testCaseCount(), testRun.status());
         return toResult(testRun);
     }
 
@@ -131,7 +136,8 @@ public class CreateTestRunService {
             testCaseSnapshotRepository.save(snapshot);
         }
 
-        outboxPort.save(testRunRequestedEvent(testRunId, now));
+        OutboxEventRecord requestedEvent = testRunRequestedEvent(testRunId, now);
+        outboxPort.save(requestedEvent);
 
         if (command.hasIdempotencyKey()) {
             idempotencyPort.save(new IdempotencyRecord(
@@ -143,6 +149,8 @@ public class CreateTestRunService {
             ));
         }
 
+        log.info("TestRun accepted. testRunId={} testCaseCount={} eventId={} eventType={}",
+                testRunId.value(), sources.size(), requestedEvent.eventId(), requestedEvent.eventType());
         return toResult(testRun);
     }
 

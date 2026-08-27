@@ -6,6 +6,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.guardbench.testrun.application.messaging.TargetTypeCode;
 import com.guardbench.testrun.application.port.out.ClaimResult;
 import com.guardbench.testrun.application.port.out.GuardrailMaterializationPort;
@@ -52,6 +55,7 @@ import com.guardbench.testrun.domain.repository.TestRunRepository;
  */
 public class ResolveTestRunService {
 
+    private static final Logger log = LoggerFactory.getLogger(ResolveTestRunService.class);
     private static final int MAX_RESOLUTION_ATTEMPTS = 3;
 
     private final ResolutionClaimPort resolutionClaimPort;
@@ -92,26 +96,35 @@ public class ResolveTestRunService {
      * @return 처리 결과를 나타내는 값
      */
     public ResolutionOutcome resolve(long testRunId) {
+        long resolutionStartedNanos = System.nanoTime();
+        log.info("TestRun resolution started. testRunId={}", testRunId);
         TestRun testRun = testRunRepository.findById(new TestRunId(testRunId))
                 .orElse(null);
         if (testRun == null) {
+            log.warn("TestRun resolution skipped because TestRun was not found. testRunId={} elapsedMs={}",
+                    testRunId, elapsedMs(resolutionStartedNanos));
             return ResolutionOutcome.NOT_FOUND;
         }
 
         // 이미 RUNNING 또는 FINISHED면 멱등 성공
         if (testRun.status() == TestRunStatus.RUNNING || testRun.status() == TestRunStatus.FINISHED) {
+            log.info("TestRun resolution already complete. testRunId={} status={} elapsedMs={}",
+                    testRunId, testRun.status(), elapsedMs(resolutionStartedNanos));
             return ResolutionOutcome.ALREADY_RESOLVED;
         }
 
         // claim 선점
         ClaimResult claimResult = resolutionClaimPort.tryAcquire(testRunId);
         if (claimResult instanceof ClaimResult.AlreadyHeld) {
+            log.warn("TestRun resolution claim held by another worker. testRunId={} elapsedMs={}",
+                    testRunId, elapsedMs(resolutionStartedNanos));
             return ResolutionOutcome.CLAIM_HELD_BY_OTHER;
         }
 
         ClaimResult.Acquired acquired = (ClaimResult.Acquired) claimResult;
         UUID claimToken = acquired.claimToken();
         int attemptCount = acquired.attemptCount();
+        log.info("TestRun resolution claim acquired. testRunId={} attemptCount={}", testRunId, attemptCount);
 
         // QUEUED → PREPARING 전환 (persistence phase 트랜잭션)
         if (testRun.status() == TestRunStatus.QUEUED) {
@@ -125,38 +138,53 @@ public class ResolveTestRunService {
         // Materialization (DB 트랜잭션 밖, 외부 호출)
         GuardrailMaterializedVersion materializedVersion;
         try {
+            long materializationStartedNanos = System.nanoTime();
+            log.info("Candidate materialization started. testRunId={} attemptCount={}", testRunId, attemptCount);
             GuardrailMaterializationRequest request = new GuardrailMaterializationRequest(
                     testRun.candidateTarget().guardrailId(),
                     testRunId
             );
             materializedVersion = materializationPort.materialize(request);
+            log.info("Candidate materialization completed. testRunId={} attemptCount={} elapsedMs={}",
+                    testRunId, attemptCount, elapsedMs(materializationStartedNanos));
         } catch (GuardrailProviderException exception) {
+            log.warn("Candidate materialization failed. testRunId={} attemptCount={} failureCode={} elapsedMs={}",
+                    testRunId, attemptCount, exception.failureCode(), elapsedMs(resolutionStartedNanos));
             return handleMaterializationFailure(testRun, attemptCount);
         }
 
         // claim 소유 재검증
         if (!resolutionClaimPort.isHeldBy(testRunId, claimToken)) {
+            log.warn("TestRun resolution claim lost after materialization. testRunId={} attemptCount={} elapsedMs={}",
+                    testRunId, attemptCount, elapsedMs(resolutionStartedNanos));
             return ResolutionOutcome.CLAIM_LOST_AFTER_MATERIALIZATION;
         }
 
         // PREPARING → RUNNING + fan-out Outbox 원자적 저장 (persistence phase 트랜잭션)
         Instant now = clock.instant();
+        int[] snapshotCount = new int[1];
         transactionalPhasePort.runInTransaction(() -> {
             testRun.beginRunning(materializedVersion.version(), now);
             testRunRepository.save(testRun);
 
             List<Long> snapshotIds = loadSnapshotIdsPort.loadSnapshotIdsByTestRunId(testRunId);
+            snapshotCount[0] = snapshotIds.size();
             for (long snapshotId : snapshotIds) {
                 outboxPort.save(executionRequestedEvent(testRunId, snapshotId, TargetTypeCode.BASELINE, now));
                 outboxPort.save(executionRequestedEvent(testRunId, snapshotId, TargetTypeCode.CANDIDATE, now));
             }
         });
 
+        log.info("TestRun execution fan-out completed. testRunId={} snapshotCount={} executionEventCount={} elapsedMs={}",
+                testRunId, snapshotCount[0], snapshotCount[0] * 2, elapsedMs(resolutionStartedNanos));
+
         return ResolutionOutcome.RESOLVED;
     }
 
     private ResolutionOutcome handleMaterializationFailure(TestRun testRun, int attemptCount) {
         if (attemptCount < MAX_RESOLUTION_ATTEMPTS) {
+            log.warn("Candidate materialization will be retried. testRunId={} attemptCount={}",
+                    testRun.id().value(), attemptCount);
             return ResolutionOutcome.MATERIALIZATION_FAILED_RETRYABLE;
         }
 
@@ -183,7 +211,14 @@ public class ResolveTestRunService {
             testRunRepository.save(testRun);
         });
 
+        log.error("TestRun finished after terminal candidate materialization failure. testRunId={} attemptCount={}",
+                testRunId, attemptCount);
+
         return ResolutionOutcome.MATERIALIZATION_FAILED_TERMINAL;
+    }
+
+    private static long elapsedMs(long startedNanos) {
+        return (System.nanoTime() - startedNanos) / 1_000_000;
     }
 
     private OutboxEventRecord executionRequestedEvent(

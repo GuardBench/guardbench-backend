@@ -7,6 +7,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.guardbench.testrun.application.messaging.TestRunQueue;
@@ -35,6 +37,7 @@ import com.guardbench.testrun.application.port.out.SqsPublishPort.PublishBatchEn
  */
 public class OutboxPublisher {
 
+    private static final Logger log = LoggerFactory.getLogger(OutboxPublisher.class);
     /** SQS SendMessageBatch가 queue당 지원하는 최대 항목 수. */
     private static final int SQS_BATCH_LIMIT = 10;
 
@@ -74,6 +77,8 @@ public class OutboxPublisher {
                     .map(event -> new PublishBatchEntry(event.eventId(), event.payload()))
                     .toList();
 
+            chunk.forEach(event -> logPublishStart(queue, event));
+
             PublishBatchResult result = sqsPublishPort.publishBatch(queue, entries);
 
             List<UUID> succeededIds = chunk.stream()
@@ -82,8 +87,29 @@ public class OutboxPublisher {
                     .toList();
             outboxPort.markPublished(succeededIds);
             publishedCount += succeededIds.size();
+            chunk.forEach(event -> logPublishResult(queue, event, result.succeeded(event.eventId())));
         }
         return publishedCount;
+    }
+
+    private static void logPublishStart(TestRunQueue queue, OutboxEventRecord event) {
+        OutboxEventRecord.ObservabilityContext context = event.observabilityContext();
+        log.info("Outbox event publish started. queue={} eventId={} eventType={} testRunId={} snapshotId={} targetType={}",
+                queue.queueName(), event.eventId(), event.eventType(), context.testRunId(),
+                context.snapshotId(), context.targetType());
+    }
+
+    private static void logPublishResult(TestRunQueue queue, OutboxEventRecord event, boolean succeeded) {
+        OutboxEventRecord.ObservabilityContext context = event.observabilityContext();
+        if (succeeded) {
+            log.info("Outbox event published. queue={} eventId={} eventType={} testRunId={} snapshotId={} targetType={}",
+                    queue.queueName(), event.eventId(), event.eventType(), context.testRunId(),
+                    context.snapshotId(), context.targetType());
+            return;
+        }
+        log.warn("Outbox event publish deferred for retry. queue={} eventId={} eventType={} testRunId={} snapshotId={} targetType={}",
+                queue.queueName(), event.eventId(), event.eventType(), context.testRunId(),
+                context.snapshotId(), context.targetType());
     }
 
     private static Map<TestRunQueue, List<OutboxEventRecord>> groupByQueue(List<OutboxEventRecord> events) {

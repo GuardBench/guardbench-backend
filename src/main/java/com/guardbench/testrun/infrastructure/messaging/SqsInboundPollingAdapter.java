@@ -98,11 +98,35 @@ public class SqsInboundPollingAdapter {
             return;
         }
 
-        boolean shouldAck = dispatch(decoded);
+        Long snapshotId = snapshotId(decoded);
+        String targetType = targetType(decoded);
+        log.info("SQS message received. queue={} messageId={} eventId={} eventType={} testRunId={} snapshotId={} targetType={}",
+                queueType.queueName(), message.messageId(), decoded.eventId(), decoded.eventType(),
+                decoded.testRunId(), snapshotId, targetType);
+
+        boolean shouldAck;
+        try {
+            log.info("SQS message processing started. queue={} eventId={} eventType={} testRunId={} snapshotId={} targetType={}",
+                    queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId, targetType);
+            shouldAck = dispatch(decoded);
+        } catch (Exception exception) {
+            log.error("SQS message processing failed. queue={} eventId={} eventType={} testRunId={} snapshotId={} targetType={} failureType={}",
+                    queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId,
+                    targetType, exception.getClass().getSimpleName());
+            return;
+        }
 
         if (shouldAck) {
-            deleteMessage(message);
+            log.info("SQS message processing completed. queue={} eventId={} eventType={} testRunId={} snapshotId={} targetType={}",
+                    queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId, targetType);
+            if (deleteMessage(message)) {
+                log.info("SQS message deleted. queue={} eventId={} eventType={} testRunId={} snapshotId={} targetType={}",
+                        queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId, targetType);
+            }
+            return;
         }
+        log.warn("SQS message processing deferred for retry. queue={} eventId={} eventType={} testRunId={} snapshotId={} targetType={}",
+                queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId, targetType);
         // nack: 삭제하지 않아 visibility timeout 후 재전달됨
     }
 
@@ -147,16 +171,34 @@ public class SqsInboundPollingAdapter {
         };
     }
 
-    private void deleteMessage(Message message) {
+    private boolean deleteMessage(Message message) {
         try {
             sqsClient.deleteMessage(DeleteMessageRequest.builder()
                     .queueUrl(queueUrl)
                     .receiptHandle(message.receiptHandle())
                     .build());
+            return true;
         } catch (Exception exception) {
             // ADR 0005: SQS 삭제 실패 시 재전달 후 멱등 처리됨
-            log.warn("Failed to delete message from {}. messageId={}",
-                    queueType.queueName(), message.messageId(), exception);
+            log.warn("SQS message delete failed. queue={} messageId={} failureType={}",
+                    queueType.queueName(), message.messageId(), exception.getClass().getSimpleName());
+            return false;
         }
+    }
+
+    private static Long snapshotId(TestRunMessage message) {
+        return switch (message) {
+            case TestRunRequestedMessage ignored -> null;
+            case TestExecutionRequestedMessage requested -> requested.snapshotId();
+            case TestExecutionCompletedMessage completed -> completed.snapshotId();
+        };
+    }
+
+    private static String targetType(TestRunMessage message) {
+        return switch (message) {
+            case TestRunRequestedMessage ignored -> null;
+            case TestExecutionRequestedMessage requested -> requested.targetType().name();
+            case TestExecutionCompletedMessage completed -> completed.targetType().name();
+        };
     }
 }
