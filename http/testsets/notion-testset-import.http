@@ -5,7 +5,10 @@
 # 원천의 도메인/유형은 category에 "도메인 / 유형" 형식으로 보존했습니다.
 # 이 파일의 도메인은 모두 도서 추천 챗봇입니다.
 
-@baseUrl = https://d1fn0cbu5juq2i.cloudfront.net
+# shuite 중복 등록 방지용
+# @baseUrl = https://d1fn0cbu5juq2i.cloudfront.net
+
+@baseUrl = http://localhost:8080
 
 ### 테스트 스위트 + 테스트 케이스 78건 생성
 POST {{baseUrl}}/api/v1/test-suites
