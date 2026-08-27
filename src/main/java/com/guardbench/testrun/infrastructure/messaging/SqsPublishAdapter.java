@@ -8,6 +8,9 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.guardbench.testrun.application.messaging.TestRunQueue;
 import com.guardbench.testrun.application.port.out.PublishBatchResult;
 import com.guardbench.testrun.application.port.out.SqsPublishPort;
@@ -27,6 +30,7 @@ import software.amazon.awssdk.services.sqs.model.SendMessageBatchResponse;
  */
 public final class SqsPublishAdapter implements SqsPublishPort {
 
+    private static final Logger log = LoggerFactory.getLogger(SqsPublishAdapter.class);
     private final SqsClient sqsClient;
     private final Map<TestRunQueue, String> queueUrls;
 
@@ -62,9 +66,13 @@ public final class SqsPublishAdapter implements SqsPublishPort {
             Set<UUID> succeeded = response.successful().stream()
                     .map(entry -> UUID.fromString(entry.id()))
                     .collect(Collectors.toCollection(HashSet::new));
+            log.info("SQS batch publish completed. queue={} requestedCount={} succeededCount={} failedCount={}",
+                    queue.queueName(), entries.size(), succeeded.size(), entries.size() - succeeded.size());
             return new PublishBatchResult(succeeded);
         } catch (SdkException exception) {
             // 요청 자체가 실패하면 batch 전체를 PENDING으로 남긴다.
+            log.error("SQS batch publish failed. queue={} requestedCount={} failureType={}",
+                    queue.queueName(), entries.size(), exception.getClass().getSimpleName());
             return new PublishBatchResult(Set.of());
         }
     }

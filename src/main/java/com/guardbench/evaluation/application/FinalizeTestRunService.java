@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.guardbench.evaluation.application.port.out.FinalizeTestRunPort;
@@ -37,6 +39,7 @@ import com.guardbench.evaluation.domain.repository.SnapshotEvaluationRepository;
  */
 public class FinalizeTestRunService {
 
+    private static final Logger log = LoggerFactory.getLogger(FinalizeTestRunService.class);
     private final LoadTestRunExecutionFactsPort loadExecutionFactsPort;
     private final FinalizeTestRunPort finalizeTestRunPort;
     private final QualityGateResultRepository qualityGateResultRepository;
@@ -80,6 +83,8 @@ public class FinalizeTestRunService {
      */
     @Transactional
     public FinalizationOutcome finalize(long testRunId) {
+        long finalizationStartedNanos = System.nanoTime();
+        log.info("TestRun finalization started. testRunId={}", testRunId);
         TestRunEvaluationReference reference = new TestRunEvaluationReference(testRunId);
 
         // ADR 0005: 판정과 저장을 직렬화하기 위해 TestRun 행 잠금을 먼저 획득한다.
@@ -88,22 +93,30 @@ public class FinalizeTestRunService {
         TestRunExecutionFacts facts = loadExecutionFactsPort.lockAndLoad(testRunId)
                 .orElse(null);
         if (facts == null) {
+            log.warn("TestRun finalization skipped because TestRun was not found. testRunId={} elapsedMs={}",
+                    testRunId, elapsedMs(finalizationStartedNanos));
             return FinalizationOutcome.notFound();
         }
 
         // 이미 완료된 최종화의 재호출: 멱등 성공
         Optional<QualityGateResult> existing = qualityGateResultRepository.findById(reference);
         if (existing.isPresent()) {
+            log.info("TestRun finalization already completed. testRunId={} qualityGateStatus={} elapsedMs={}",
+                    testRunId, existing.get().status(), elapsedMs(finalizationStartedNanos));
             return FinalizationOutcome.alreadyFinalized(existing.get());
         }
 
         // FINISHED인데 QualityGateResult가 없으면 불변식 위반
         if ("FINISHED".equals(facts.testRunStatus())) {
+            log.error("TestRun finalization invariant violation. testRunId={} status={} elapsedMs={}",
+                    testRunId, facts.testRunStatus(), elapsedMs(finalizationStartedNanos));
             return FinalizationOutcome.invariantViolation();
         }
 
         // RUNNING이 아니면 최종화 불가 (QUEUED, PREPARING은 불가)
         if (!"RUNNING".equals(facts.testRunStatus())) {
+            log.info("TestRun finalization not ready. testRunId={} status={} elapsedMs={}",
+                    testRunId, facts.testRunStatus(), elapsedMs(finalizationStartedNanos));
             return FinalizationOutcome.notReady();
         }
 
@@ -113,10 +126,17 @@ public class FinalizeTestRunService {
         // 절대 진행도를 먼저 갱신한 뒤 NotReady로 반환한다.
         boolean snapshotsReady = facts.snapshotFacts().size() == facts.testCaseCount();
         boolean allPairsTerminal = facts.snapshotFacts().stream().allMatch(SnapshotExecutionFact::pairTerminal);
+        long terminalPairCount = facts.snapshotFacts().stream().filter(SnapshotExecutionFact::pairTerminal).count();
+        log.info("TestRun finalization readiness checked. testRunId={} snapshots={} expected={} terminalPairs={} snapshotsReady={} allPairsTerminal={}",
+                testRunId, facts.snapshotFacts().size(), facts.testCaseCount(), terminalPairCount,
+                snapshotsReady, allPairsTerminal);
         if (!snapshotsReady || !allPairsTerminal) {
             if (snapshotsReady) {
                 finalizeTestRunPort.updateProgress(testRunId);
             }
+            log.info("TestRun finalization not ready after readiness check. testRunId={} snapshots={} expected={} terminalPairs={} snapshotsReady={} allPairsTerminal={} elapsedMs={}",
+                    testRunId, facts.snapshotFacts().size(), facts.testCaseCount(), terminalPairCount,
+                    snapshotsReady, allPairsTerminal, elapsedMs(finalizationStartedNanos));
             return FinalizationOutcome.notReady();
         }
 
@@ -154,7 +174,15 @@ public class FinalizeTestRunService {
                 facts.testCaseCount()
         );
 
+        log.info("TestRun finalization completed. testRunId={} qualityGateStatus={} executionOutcome={} processedTestCaseCount={} testCaseCount={} elapsedMs={}",
+                testRunId, qualityGateResult.status(), executionOutcomeCode, processedTestCaseCount,
+                facts.testCaseCount(), elapsedMs(finalizationStartedNanos));
+
         return FinalizationOutcome.finalized(qualityGateResult);
+    }
+
+    private static long elapsedMs(long startedNanos) {
+        return (System.nanoTime() - startedNanos) / 1_000_000;
     }
 
     private List<SnapshotEvaluation> evaluateSnapshots(TestRunExecutionFacts facts, Instant now) {

@@ -28,6 +28,9 @@ public record OutboxEventRecord(
     public static final String STATUS_PENDING = "PENDING";
     public static final String STATUS_PUBLISHED = "PUBLISHED";
 
+    /** Outbox 발행 운영 로그에 사용하는, 메시지 payload의 비민감 식별자다. */
+    public record ObservabilityContext(long testRunId, Long snapshotId, String targetType) {}
+
     public OutboxEventRecord {
         if (eventId == null) {
             throw new IllegalArgumentException("eventId must not be null");
@@ -115,5 +118,20 @@ public record OutboxEventRecord(
             Instant createdAt
     ) {
         return new OutboxEventRecord(eventId, eventType, 1, payload, deduplicationKey, STATUS_PENDING, createdAt, null);
+    }
+
+    /**
+     * 이미 검증된 v1 payload에서 운영 추적에 필요한 식별자만 읽는다.
+     * 입력, 실행 결과, Provider 응답은 반환하지 않는다.
+     */
+    public ObservabilityContext observabilityContext() {
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(payload);
+            Long snapshotId = root.has("snapshotId") ? root.get("snapshotId").longValue() : null;
+            String targetType = root.has("targetType") ? root.get("targetType").textValue() : null;
+            return new ObservabilityContext(root.get("testRunId").longValue(), snapshotId, targetType);
+        } catch (JacksonException exception) {
+            throw new IllegalStateException("validated Outbox payload could not be read", exception);
+        }
     }
 }
