@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Last reviewed: 2026-08-25
+> Last reviewed: 2026-08-27
 > Canonical source: GitHub
 > Origin: [GitHub Issue #5](https://github.com/GuardBench/guardbench-backend/issues/5)
 
@@ -12,6 +12,9 @@
 - Superseded in part by: [ADR 0006](0006-independent-domain-contract-boundaries.md) — `evaluation -> testrun` Java Domain 의존 해석
 - Extended by: [ADR 0008](0008-async-testrun-persistence-contract.md) — Outbox, claim과 HTTP Idempotency 물리 계약
 - Implementation map: [비동기 TestRun 계약 맵](../contracts/README.md) (`DRAFT`; 계약 키별 Primary contract와 보조 참조를 찾게 할 뿐 ADR의 승인 내용을 대체하지 않음)
+- Implementation docs:
+  - [TestRun Persistence 구현 인덱스](../architecture/testrun-persistence.md) — Outbox·claim·idempotency 물리 산출물 위치
+  - [애플리케이션 오류 코드: TestExecution 실행 오류 Code](../conventions/application-errors.md#testexecution-실행-오류-code) — 공개 가능한 오류 code 목록
 
 ## Context
 

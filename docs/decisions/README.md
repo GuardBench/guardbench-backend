@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Team
-> Last reviewed: 2026-08-25
+> Last reviewed: 2026-08-27
 > Canonical source: GitHub
 > Origin: 없음
 
@@ -25,7 +25,7 @@
 
 ## 비동기 TestRun 계약 맵
 
-[비동기 TestRun 계약 맵](../contracts/README.md)은 #14·#16·#17·#18·#19의 변경을 계약 키별 **Primary contract**와 필수 보조 참조로 연결한다. 이 DRAFT 인덱스는 탐색 보조물일 뿐 ADR을 대체하거나 새 DB 제약을 정하지 않는다. ADR 0007·0008로 승인되지 않은 물리 계약을 해석하지 않으며, 새 미결정만 관련 Issue에 기록한다.
+[비동기 TestRun 계약 맵](../contracts/README.md)은 #14·#16·#17·#18·#19의 변경을 계약 키별 **Primary contract**와 필수 보조 참조로 연결한다. 이 인덱스는 탐색 보조물일 뿐 ADR을 대체하거나 새 DB 제약을 정하지 않는다. ADR 0007·0008로 승인되지 않은 물리 계약을 해석하지 않으며, 새 미결정만 관련 Issue에 기록한다.
 
 ## 결정 관계
 
