@@ -1,9 +1,10 @@
 # TestRun Persistence 구현 인덱스
 
-> Status: DRAFT
+> Status: APPROVED
 > Owner: Backend
 > Scope: GitHub Issue #14
-> Related broad documentation issue: [#49](https://github.com/GuardBench/guardbench-backend/issues/49) — **OPEN 유지**
+> Last reviewed: 2026-08-27
+> Related broad documentation issue: [#49](https://github.com/GuardBench/guardbench-backend/issues/49)
 
 이 문서는 #14에서 구현된 PostgreSQL 물리 Persistence 산출물의 탐색 인덱스다. 새 동작, DB 제약 또는 Context 경계를 결정하지 않으며, 구현 판단은 아래 APPROVED ADR을 따른다.
 
@@ -36,4 +37,5 @@
 
 - QualityGateResult 저장과 TestRun `FINISHED` 전환의 Application 트랜잭션 조율은 ADR 0004 및 후속 Worker/finalization 범위다.
 - TestRun 조회 HTTP API와 `testrun/application/port/out` Query Port는 #15의 별도 worktree/PR 범위다.
-- Queue, retry, DLQ, Worker, 운영 설정과 전체 canonical 문서 정리는 #49의 잔여 범위이므로 이 문서로 #49를 완료 처리하지 않는다.
+- Queue, retry, DLQ, Worker 계약은 [ADR 0005](../decisions/0005-async-test-run-execution-contract.md)와 [비동기 TestRun 계약 맵](../contracts/README.md)이 소유하며 이 문서로 대체하지 않는다.
+- #19(통합·회귀 테스트)는 실제 PostgreSQL에서 접수·Worker 체인·결과 조회를 검증한다. SQS 전송·DLQ와 같은 비동기 인프라 경계는 이 Persistence 인덱스의 범위가 아니다.
