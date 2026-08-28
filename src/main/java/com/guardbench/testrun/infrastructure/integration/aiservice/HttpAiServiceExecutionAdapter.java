@@ -2,6 +2,7 @@ package com.guardbench.testrun.infrastructure.integration.aiservice;
 
 import java.util.Objects;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -18,11 +19,12 @@ public final class HttpAiServiceExecutionAdapter implements AiServiceExecutionPo
 
     private final RestClient restClient;
 
+    @Autowired
     public HttpAiServiceExecutionAdapter(RestClient.Builder restClientBuilder) {
         this.restClient = Objects.requireNonNull(restClientBuilder, "restClientBuilder must not be null").build();
     }
 
-    HttpAiServiceExecutionAdapter(RestClient restClient) {
+    public HttpAiServiceExecutionAdapter(RestClient restClient) {
         this.restClient = Objects.requireNonNull(restClient, "restClient must not be null");
     }
 
