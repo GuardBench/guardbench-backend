@@ -21,8 +21,8 @@ import com.guardbench.evaluation.presentation.dto.AiServiceAssertionExecuteRes;
 @RequestMapping("/api/v1/ai-service-assertions")
 public class AiServiceAssertionController {
 
-    // TODO: 실제 고객 AI 서비스 endpoint가 확정되면 이 값만 교체한다.
-    private static final String CUSTOMER_MODEL_ENDPOINT = "https://<CUSTOMER_MODEL_ENDPOINT>";
+    private static final String CUSTOMER_MODEL_ENDPOINT =
+            "https://d2cmff9bta4e7l.cloudfront.net/api/guard";
 
     private final ExecuteAiServiceAssertionService executeAiServiceAssertionService;
 
