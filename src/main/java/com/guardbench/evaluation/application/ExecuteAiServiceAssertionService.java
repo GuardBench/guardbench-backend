@@ -3,6 +3,8 @@ package com.guardbench.evaluation.application;
 import java.util.List;
 import java.util.Objects;
 
+import org.springframework.stereotype.Service;
+
 import com.guardbench.evaluation.application.port.out.AiServiceActionPort;
 import com.guardbench.evaluation.domain.AssertionResult;
 import com.guardbench.evaluation.domain.AssertionStatus;
@@ -10,9 +12,9 @@ import com.guardbench.evaluation.domain.EvaluationAction;
 
 /**
  * 단일 고객 AI endpoint에 테스트 케이스들을 실행하고 Assertion만 계산하는 MVP 전용 Use Case다.
- *
- * <p>Baseline, Comparability, Change Classification, Quality Gate는 이 흐름에서 수행하지 않는다.
+ * Baseline, Comparability, Change Classification, Quality Gate는 이 흐름에서 수행하지 않는다.
  */
+@Service
 public final class ExecuteAiServiceAssertionService {
 
     private final AiServiceActionPort actionPort;

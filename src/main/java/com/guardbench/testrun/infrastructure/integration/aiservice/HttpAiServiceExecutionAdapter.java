@@ -3,6 +3,7 @@ package com.guardbench.testrun.infrastructure.integration.aiservice;
 import java.util.Objects;
 
 import org.springframework.http.MediaType;
+import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import com.guardbench.testrun.application.port.out.AiServiceExecutionPort;
@@ -12,11 +13,16 @@ import com.guardbench.testrun.application.port.out.AiServiceExecutionResult;
 /**
  * 고객 AI 서비스의 최소 정상 HTTP 응답 계약을 구현한 Adapter다.
  */
+@Component
 public final class HttpAiServiceExecutionAdapter implements AiServiceExecutionPort {
 
     private final RestClient restClient;
 
-    public HttpAiServiceExecutionAdapter(RestClient restClient) {
+    public HttpAiServiceExecutionAdapter(RestClient.Builder restClientBuilder) {
+        this.restClient = Objects.requireNonNull(restClientBuilder, "restClientBuilder must not be null").build();
+    }
+
+    HttpAiServiceExecutionAdapter(RestClient restClient) {
         this.restClient = Objects.requireNonNull(restClient, "restClient must not be null");
     }
 

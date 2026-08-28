@@ -2,6 +2,8 @@ package com.guardbench.evaluation.infrastructure.integration;
 
 import java.util.Objects;
 
+import org.springframework.stereotype.Component;
+
 import com.guardbench.evaluation.application.port.out.AiServiceActionPort;
 import com.guardbench.evaluation.domain.EvaluationAction;
 import com.guardbench.testrun.application.AiServiceExecutionFacade;
@@ -9,6 +11,7 @@ import com.guardbench.testrun.application.AiServiceExecutionFacade;
 /**
  * Evaluation의 AI service action Port를 TestRun Application Facade에 연결한다.
  */
+@Component
 public final class AiServiceActionIntegrationAdapter implements AiServiceActionPort {
 
     private final AiServiceExecutionFacade executionFacade;
