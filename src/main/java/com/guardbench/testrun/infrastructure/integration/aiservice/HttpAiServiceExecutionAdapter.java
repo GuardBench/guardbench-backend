@@ -2,7 +2,6 @@ package com.guardbench.testrun.infrastructure.integration.aiservice;
 
 import java.util.Objects;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -19,11 +18,16 @@ public final class HttpAiServiceExecutionAdapter implements AiServiceExecutionPo
 
     private final RestClient restClient;
 
-    @Autowired
-    public HttpAiServiceExecutionAdapter(RestClient.Builder restClientBuilder) {
-        this.restClient = Objects.requireNonNull(restClientBuilder, "restClientBuilder must not be null").build();
+    /**
+     * Spring 배포 환경에서 별도 RestClient Bean 없이 자체 기본 Client를 생성한다.
+     */
+    public HttpAiServiceExecutionAdapter() {
+        this(RestClient.create());
     }
 
+    /**
+     * 테스트에서 MockRestServiceServer와 결합한 RestClient를 주입할 수 있도록 유지한다.
+     */
     public HttpAiServiceExecutionAdapter(RestClient restClient) {
         this.restClient = Objects.requireNonNull(restClient, "restClient must not be null");
     }
