@@ -24,10 +24,34 @@ jobs:
       - name: Build, test, and package
         run: ./gradlew clean check bootJar --no-daemon
 
+  changes:
+    name: detect deployment scope
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    outputs:
+      application_source: ${{ steps.application_source.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect application source changes
+        id: application_source
+        env:
+          BEFORE: ${{ github.event.before }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$BEFORE" =~ ^0+$ ]] \
+            || ! git diff --quiet "$BEFORE" "$GITHUB_SHA" -- src/; then
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          fi
+
   deploy:
     name: deploy dev
-    needs: verify
-    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    needs: [verify, changes]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev' && needs.changes.outputs.application_source == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: dev
