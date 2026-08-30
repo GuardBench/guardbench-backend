@@ -13,7 +13,7 @@ public final class TestRunPersistenceFixture {
     }
 
     public void clearPersistenceTables() {
-        jdbcTemplate.execute("TRUNCATE TABLE outbox_event, test_suite CASCADE");
+        jdbcTemplate.execute("TRUNCATE TABLE outbox_event, test_suite, target_reference CASCADE");
     }
 
     public void insertTestSuite(long testSuiteId, Instant createdAt) {
@@ -45,19 +45,34 @@ public final class TestRunPersistenceFixture {
     }
 
     public void insertQueuedTestRun(long testRunId, long testSuiteId, int testCaseCount, Instant createdAt) {
+        String targetReference = "target-ref-" + testRunId;
+        insertTargetReference(targetReference);
         jdbcTemplate.update(
                 """
                 INSERT INTO test_run(id, test_suite_id, status, test_case_count, processed_test_case_count,
-                    baseline_guardrail_id, baseline_version, candidate_guardrail_id,
-                    candidate_requested_source, created_at, updated_at)
-                VALUES (?, ?, 'QUEUED', ?, 0, 'guardrail', '1', 'guardrail', 'DRAFT', ?, ?)
+                    target_reference_id, created_at, updated_at)
+                VALUES (?, ?, 'QUEUED', ?, 0, ?, ?, ?)
                 """,
                 testRunId,
                 testSuiteId,
                 testCaseCount,
+                targetReference,
                 Timestamp.from(createdAt),
                 Timestamp.from(createdAt)
         );
+    }
+
+    public void insertTargetReference(String referenceId) {
+        jdbcTemplate.update(
+                "INSERT INTO target_reference(reference_id, target_type) VALUES (?, 'BEDROCK_GUARDRAIL')",
+                referenceId);
+        jdbcTemplate.update(
+                """
+                INSERT INTO bedrock_guardrail_target(
+                    reference_id, guardrail_identifier, requested_revision, resolved_revision
+                ) VALUES (?, 'guardrail', 'DRAFT', NULL)
+                """,
+                referenceId);
     }
 
     public void insertSnapshot(long snapshotId, long testRunId, long sourceTestCaseId, Instant createdAt) {

@@ -8,9 +8,8 @@ package com.guardbench.testrun.application;
  */
 public record TestRunCreateIntent(
         long testSuiteId,
-        String baselineGuardrailId,
-        String baselineVersion,
-        String candidateGuardrailId,
-        String candidateSource
+        String targetType,
+        String targetIdentifier,
+        String targetRevision
 ) {
 }

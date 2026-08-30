@@ -20,7 +20,6 @@ import org.testcontainers.utility.DockerImageName;
 
 import com.guardbench.testrun.application.ExecuteTestRunService;
 import com.guardbench.testrun.application.ResolveTestRunService;
-import com.guardbench.testrun.application.messaging.TargetTypeCode;
 import com.guardbench.testrun.application.messaging.TestRunMessageCodec;
 import com.guardbench.testrun.application.messaging.TestRunQueue;
 
@@ -87,7 +86,7 @@ class SqsWorkerEndToEndTest {
                 pollingConfig, stubResolveService, null, null
         );
 
-        // v1 TestRunRequested 메시지 전송
+        // v2 TestRunRequested 메시지 전송
         String payload = codec.encode(new com.guardbench.testrun.application.messaging.TestRunRequestedMessage(
                 UUID.randomUUID(), 42L, Instant.parse("2026-08-25T10:00:00Z")
         ));
@@ -127,7 +126,7 @@ class SqsWorkerEndToEndTest {
                 pollingConfig, stubResolveService, null, null
         );
 
-        // v1 TestRunRequested 메시지 전송
+        // v2 TestRunRequested 메시지 전송
         String payload = codec.encode(new com.guardbench.testrun.application.messaging.TestRunRequestedMessage(
                 UUID.randomUUID(), 99L, Instant.parse("2026-08-25T11:00:00Z")
         ));
@@ -168,10 +167,10 @@ class SqsWorkerEndToEndTest {
                 pollingConfig, null, stubExecuteService, null
         );
 
-        // v1 TestExecutionRequested 메시지 전송
+        // v2 TestExecutionRequested 메시지 전송
         String payload = codec.encode(
                 new com.guardbench.testrun.application.messaging.TestExecutionRequestedMessage(
-                        UUID.randomUUID(), 42L, 100L, TargetTypeCode.BASELINE,
+                        UUID.randomUUID(), 42L, 100L,
                         Instant.parse("2026-08-25T10:00:01Z")
                 )
         );
@@ -219,7 +218,7 @@ class SqsWorkerEndToEndTest {
                         @Override public void save(com.guardbench.testrun.domain.TestRun testRun) {}
                         @Override public java.util.Optional<com.guardbench.testrun.domain.TestRun> findById(com.guardbench.testrun.domain.TestRunId id) { return java.util.Optional.empty(); }
                     },
-                    request -> null,
+                    request -> { },
                     testRunId -> java.util.List.of(),
                     new com.guardbench.testrun.application.port.out.OutboxPort() {
                         @Override public void save(com.guardbench.testrun.application.port.out.OutboxEventRecord event) {}
@@ -253,14 +252,14 @@ class SqsWorkerEndToEndTest {
         StubExecuteService(ExecutionOutcome fixedOutcome) {
             super(
                     new com.guardbench.testrun.application.port.out.ExecutionClaimPort() {
-                        @Override public com.guardbench.testrun.application.port.out.ClaimResult tryAcquire(long snapshotId, String targetType) { return null; }
-                        @Override public boolean isHeldBy(long snapshotId, String targetType, java.util.UUID token) { return false; }
+                        @Override public com.guardbench.testrun.application.port.out.ClaimResult tryAcquire(long snapshotId) { return null; }
+                        @Override public boolean isHeldBy(long snapshotId, java.util.UUID token) { return false; }
                     },
                     new com.guardbench.testrun.domain.repository.TestExecutionRepository() {
                         @Override public void save(com.guardbench.testrun.domain.TestExecution execution) {}
                         @Override public java.util.Optional<com.guardbench.testrun.domain.TestExecution> findById(com.guardbench.testrun.domain.TestExecutionId id) { return java.util.Optional.empty(); }
                     },
-                    (snapshotId, targetType) -> java.util.Optional.empty(),
+                    snapshotId -> java.util.Optional.empty(),
                     request -> null,
                     new com.guardbench.testrun.application.port.out.OutboxPort() {
                         @Override public void save(com.guardbench.testrun.application.port.out.OutboxEventRecord event) {}
@@ -274,7 +273,7 @@ class SqsWorkerEndToEndTest {
         }
 
         @Override
-        public ExecutionOutcome execute(long snapshotId, TargetTypeCode targetTypeCode) {
+        public ExecutionOutcome execute(long snapshotId) {
             return fixedOutcome;
         }
     }

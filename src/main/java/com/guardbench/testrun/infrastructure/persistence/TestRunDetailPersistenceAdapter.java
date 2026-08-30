@@ -12,8 +12,7 @@ import com.guardbench.testrun.application.port.out.QualityGateMetricsView;
 import com.guardbench.testrun.application.port.out.QualityGateView;
 import com.guardbench.testrun.application.port.out.TestRunDetail;
 import com.guardbench.testrun.application.port.out.TestRunProgress;
-import com.guardbench.testrun.application.port.out.TestRunTargets;
-import com.guardbench.testrun.domain.CandidateSource;
+import com.guardbench.testrun.application.port.out.TargetReferenceView;
 import com.guardbench.testrun.domain.TestRunExecutionOutcome;
 import com.guardbench.testrun.domain.TestRunStatus;
 
@@ -38,9 +37,7 @@ class TestRunDetailPersistenceAdapter implements LoadTestRunDetailPort {
 
     private static final String SELECT_SQL = """
             SELECT r.id, r.test_suite_id, r.status, r.test_case_count,
-                   r.processed_test_case_count, r.baseline_guardrail_id, r.baseline_version,
-                   r.candidate_guardrail_id, r.candidate_requested_source,
-                   r.candidate_resolved_version, r.execution_outcome,
+                   r.processed_test_case_count, r.target_reference_id, r.execution_outcome,
                    r.created_at, r.started_at, r.completed_at, r.updated_at,
                    qgr.gate_status, qgr.candidate_assertion_pass_rate,
                    qgr.security_regression_count, qgr.security_regression_rate,
@@ -72,24 +69,13 @@ class TestRunDetailPersistenceAdapter implements LoadTestRunDetailPort {
                 new TestRunProgress(
                         resultSet.getInt("processed_test_case_count"),
                         percent(resultSet.getInt("processed_test_case_count"), resultSet.getInt("test_case_count"))),
-                mapTargets(resultSet),
+                new TargetReferenceView(resultSet.getString("target_reference_id")),
                 executionOutcome == null ? null : TestRunExecutionOutcome.valueOf(executionOutcome),
                 mapQualityGate(resultSet),
                 toInstant(resultSet, "created_at"),
                 toInstant(resultSet, "started_at"),
                 toInstant(resultSet, "completed_at"),
                 toInstant(resultSet, "updated_at"));
-    }
-
-    private TestRunTargets mapTargets(ResultSet resultSet) throws SQLException {
-        return new TestRunTargets(
-                new TestRunTargets.BaselineTargetView(
-                        resultSet.getString("baseline_guardrail_id"),
-                        resultSet.getString("baseline_version")),
-                new TestRunTargets.CandidateTargetView(
-                        resultSet.getString("candidate_guardrail_id"),
-                        CandidateSource.valueOf(resultSet.getString("candidate_requested_source")),
-                        resultSet.getString("candidate_resolved_version")));
     }
 
     private QualityGateView mapQualityGate(ResultSet resultSet) throws SQLException {

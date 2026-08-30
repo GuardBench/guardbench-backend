@@ -21,11 +21,14 @@ import com.guardbench.testrun.application.port.out.NextTestCaseSnapshotIdPort;
 import com.guardbench.testrun.application.port.out.NextTestRunIdPort;
 import com.guardbench.testrun.application.port.out.OutboxEventRecord;
 import com.guardbench.testrun.application.port.out.OutboxPort;
+import com.guardbench.testrun.application.port.out.RegisterTargetReferencePort;
+import com.guardbench.testrun.application.port.out.TargetRegistration;
 import com.guardbench.testrun.application.port.out.TestCaseSnapshotSource;
 import com.guardbench.testrun.domain.TestCaseSnapshot;
 import com.guardbench.testrun.domain.TestCaseSnapshotId;
 import com.guardbench.testrun.domain.TestRun;
 import com.guardbench.testrun.domain.TestRunId;
+import com.guardbench.testrun.domain.TargetReference;
 import com.guardbench.testrun.domain.repository.TestCaseSnapshotRepository;
 import com.guardbench.testrun.domain.repository.TestRunRepository;
 
@@ -35,7 +38,8 @@ import com.guardbench.testrun.domain.repository.TestRunRepository;
  */
 final class CreateTestRunFakeAdapters
         implements ExistsTestSuitePort, LoadTestCaseSnapshotSourcesPort,
-        TestRunRepository, TestCaseSnapshotRepository, OutboxPort, IdempotencyPort {
+        TestRunRepository, TestCaseSnapshotRepository, OutboxPort, IdempotencyPort,
+        RegisterTargetReferencePort {
 
     static final Instant FIXED_NOW = Instant.parse("2026-08-26T00:00:00Z");
     final Clock clock = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
@@ -48,6 +52,7 @@ final class CreateTestRunFakeAdapters
     private final Map<Long, TestCaseSnapshot> snapshotsById = new HashMap<>();
     private final List<OutboxEventRecord> outboxEvents = new ArrayList<>();
     private final Map<String, IdempotencyRecord> idempotencyRecords = new HashMap<>();
+    private final Map<String, TargetRegistration> targetRegistrations = new HashMap<>();
 
     void givenTestSuite(long testSuiteId, List<TestCaseSnapshotSource> sources) {
         existingTestSuiteIds.add(testSuiteId);
@@ -134,5 +139,10 @@ final class CreateTestRunFakeAdapters
     @Override
     public void save(IdempotencyRecord record) {
         idempotencyRecords.put(record.idempotencyKey(), record);
+    }
+
+    @Override
+    public void register(TargetReference reference, TargetRegistration registration) {
+        targetRegistrations.put(reference.value(), registration);
     }
 }

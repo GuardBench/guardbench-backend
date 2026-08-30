@@ -29,14 +29,14 @@ class TestRunTest {
             );
 
             testRun.beginPreparing(CREATED_AT.plusSeconds(1));
-            testRun.beginRunning("5", CREATED_AT.plusSeconds(2));
+            testRun.beginRunning(CREATED_AT.plusSeconds(2));
             testRun.updateProgress(executionSummary, CREATED_AT.plusSeconds(3));
             testRun.finish(executionSummary, CREATED_AT.plusSeconds(4));
 
             assertEquals(TestRunStatus.FINISHED, testRun.status());
             assertEquals(TestRunExecutionOutcome.COMPLETED, testRun.executionOutcome());
             assertEquals(2, testRun.processedTestCaseCount());
-            assertEquals("5", testRun.candidateTarget().resolvedVersion());
+            assertEquals("target-reference", testRun.targetReference().value());
             assertEquals(CREATED_AT.plusSeconds(1), testRun.timeline().startedAt());
             assertEquals(CREATED_AT.plusSeconds(4), testRun.timeline().completedAt());
         }
@@ -60,7 +60,7 @@ class TestRunTest {
         void rejectsInvalidLifecycleTransitions() {
             TestRun testRun = queuedTestRun(1);
 
-            assertThrows(IllegalStateException.class, () -> testRun.beginRunning("5", CREATED_AT));
+            assertThrows(IllegalStateException.class, () -> testRun.beginRunning(CREATED_AT));
             assertThrows(IllegalStateException.class, () -> testRun.finish(summary(succeededPair(1)), CREATED_AT));
 
             testRun.beginPreparing(CREATED_AT.plusSeconds(1));
@@ -70,26 +70,11 @@ class TestRunTest {
         }
 
         @Test
-        @DisplayName("Candidate 확정 version 없이는 RUNNING으로 전이하지 않는다")
-        void rejectsRunningTransitionWithoutResolvedCandidateVersion() {
-            TestRun testRun = queuedTestRun(1);
-            testRun.beginPreparing(CREATED_AT.plusSeconds(1));
-
-            assertThrows(
-                    IllegalArgumentException.class,
-                    () -> testRun.beginRunning(null, CREATED_AT.plusSeconds(2))
-            );
-
-            assertEquals(TestRunStatus.PREPARING, testRun.status());
-            assertNull(testRun.candidateTarget().resolvedVersion());
-        }
-
-        @Test
         @DisplayName("완료 시각이 시작 시각보다 앞서면 FINISHED로 전이하지 않는다")
         void rejectsFinishWithCompletedTimeBeforeStartedTime() {
             TestRun testRun = queuedTestRun(1);
             testRun.beginPreparing(CREATED_AT.plusSeconds(10));
-            testRun.beginRunning("5", CREATED_AT.plusSeconds(11));
+            testRun.beginRunning(CREATED_AT.plusSeconds(11));
 
             assertThrows(
                     IllegalArgumentException.class,
@@ -102,41 +87,23 @@ class TestRunTest {
         }
     }
 
-    @Test
-    @DisplayName("Baseline과 Candidate는 동일한 Guardrail ID가 아니면 생성할 수 없다")
-    void rejectsDifferentBaselineAndCandidateGuardrails() {
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> TestRun.queue(
-                        new TestRunId(1),
-                        new SourceTestSuiteId(10),
-                        new BaselineTarget("baseline-guardrail", "4"),
-                        new CandidateTarget("candidate-guardrail", CandidateSource.DRAFT, null),
-                        1,
-                        CREATED_AT
-                )
-        );
-    }
-
     private static TestRun queuedTestRun(int testCaseCount) {
         return TestRun.queue(
                 new TestRunId(1),
                 new SourceTestSuiteId(10),
-                new BaselineTarget("guardrail-123", "4"),
-                new CandidateTarget("guardrail-123", CandidateSource.DRAFT, null),
+                new TargetReference("target-reference"),
                 testCaseCount,
                 CREATED_AT
         );
     }
 
-    private static TestRunExecutionSummary summary(SnapshotExecutionPair... executionPairs) {
-        return TestRunExecutionSummary.from(List.of(executionPairs));
+    private static TestRunExecutionSummary summary(SnapshotExecutionStatus... executionStatuses) {
+        return TestRunExecutionSummary.from(List.of(executionStatuses));
     }
 
-    private static SnapshotExecutionPair succeededPair(long snapshotId) {
-        return new SnapshotExecutionPair(
+    private static SnapshotExecutionStatus succeededPair(long snapshotId) {
+        return new SnapshotExecutionStatus(
                 new TestCaseSnapshotId(snapshotId),
-                TestExecutionStatus.SUCCEEDED,
                 TestExecutionStatus.SUCCEEDED
         );
     }

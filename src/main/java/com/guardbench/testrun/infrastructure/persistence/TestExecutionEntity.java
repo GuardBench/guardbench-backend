@@ -2,14 +2,14 @@ package com.guardbench.testrun.infrastructure.persistence;
 
 import java.time.Instant;
 
-import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "test_execution")
 class TestExecutionEntity {
-    @EmbeddedId TestExecutionEntityId id;
+    @Id Long snapshotId;
     String resultStatus;
     String actualAction;
     String errorCode;
@@ -21,7 +21,7 @@ class TestExecutionEntity {
     }
 
     private TestExecutionEntity(
-            TestExecutionEntityId id,
+            Long snapshotId,
             String resultStatus,
             String actualAction,
             String errorCode,
@@ -29,7 +29,7 @@ class TestExecutionEntity {
             Instant startedAt,
             Instant completedAt
     ) {
-        this.id = id;
+        this.snapshotId = snapshotId;
         this.resultStatus = resultStatus;
         this.actualAction = actualAction;
         this.errorCode = errorCode;
@@ -39,7 +39,7 @@ class TestExecutionEntity {
     }
 
     static TestExecutionEntity of(
-            TestExecutionEntityId id,
+            Long snapshotId,
             String resultStatus,
             String actualAction,
             String errorCode,
@@ -47,6 +47,6 @@ class TestExecutionEntity {
             Instant startedAt,
             Instant completedAt
     ) {
-        return new TestExecutionEntity(id, resultStatus, actualAction, errorCode, errorMessage, startedAt, completedAt);
+        return new TestExecutionEntity(snapshotId, resultStatus, actualAction, errorCode, errorMessage, startedAt, completedAt);
     }
 }

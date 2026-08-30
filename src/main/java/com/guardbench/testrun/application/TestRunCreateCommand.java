@@ -7,18 +7,16 @@ import java.util.Objects;
  */
 public record TestRunCreateCommand(
         long testSuiteId,
-        String baselineGuardrailId,
-        String baselineVersion,
-        String candidateGuardrailId,
-        String candidateSource,
+        String targetType,
+        String targetIdentifier,
+        String targetRevision,
         String idempotencyKey
 ) {
 
     public TestRunCreateCommand {
-        Objects.requireNonNull(baselineGuardrailId, "baselineGuardrailId must not be null");
-        Objects.requireNonNull(baselineVersion, "baselineVersion must not be null");
-        Objects.requireNonNull(candidateGuardrailId, "candidateGuardrailId must not be null");
-        Objects.requireNonNull(candidateSource, "candidateSource must not be null");
+        Objects.requireNonNull(targetType, "targetType must not be null");
+        Objects.requireNonNull(targetIdentifier, "targetIdentifier must not be null");
+        Objects.requireNonNull(targetRevision, "targetRevision must not be null");
     }
 
     boolean hasIdempotencyKey() {
@@ -28,10 +26,9 @@ public record TestRunCreateCommand(
     TestRunCreateIntent toIntent() {
         return new TestRunCreateIntent(
                 testSuiteId,
-                baselineGuardrailId,
-                baselineVersion,
-                candidateGuardrailId,
-                candidateSource
+                targetType,
+                targetIdentifier,
+                targetRevision
         );
     }
 }

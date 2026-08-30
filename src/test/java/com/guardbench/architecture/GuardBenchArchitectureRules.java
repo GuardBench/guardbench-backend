@@ -20,7 +20,7 @@ final class GuardBenchArchitectureRules {
             "testdefinition",
             "testrun",
             "evaluation",
-            "guardrail",
+            "target",
             "common"
     );
 
@@ -71,7 +71,7 @@ final class GuardBenchArchitectureRules {
             .should().dependOnClassesThat().resideInAnyPackage(
                     "com.guardbench.testrun..",
                     "com.guardbench.evaluation..",
-                    "com.guardbench.guardrail.."
+                    "com.guardbench.target.."
             )
             .as("testdefinition must not depend on downstream domains")
             .allowEmptyShould(true);
@@ -82,14 +82,14 @@ final class GuardBenchArchitectureRules {
             .should().dependOnClassesThat().resideInAnyPackage(
                     "com.guardbench.testdefinition..",
                     "com.guardbench.evaluation..",
-                    "com.guardbench.guardrail.."
+                    "com.guardbench.target.."
             )
             .as("testrun must not depend on other bounded contexts outside its integration adapters")
             .allowEmptyShould(true);
 
     static final ArchRule EVALUATION_DEPENDENCIES = noClasses()
             .that().resideInAPackage("com.guardbench.evaluation..")
-            .should().dependOnClassesThat().resideInAPackage("com.guardbench.guardrail..")
+            .should().dependOnClassesThat().resideInAPackage("com.guardbench.target..")
             .as("evaluation must not depend on guardrail")
             .allowEmptyShould(true);
 
@@ -108,7 +108,7 @@ final class GuardBenchArchitectureRules {
             .allowEmptyShould(true);
 
     static final ArchRule GUARDRAIL_DEPENDENCIES = noClasses()
-            .that().resideInAPackage("com.guardbench.guardrail..")
+            .that().resideInAPackage("com.guardbench.target..")
             .should().dependOnClassesThat().resideInAPackage("com.guardbench.evaluation..")
             .as("guardrail must not depend on evaluation")
             .allowEmptyShould(true);
@@ -119,7 +119,7 @@ final class GuardBenchArchitectureRules {
                     "com.guardbench.testdefinition..",
                     "com.guardbench.testrun..",
                     "com.guardbench.evaluation..",
-                    "com.guardbench.guardrail.."
+                    "com.guardbench.target.."
             )
             .as("common must not become a domain dependency hub")
             .allowEmptyShould(true);

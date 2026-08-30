@@ -37,23 +37,19 @@ public record TestRunExecutionFacts(
     public record SnapshotExecutionFact(
             long snapshotId,
             String expectedActionCode,
-            TargetExecutionFact baseline,
-            TargetExecutionFact candidate
+            TargetExecutionFact execution
     ) {
         public SnapshotExecutionFact {
             Objects.requireNonNull(expectedActionCode, "expectedActionCode must not be null");
-            Objects.requireNonNull(baseline, "baseline must not be null");
-            Objects.requireNonNull(candidate, "candidate must not be null");
+            Objects.requireNonNull(execution, "execution must not be null");
         }
 
-        /** Baseline과 Candidate가 모두 terminal이면 이 pair의 실행은 끝났다. */
-        public boolean pairTerminal() {
-            return baseline.terminal() && candidate.terminal();
+        public boolean terminal() {
+            return execution.terminal();
         }
 
-        /** Baseline과 Candidate가 모두 성공했는지 여부다. */
-        public boolean pairSucceeded() {
-            return baseline.succeeded() && candidate.succeeded();
+        public boolean succeeded() {
+            return execution.succeeded();
         }
     }
 

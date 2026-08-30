@@ -88,7 +88,7 @@ class PartialCompletionProgressIntegrationTest {
 
         jdbcTemplate.update("""
                 UPDATE test_run
-                SET status = 'RUNNING', started_at = ?, candidate_resolved_version = '2'
+                SET status = 'RUNNING', started_at = ?
                 WHERE id = ?
                 """, Timestamp.from(NOW), TEST_RUN_ID);
     }
@@ -96,8 +96,7 @@ class PartialCompletionProgressIntegrationTest {
     @Test
     @DisplayName("한 Snapshot만 완료돼도 RUNNING 진행도가 갱신된다")
     void updatesProgressWhenOnlyOneSnapshotIsComplete() {
-        insertSucceededExecution(SNAPSHOT_ID_1, "BASELINE");
-        insertSucceededExecution(SNAPSHOT_ID_1, "CANDIDATE");
+        insertSucceededExecution(SNAPSHOT_ID_1);
         // SNAPSHOT_ID_2는 아직 실행 결과가 없다.
 
         FinalizationOutcome outcome = finalizeTestRunService.finalize(TEST_RUN_ID);
@@ -116,8 +115,7 @@ class PartialCompletionProgressIntegrationTest {
         // SNAPSHOT_ID_2는 fixture에서 이미 생성됐지만, 이 테스트는 testCaseCount만큼
         // Snapshot이 아직 갖춰지지 않은 초기 fan-out 시점을 시뮬레이션한다.
         jdbcTemplate.update("UPDATE test_run SET test_case_count = 3 WHERE id = ?", TEST_RUN_ID);
-        insertSucceededExecution(SNAPSHOT_ID_1, "BASELINE");
-        insertSucceededExecution(SNAPSHOT_ID_1, "CANDIDATE");
+        insertSucceededExecution(SNAPSHOT_ID_1);
 
         FinalizationOutcome outcome = finalizeTestRunService.finalize(TEST_RUN_ID);
 
@@ -129,11 +127,11 @@ class PartialCompletionProgressIntegrationTest {
 
     // ─── Helper ──────────────────────────────────────────────────────
 
-    private void insertSucceededExecution(long snapshotId, String targetType) {
+    private void insertSucceededExecution(long snapshotId) {
         jdbcTemplate.update("""
-                INSERT INTO test_execution(snapshot_id, target_type, result_status, actual_action, started_at, completed_at)
-                VALUES (?, ?, 'SUCCEEDED', 'ALLOW', ?, ?)
-                """, snapshotId, targetType, Timestamp.from(NOW), Timestamp.from(NOW));
+                INSERT INTO test_execution(snapshot_id, result_status, actual_action, started_at, completed_at)
+                VALUES (?, 'SUCCEEDED', 'ALLOW', ?, ?)
+                """, snapshotId, Timestamp.from(NOW), Timestamp.from(NOW));
     }
 
     private String testRunStatus() {

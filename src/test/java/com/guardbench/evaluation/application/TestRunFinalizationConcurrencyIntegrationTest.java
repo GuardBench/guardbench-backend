@@ -94,11 +94,10 @@ class TestRunFinalizationConcurrencyIntegrationTest {
 
         jdbcTemplate.update("""
                 UPDATE test_run
-                SET status = 'RUNNING', started_at = ?, candidate_resolved_version = '2'
+                SET status = 'RUNNING', started_at = ?
                 WHERE id = ?
                 """, Timestamp.from(NOW), TEST_RUN_ID);
-        insertSucceededExecution("BASELINE");
-        insertSucceededExecution("CANDIDATE");
+        insertSucceededExecution();
     }
 
     @Test
@@ -166,11 +165,11 @@ class TestRunFinalizationConcurrencyIntegrationTest {
 
     // ─── Helper ──────────────────────────────────────────────────────
 
-    private void insertSucceededExecution(String targetType) {
+    private void insertSucceededExecution() {
         jdbcTemplate.update("""
-                INSERT INTO test_execution(snapshot_id, target_type, result_status, actual_action, started_at, completed_at)
-                VALUES (?, ?, 'SUCCEEDED', 'ALLOW', ?, ?)
-                """, SNAPSHOT_ID, targetType, Timestamp.from(NOW), Timestamp.from(NOW));
+                INSERT INTO test_execution(snapshot_id, result_status, actual_action, started_at, completed_at)
+                VALUES (?, 'SUCCEEDED', 'ALLOW', ?, ?)
+                """, SNAPSHOT_ID, Timestamp.from(NOW), Timestamp.from(NOW));
     }
 
     private int countOf(String table) {

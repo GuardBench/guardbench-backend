@@ -29,7 +29,7 @@ public record OutboxEventRecord(
     public static final String STATUS_PUBLISHED = "PUBLISHED";
 
     /** Outbox 발행 운영 로그에 사용하는, 메시지 payload의 비민감 식별자다. */
-    public record ObservabilityContext(long testRunId, Long snapshotId, String targetType) {}
+    public record ObservabilityContext(long testRunId, Long snapshotId) {}
 
     public OutboxEventRecord {
         if (eventId == null) {
@@ -38,8 +38,8 @@ public record OutboxEventRecord(
         if (eventType == null || eventType.isBlank()) {
             throw new IllegalArgumentException("eventType must not be blank");
         }
-        if (schemaVersion != 1) {
-            throw new IllegalArgumentException("schemaVersion must be 1");
+        if (schemaVersion != 1 && schemaVersion != 2) {
+            throw new IllegalArgumentException("schemaVersion must be 1 or 2");
         }
         if (payload == null || payload.isBlank()) {
             throw new IllegalArgumentException("payload must not be blank");
@@ -82,15 +82,17 @@ public record OutboxEventRecord(
                 case "TestRunRequested" -> { }
                 case "TestExecutionRequested", "TestExecutionCompleted" -> {
                     requirePositiveLong(root, "snapshotId");
-                    String targetType = requireText(root, "targetType");
-                    if (!"BASELINE".equals(targetType) && !"CANDIDATE".equals(targetType)) {
-                        throw new IllegalArgumentException("payload targetType must be BASELINE or CANDIDATE");
+                    if (schemaVersion == 1) {
+                        String targetType = requireText(root, "targetType");
+                        if (!"BASELINE".equals(targetType) && !"CANDIDATE".equals(targetType)) {
+                            throw new IllegalArgumentException("payload targetType must be BASELINE or CANDIDATE");
+                        }
                     }
                 }
                 default -> throw new IllegalArgumentException("unsupported eventType: " + eventType);
             }
         } catch (JacksonException | DateTimeException exception) {
-            throw new IllegalArgumentException("payload must be a valid v1 event JSON", exception);
+            throw new IllegalArgumentException("payload must be valid event JSON", exception);
         }
     }
 
@@ -117,7 +119,7 @@ public record OutboxEventRecord(
             String deduplicationKey,
             Instant createdAt
     ) {
-        return new OutboxEventRecord(eventId, eventType, 1, payload, deduplicationKey, STATUS_PENDING, createdAt, null);
+        return new OutboxEventRecord(eventId, eventType, 2, payload, deduplicationKey, STATUS_PENDING, createdAt, null);
     }
 
     /**
@@ -128,8 +130,7 @@ public record OutboxEventRecord(
         try {
             JsonNode root = OBJECT_MAPPER.readTree(payload);
             Long snapshotId = root.has("snapshotId") ? root.get("snapshotId").longValue() : null;
-            String targetType = root.has("targetType") ? root.get("targetType").textValue() : null;
-            return new ObservabilityContext(root.get("testRunId").longValue(), snapshotId, targetType);
+            return new ObservabilityContext(root.get("testRunId").longValue(), snapshotId);
         } catch (JacksonException exception) {
             throw new IllegalStateException("validated Outbox payload could not be read", exception);
         }

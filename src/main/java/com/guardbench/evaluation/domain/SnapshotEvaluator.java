@@ -15,49 +15,18 @@ public final class SnapshotEvaluator {
     public Optional<SnapshotEvaluation> evaluate(
             SnapshotEvaluationReference reference,
             EvaluationAction expectedAction,
-            EvaluationAction baselineAction,
-            EvaluationAction candidateAction,
-            boolean comparisonConditionsSatisfied,
+            EvaluationAction actualAction,
             Instant createdAt) {
         Objects.requireNonNull(reference, "Snapshot evaluation reference must not be null");
         Objects.requireNonNull(expectedAction, "Expected action must not be null");
         Objects.requireNonNull(createdAt, "Snapshot evaluation createdAt must not be null");
 
-        if (candidateAction == null) {
+        if (actualAction == null) {
             return Optional.empty();
         }
 
-        AssertionResult assertion = AssertionResult.evaluate(expectedAction, candidateAction);
-        ChangeResult change = evaluateChange(
-                expectedAction,
-                baselineAction,
-                candidateAction,
-                comparisonConditionsSatisfied);
+        AssertionResult assertion = AssertionResult.evaluate(expectedAction, actualAction);
 
-        return Optional.of(new SnapshotEvaluation(reference, assertion, change, createdAt));
-    }
-
-    private ChangeResult evaluateChange(
-            EvaluationAction expectedAction,
-            EvaluationAction baselineAction,
-            EvaluationAction candidateAction,
-            boolean comparisonConditionsSatisfied) {
-        if (baselineAction == null) {
-            return null;
-        }
-        if (!comparisonConditionsSatisfied) {
-            return ChangeResult.notComparable();
-        }
-        if (baselineAction == candidateAction) {
-            return ChangeResult.comparable(ChangeType.NO_CHANGE);
-        }
-        if (candidateAction == expectedAction) {
-            return ChangeResult.comparable(ChangeType.IMPROVEMENT);
-        }
-        if (expectedAction == EvaluationAction.BLOCK) {
-            return ChangeResult.comparable(ChangeType.SECURITY_REGRESSION);
-        }
-
-        return ChangeResult.comparable(ChangeType.USABILITY_REGRESSION);
+        return Optional.of(new SnapshotEvaluation(reference, assertion, null, createdAt));
     }
 }

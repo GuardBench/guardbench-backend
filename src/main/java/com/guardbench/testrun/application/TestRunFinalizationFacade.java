@@ -8,8 +8,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 import com.guardbench.testrun.application.port.out.LockTestRunPort;
-import com.guardbench.testrun.domain.SnapshotExecutionPair;
-import com.guardbench.testrun.domain.TargetType;
+import com.guardbench.testrun.domain.SnapshotExecutionStatus;
 import com.guardbench.testrun.domain.TestCaseSnapshot;
 import com.guardbench.testrun.domain.TestCaseSnapshotId;
 import com.guardbench.testrun.domain.TestExecution;
@@ -87,8 +86,7 @@ public class TestRunFinalizationFacade {
             facts.add(new TestRunFinalizationFacts.SnapshotExecutionFact(
                     snapshotId.value(),
                     snapshot.expectedResult().action().name(),
-                    toTargetFact(snapshotId, TargetType.BASELINE),
-                    toTargetFact(snapshotId, TargetType.CANDIDATE)
+                    toTargetFact(snapshotId)
             ));
         }
 
@@ -101,10 +99,9 @@ public class TestRunFinalizationFacade {
     }
 
     private TestRunFinalizationFacts.TargetExecutionFact toTargetFact(
-            TestCaseSnapshotId snapshotId,
-            TargetType targetType
+            TestCaseSnapshotId snapshotId
     ) {
-        return testExecutionRepository.findById(new TestExecutionId(snapshotId, targetType))
+        return testExecutionRepository.findById(new TestExecutionId(snapshotId))
                 .map(TestRunFinalizationFacade::toTargetFact)
                 .orElseGet(TestRunFinalizationFacts.TargetExecutionFact::notExecuted);
     }
@@ -134,8 +131,8 @@ public class TestRunFinalizationFacade {
                 .orElseThrow(() -> new IllegalStateException(
                         "TestRun not found for finalization. testRunId=" + testRunId));
 
-        List<SnapshotExecutionPair> pairs = buildPairsForFinalization(testRunId);
-        TestRunExecutionSummary summary = TestRunExecutionSummary.from(pairs);
+        List<SnapshotExecutionStatus> statuses = buildStatusesForFinalization(testRunId);
+        TestRunExecutionSummary summary = TestRunExecutionSummary.from(statuses);
 
         Instant completedAt = clock.instant();
         testRun.finish(summary, completedAt);
@@ -163,31 +160,25 @@ public class TestRunFinalizationFacade {
             return;
         }
 
-        List<SnapshotExecutionPair> pairs = buildPairsForFinalization(testRunId);
-        TestRunExecutionSummary summary = TestRunExecutionSummary.from(pairs);
+        List<SnapshotExecutionStatus> statuses = buildStatusesForFinalization(testRunId);
+        TestRunExecutionSummary summary = TestRunExecutionSummary.from(statuses);
 
         testRun.updateProgress(summary, clock.instant());
         testRunRepository.save(testRun);
     }
 
-    private List<SnapshotExecutionPair> buildPairsForFinalization(long testRunId) {
+    private List<SnapshotExecutionStatus> buildStatusesForFinalization(long testRunId) {
         List<TestCaseSnapshot> snapshots = snapshotRepository.findAllByTestRunId(new TestRunId(testRunId));
 
-        List<SnapshotExecutionPair> pairs = new ArrayList<>();
+        List<SnapshotExecutionStatus> statuses = new ArrayList<>();
         for (TestCaseSnapshot snapshot : snapshots) {
             TestCaseSnapshotId snapshotId = snapshot.id();
-            TestExecutionId baselineId = new TestExecutionId(snapshotId, TargetType.BASELINE);
-            TestExecutionId candidateId = new TestExecutionId(snapshotId, TargetType.CANDIDATE);
-
-            TestExecutionStatus baselineStatus = testExecutionRepository.findById(baselineId)
-                    .map(TestExecution::status)
-                    .orElse(null);
-            TestExecutionStatus candidateStatus = testExecutionRepository.findById(candidateId)
+            TestExecutionStatus executionStatus = testExecutionRepository.findById(new TestExecutionId(snapshotId))
                     .map(TestExecution::status)
                     .orElse(null);
 
-            pairs.add(new SnapshotExecutionPair(snapshotId, baselineStatus, candidateStatus));
+            statuses.add(new SnapshotExecutionStatus(snapshotId, executionStatus));
         }
-        return pairs;
+        return statuses;
     }
 }

@@ -1,5 +1,7 @@
 # 0002. PostgreSQL 영속성 계약과 물리 ERD
 
+> ⚠️ Baseline/Candidate TestRun·복합 execution PK 부분은 [ADR 0010](0010-single-target-test-run-model.md)이 대체한다.
+
 > Status: APPROVED
 > Owner: Backend
 > Last reviewed: 2026-08-25

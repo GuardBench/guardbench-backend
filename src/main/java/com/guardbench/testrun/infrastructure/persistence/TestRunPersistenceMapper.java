@@ -2,14 +2,11 @@ package com.guardbench.testrun.infrastructure.persistence;
 
 import com.guardbench.testrun.domain.Action;
 import com.guardbench.testrun.domain.ActualResult;
-import com.guardbench.testrun.domain.BaselineTarget;
-import com.guardbench.testrun.domain.CandidateSource;
-import com.guardbench.testrun.domain.CandidateTarget;
 import com.guardbench.testrun.domain.ExpectedResult;
 import com.guardbench.testrun.domain.Severity;
 import com.guardbench.testrun.domain.SourceTestCaseId;
 import com.guardbench.testrun.domain.SourceTestSuiteId;
-import com.guardbench.testrun.domain.TargetType;
+import com.guardbench.testrun.domain.TargetReference;
 import com.guardbench.testrun.domain.TestCaseSnapshot;
 import com.guardbench.testrun.domain.TestCaseSnapshotId;
 import com.guardbench.testrun.domain.TestExecution;
@@ -34,11 +31,7 @@ final class TestRunPersistenceMapper {
                 source.status().name(),
                 source.testCaseCount(),
                 source.processedTestCaseCount(),
-                source.baselineTarget().guardrailId(),
-                source.baselineTarget().version(),
-                source.candidateTarget().guardrailId(),
-                source.candidateTarget().requestedSource().name(),
-                source.candidateTarget().resolvedVersion(),
+                source.targetReference().value(),
                 source.executionOutcome() == null ? null : source.executionOutcome().name(),
                 source.timeline().createdAt(),
                 source.timeline().startedAt(),
@@ -51,12 +44,7 @@ final class TestRunPersistenceMapper {
         return TestRun.rehydrate(
                 new TestRunId(source.id),
                 new SourceTestSuiteId(source.testSuiteId),
-                new BaselineTarget(source.baselineGuardrailId, source.baselineVersion),
-                new CandidateTarget(
-                        source.candidateGuardrailId,
-                        CandidateSource.valueOf(source.candidateRequestedSource),
-                        source.candidateResolvedVersion
-                ),
+                new TargetReference(source.targetReferenceId),
                 source.testCaseCount,
                 source.processedTestCaseCount,
                 TestRunStatus.valueOf(source.status),
@@ -95,7 +83,7 @@ final class TestRunPersistenceMapper {
 
     static TestExecutionEntity toEntity(TestExecution source) {
         return TestExecutionEntity.of(
-                new TestExecutionEntityId(source.id().snapshotId().value(), source.id().targetType().name()),
+                source.id().snapshotId().value(),
                 source.status().name(),
                 source.actualResult() == null ? null : source.actualResult().action().name(),
                 source.error() == null ? null : source.error().code().name(),
@@ -106,10 +94,7 @@ final class TestRunPersistenceMapper {
     }
 
     static TestExecution toDomain(TestExecutionEntity source) {
-        TestExecutionId id = new TestExecutionId(
-                new TestCaseSnapshotId(source.id.snapshotId),
-                TargetType.valueOf(source.id.targetType)
-        );
+        TestExecutionId id = new TestExecutionId(new TestCaseSnapshotId(source.snapshotId));
         TestExecutionStatus status = TestExecutionStatus.valueOf(source.resultStatus);
         return switch (status) {
             case SUCCEEDED -> TestExecution.succeeded(

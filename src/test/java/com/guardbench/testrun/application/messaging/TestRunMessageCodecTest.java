@@ -18,7 +18,7 @@ class TestRunMessageCodecTest {
     private final Instant occurredAt = Instant.parse("2026-08-26T00:00:00Z");
 
     @Test
-    @DisplayName("TestRunRequested v1 메시지를 round-trip한다")
+    @DisplayName("TestRunRequested v2 메시지를 round-trip한다")
     void roundTripsTestRunRequested() {
         TestRunRequestedMessage original = new TestRunRequestedMessage(UUID.randomUUID(), 41L, occurredAt);
 
@@ -29,12 +29,12 @@ class TestRunMessageCodecTest {
     }
 
     @Test
-    @DisplayName("실행 요청과 완료 메시지의 snapshot target 값을 round-trip한다")
+    @DisplayName("실행 요청과 완료 메시지의 Snapshot 값을 role 없이 round-trip한다")
     void roundTripsExecutionMessages() {
         TestExecutionRequestedMessage requested = new TestExecutionRequestedMessage(
-                UUID.randomUUID(), 41L, 42L, TargetTypeCode.BASELINE, occurredAt);
+                UUID.randomUUID(), 41L, 42L, occurredAt);
         TestExecutionCompletedMessage completed = new TestExecutionCompletedMessage(
-                UUID.randomUUID(), 41L, 42L, TargetTypeCode.CANDIDATE, occurredAt);
+                UUID.randomUUID(), 41L, 42L, occurredAt);
 
         assertEquals(requested, codec.decode(codec.encode(requested)));
         assertEquals(completed, codec.decode(codec.encode(completed)));
@@ -47,7 +47,7 @@ class TestRunMessageCodecTest {
     void ignoresUnknownOptionalField() {
         UUID eventId = UUID.randomUUID();
         String payload = """
-                {"eventId":"%s","eventType":"TestRunRequested","schemaVersion":1,
+                {"eventId":"%s","eventType":"TestRunRequested","schemaVersion":2,
                 "testRunId":41,"occurredAt":"2026-08-26T00:00:00Z","futureField":"ignored"}
                 """.formatted(eventId);
 
@@ -59,14 +59,14 @@ class TestRunMessageCodecTest {
 
     @Test
     @DisplayName("필수 field 누락, 지원하지 않는 schema와 event type은 역직렬화를 거부한다")
-    void rejectsInvalidV1Messages() {
+    void rejectsInvalidV2Messages() {
         assertThrows(InvalidTestRunMessageException.class,
-                () -> codec.decode("{\"eventType\":\"TestRunRequested\",\"schemaVersion\":1}"));
+                () -> codec.decode("{\"eventType\":\"TestRunRequested\",\"schemaVersion\":2}"));
         assertThrows(InvalidTestRunMessageException.class,
-                () -> codec.decode("{\"eventId\":\"%s\",\"eventType\":\"TestRunRequested\",\"schemaVersion\":2,\"testRunId\":1,\"occurredAt\":\"2026-08-26T00:00:00Z\"}"
+                () -> codec.decode("{\"eventId\":\"%s\",\"eventType\":\"TestRunRequested\",\"schemaVersion\":1,\"testRunId\":1,\"occurredAt\":\"2026-08-26T00:00:00Z\"}"
                         .formatted(UUID.randomUUID())));
         assertThrows(InvalidTestRunMessageException.class,
-                () -> codec.decode("{\"eventId\":\"%s\",\"eventType\":\"Unknown\",\"schemaVersion\":1,\"testRunId\":1,\"occurredAt\":\"2026-08-26T00:00:00Z\"}"
+                () -> codec.decode("{\"eventId\":\"%s\",\"eventType\":\"Unknown\",\"schemaVersion\":2,\"testRunId\":1,\"occurredAt\":\"2026-08-26T00:00:00Z\"}"
                         .formatted(UUID.randomUUID())));
     }
 }

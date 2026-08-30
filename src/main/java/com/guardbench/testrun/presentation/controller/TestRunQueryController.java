@@ -146,19 +146,9 @@ public class TestRunQueryController {
                     @Pattern(regexp = ".*\\S.*", message = "category는 공백일 수 없습니다.") String category,
             @RequestParam(required = false) Action expectedAction,
             @RequestParam(required = false) Severity severity,
-            @RequestParam(required = false) TestExecutionStatus baselineExecutionStatus,
-            @RequestParam(required = false) TestExecutionStatus candidateExecutionStatus,
+            @RequestParam(required = false) TestExecutionStatus executionStatus,
             @RequestParam(required = false)
-                    @Pattern(regexp = "PASS|FAIL", message = "허용되지 않은 값입니다.") String assertionStatus,
-            @RequestParam(required = false)
-                    @Pattern(regexp = "COMPARABLE|NOT_COMPARABLE", message = "허용되지 않은 값입니다.")
-                    String comparabilityStatus,
-            @RequestParam(required = false)
-                    @Pattern(
-                            regexp = "NO_CHANGE|SECURITY_REGRESSION|USABILITY_REGRESSION|IMPROVEMENT"
-                                    + "|POLICY_BEHAVIOR_CHANGED",
-                            message = "허용되지 않은 값입니다.")
-                    String changeType) {
+                    @Pattern(regexp = "PASS|FAIL", message = "허용되지 않은 값입니다.") String assertionStatus) {
         List<SortOrder<TestRunResultSortField>> sortOrders =
                 SortParamParser.parse(sort, TestRunResultSortField.class);
         TestRunResultListCriteria criteria = new TestRunResultListCriteria(
@@ -167,11 +157,8 @@ public class TestRunQueryController {
                 category,
                 expectedAction,
                 severity,
-                baselineExecutionStatus,
-                candidateExecutionStatus,
+                executionStatus,
                 assertionStatus,
-                comparabilityStatus,
-                changeType,
                 sortOrders,
                 new PageCriteria(page, size));
 

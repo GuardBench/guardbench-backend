@@ -10,11 +10,11 @@ public record AssertionResult(AssertionStatus status) {
 
     static AssertionResult evaluate(
             EvaluationAction expectedAction,
-            EvaluationAction candidateAction) {
+            EvaluationAction actualAction) {
         Objects.requireNonNull(expectedAction, "Expected action must not be null");
-        Objects.requireNonNull(candidateAction, "Candidate action must not be null");
+        Objects.requireNonNull(actualAction, "Actual action must not be null");
 
-        return new AssertionResult(expectedAction == candidateAction
+        return new AssertionResult(expectedAction == actualAction
                 ? AssertionStatus.PASS
                 : AssertionStatus.FAIL);
     }

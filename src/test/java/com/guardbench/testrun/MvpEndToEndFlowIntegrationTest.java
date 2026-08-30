@@ -23,10 +23,9 @@ import com.guardbench.testrun.application.GetTestRunDetailService;
 import com.guardbench.testrun.application.GetTestRunResultListService;
 import com.guardbench.testrun.application.TestRunCreateCommand;
 import com.guardbench.testrun.application.TestRunCreateResult;
-import com.guardbench.testrun.application.messaging.TargetTypeCode;
-import com.guardbench.testrun.application.port.out.GuardrailExecutionResult;
-import com.guardbench.testrun.application.port.out.GuardrailFailureCode;
-import com.guardbench.testrun.application.port.out.GuardrailProviderException;
+import com.guardbench.testrun.application.port.out.TargetExecutionResult;
+import com.guardbench.testrun.application.port.out.TargetFailureCode;
+import com.guardbench.testrun.application.port.out.TargetProviderException;
 import com.guardbench.testrun.application.port.out.PageResult;
 import com.guardbench.testrun.application.port.out.TestRunDetail;
 import com.guardbench.testrun.application.port.out.TestRunResultItem;
@@ -88,7 +87,7 @@ class MvpEndToEndFlowIntegrationTest {
         fixture.insertTestCase(5002L, TEST_SUITE_ID, now);
 
         TestRunCreateResult created = createTestRunService.create(new TestRunCreateCommand(
-                TEST_SUITE_ID, "guardrail-1", "1", "guardrail-1", "DRAFT", null));
+                TEST_SUITE_ID, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", null));
 
         assertThat(created.status()).isEqualTo("QUEUED");
         assertThat(created.testCaseCount()).isEqualTo(2);
@@ -101,7 +100,7 @@ class MvpEndToEndFlowIntegrationTest {
         TestRunDetail detail = getTestRunDetailService.getTestRun(created.id());
         assertThat(detail.status()).isEqualTo(TestRunStatus.FINISHED);
         assertThat(detail.progress().processedTestCaseCount()).isEqualTo(2);
-        assertThat(detail.qualityGate().statusCode()).isEqualTo("PASS");
+        assertThat(detail.qualityGate().statusCode()).isEqualTo("NOT_EVALUATED");
 
         PageResult<TestRunResultItem> results = getTestRunResultListService.getResults(
                 created.id(), TestRunResultListCriteria.firstPage());
@@ -118,7 +117,7 @@ class MvpEndToEndFlowIntegrationTest {
         fixture.insertTestCase(5011L, TEST_SUITE_ID, now);
 
         TestRunCreateCommand command = new TestRunCreateCommand(
-                TEST_SUITE_ID, "guardrail-1", "1", "guardrail-1", "DRAFT", "e2e-idem-key-1");
+                TEST_SUITE_ID, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", "e2e-idem-key-1");
 
         TestRunCreateResult first = createTestRunService.create(command);
         TestRunCreateResult second = createTestRunService.create(command);
@@ -140,9 +139,9 @@ class MvpEndToEndFlowIntegrationTest {
         fixture.insertTestCase(5022L, otherSuiteId, now);
 
         TestRunCreateCommand first = new TestRunCreateCommand(
-                TEST_SUITE_ID, "guardrail-1", "1", "guardrail-1", "DRAFT", "e2e-idem-key-2");
+                TEST_SUITE_ID, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", "e2e-idem-key-2");
         TestRunCreateCommand conflicting = new TestRunCreateCommand(
-                otherSuiteId, "guardrail-1", "1", "guardrail-1", "DRAFT", "e2e-idem-key-2");
+                otherSuiteId, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", "e2e-idem-key-2");
 
         createTestRunService.create(first);
 
@@ -164,7 +163,7 @@ class MvpEndToEndFlowIntegrationTest {
         fixture.insertTestCase(5032L, TEST_SUITE_ID, now);
 
         TestRunCreateResult created = createTestRunService.create(new TestRunCreateCommand(
-                TEST_SUITE_ID, "guardrail-1", "1", "guardrail-1", "DRAFT", null));
+                TEST_SUITE_ID, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", null));
         List<Long> snapshotIds = snapshotIdsFor(created.id());
         long failingSnapshotId = snapshotIds.get(0);
         long healthySnapshotId = snapshotIds.get(1);
@@ -173,17 +172,15 @@ class MvpEndToEndFlowIntegrationTest {
 
         workerChain.execute(request -> {
             if (request.input().equals("failing-input")) {
-                throw new GuardrailProviderException(GuardrailFailureCode.TARGET_NOT_FOUND);
+                throw new TargetProviderException(TargetFailureCode.TARGET_NOT_FOUND);
             }
-            return GuardrailExecutionResult.succeeded("ALLOW");
+            return TargetExecutionResult.succeeded("ALLOW");
         });
 
         workerChain.resolveService().resolve(created.id());
         var executeService = workerChain.executeService();
-        executeService.execute(failingSnapshotId, TargetTypeCode.BASELINE);
-        executeService.execute(failingSnapshotId, TargetTypeCode.CANDIDATE);
-        executeService.execute(healthySnapshotId, TargetTypeCode.BASELINE);
-        executeService.execute(healthySnapshotId, TargetTypeCode.CANDIDATE);
+        executeService.execute(failingSnapshotId);
+        executeService.execute(healthySnapshotId);
         FinalizationOutcome outcome = workerChain.finalizeService().finalize(created.id());
 
         assertThat(outcome).isInstanceOf(FinalizationOutcome.Finalized.class);
@@ -193,7 +190,7 @@ class MvpEndToEndFlowIntegrationTest {
         assertThat(detail.progress().processedTestCaseCount()).isEqualTo(2);
 
         String failingExecutionStatus = jdbcTemplate.queryForObject(
-                "SELECT result_status FROM test_execution WHERE snapshot_id = ? AND target_type = 'CANDIDATE'",
+                "SELECT result_status FROM test_execution WHERE snapshot_id = ?",
                 String.class, failingSnapshotId);
         assertThat(failingExecutionStatus).isEqualTo("FAILED");
 
@@ -206,8 +203,8 @@ class MvpEndToEndFlowIntegrationTest {
         String qgStatus = jdbcTemplate.queryForObject(
                 "SELECT gate_status FROM quality_gate_result WHERE test_run_id = ?", String.class, created.id());
         assertThat(qgStatus)
-                .as("execution 성공률이 95% 미만이면 FAIL이다")
-                .isEqualTo("FAIL");
+                .as("비교 없는 단일 Target run은 Quality Gate를 평가하지 않는다")
+                .isEqualTo("NOT_EVALUATED");
     }
 
     @Test
@@ -218,10 +215,10 @@ class MvpEndToEndFlowIntegrationTest {
         fixture.insertTestCase(5041L, TEST_SUITE_ID, now);
 
         TestRunCreateResult created = createTestRunService.create(new TestRunCreateCommand(
-                TEST_SUITE_ID, "guardrail-1", "1", "guardrail-1", "DRAFT", null));
+                TEST_SUITE_ID, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", null));
 
-        workerChain.materialize(request -> {
-            throw new GuardrailProviderException(GuardrailFailureCode.TARGET_NOT_FOUND);
+        workerChain.prepare(request -> {
+            throw new TargetProviderException(TargetFailureCode.TARGET_NOT_FOUND);
         });
 
         // ADR 0005: 최대 3회 시도 후 영구 실패로 종결한다.
@@ -245,7 +242,7 @@ class MvpEndToEndFlowIntegrationTest {
 
         Integer notStartedCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM test_execution WHERE result_status = 'NOT_STARTED'", Integer.class);
-        assertThat(notStartedCount).isEqualTo(2); // BASELINE + CANDIDATE
+        assertThat(notStartedCount).isEqualTo(1);
     }
 
     @Test
@@ -257,7 +254,7 @@ class MvpEndToEndFlowIntegrationTest {
         fixture.insertTestCase(testCaseId, TEST_SUITE_ID, now);
 
         TestRunCreateResult created = createTestRunService.create(new TestRunCreateCommand(
-                TEST_SUITE_ID, "guardrail-1", "1", "guardrail-1", "DRAFT", null));
+                TEST_SUITE_ID, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", null));
         List<Long> snapshotIds = snapshotIdsFor(created.id());
         assertThat(snapshotIds).hasSize(1);
         long snapshotId = snapshotIds.getFirst();
@@ -266,7 +263,7 @@ class MvpEndToEndFlowIntegrationTest {
 
         TestRunDetail beforeDeletion = getTestRunDetailService.getTestRun(created.id());
         assertThat(beforeDeletion.status()).isEqualTo(TestRunStatus.FINISHED);
-        assertThat(beforeDeletion.qualityGate().statusCode()).isEqualTo("PASS");
+        assertThat(beforeDeletion.qualityGate().statusCode()).isEqualTo("NOT_EVALUATED");
 
         testCaseService.delete(testCaseId);
 
@@ -284,7 +281,7 @@ class MvpEndToEndFlowIntegrationTest {
         assertThat(afterDeletion.status()).isEqualTo(TestRunStatus.FINISHED);
         assertThat(afterDeletion.qualityGate().statusCode())
                 .as("과거 TestRun의 Quality Gate 결과는 원본 TestCase 삭제와 무관하게 유지돼야 한다")
-                .isEqualTo("PASS");
+                .isEqualTo("NOT_EVALUATED");
 
         PageResult<TestRunResultItem> resultsAfterDeletion = getTestRunResultListService.getResults(
                 created.id(), TestRunResultListCriteria.firstPage());
@@ -294,8 +291,8 @@ class MvpEndToEndFlowIntegrationTest {
     }
 
     @Test
-    @DisplayName("모든 실행이 성공해도 Candidate가 BLOCK 기대를 ALLOW로 완화하면 SECURITY_REGRESSION으로 QG는 FAIL이다")
-    void securityRegressionCausesFailingQualityGateEvenWithAllExecutionsSucceeded() {
+    @DisplayName("단일 Target이 BLOCK 기대를 ALLOW로 응답하면 assertion은 FAIL이고 QG는 NOT_EVALUATED다")
+    void assertionFailureDoesNotCreateComparisonQualityGate() {
         Instant now = Instant.parse("2026-08-27T00:00:00Z");
         fixture.insertTestSuite(TEST_SUITE_ID, now);
         long testCaseId = 5061L;
@@ -304,17 +301,13 @@ class MvpEndToEndFlowIntegrationTest {
         jdbcTemplate.update("UPDATE test_case SET expected_action = 'BLOCK' WHERE id = ?", testCaseId);
 
         TestRunCreateResult created = createTestRunService.create(new TestRunCreateCommand(
-                TEST_SUITE_ID, "guardrail-1", "1", "guardrail-1", "DRAFT", null));
+                TEST_SUITE_ID, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", null));
         List<Long> snapshotIds = snapshotIdsFor(created.id());
         // Snapshot은 접수 시점에 TestCase의 expected_action을 복제하므로 함께 갱신한다.
         jdbcTemplate.update("UPDATE test_case_snapshot SET expected_action = 'BLOCK' WHERE test_run_id = ?",
                 created.id());
 
-        // BASELINE(guardrailVersion="1")은 정책대로 BLOCK, CANDIDATE(materialize 결과 "2")는
-        // 완화되어 ALLOW를 반환하도록 target을 version으로 구분한다.
-        workerChain.execute(request -> "1".equals(request.guardrailVersion())
-                ? GuardrailExecutionResult.succeeded("BLOCK")
-                : GuardrailExecutionResult.succeeded("ALLOW"));
+        workerChain.execute(request -> TargetExecutionResult.succeeded("ALLOW"));
 
         workerChain.runFullWorkerChain(created.id(), snapshotIds);
 
@@ -327,12 +320,11 @@ class MvpEndToEndFlowIntegrationTest {
         String qgStatus = jdbcTemplate.queryForObject(
                 "SELECT gate_status FROM quality_gate_result WHERE test_run_id = ?", String.class, created.id());
         assertThat(qgStatus)
-                .as("Candidate의 BLOCK→ALLOW 완화는 SECURITY_REGRESSION이므로 QG는 FAIL이다")
-                .isEqualTo("FAIL");
-
-        String changeType = jdbcTemplate.queryForObject(
-                "SELECT change_type FROM change_result WHERE snapshot_id = ?", String.class, snapshotIds.getFirst());
-        assertThat(changeType).isEqualTo("SECURITY_REGRESSION");
+                .as("비교 결과를 생성하지 않으므로 QG는 평가하지 않는다")
+                .isEqualTo("NOT_EVALUATED");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT assertion_status FROM assertion_result WHERE snapshot_id = ?",
+                String.class, snapshotIds.getFirst())).isEqualTo("FAIL");
     }
 
     // ─── Helper ──────────────────────────────────────────────────────

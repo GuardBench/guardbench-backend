@@ -23,13 +23,13 @@ class PostgresExecutionClaimAdapter implements ExecutionClaimPort {
 
     @Override
     @Transactional
-    public ClaimResult tryAcquire(long snapshotId, String targetType) {
+    public ClaimResult tryAcquire(long snapshotId) {
         UUID newToken = UUID.randomUUID();
         List<?> rows = entityManager.createNativeQuery(
                         """
-                        INSERT INTO test_execution_claim (snapshot_id, target_type, claim_token, lease_until, attempt_count, claimed_at, updated_at)
-                        VALUES (:snapshotId, :targetType, CAST(:claimToken AS uuid), clock_timestamp() + INTERVAL '%d seconds', 1, clock_timestamp(), clock_timestamp())
-                        ON CONFLICT (snapshot_id, target_type) DO UPDATE
+                        INSERT INTO test_execution_claim (snapshot_id, claim_token, lease_until, attempt_count, claimed_at, updated_at)
+                        VALUES (:snapshotId, CAST(:claimToken AS uuid), clock_timestamp() + INTERVAL '%d seconds', 1, clock_timestamp(), clock_timestamp())
+                        ON CONFLICT (snapshot_id) DO UPDATE
                         SET claim_token = EXCLUDED.claim_token,
                             lease_until = clock_timestamp() + INTERVAL '%d seconds',
                             attempt_count = test_execution_claim.attempt_count + 1,
@@ -38,7 +38,6 @@ class PostgresExecutionClaimAdapter implements ExecutionClaimPort {
                         RETURNING claim_token, attempt_count
                         """.formatted(LEASE_SECONDS, LEASE_SECONDS))
                 .setParameter("snapshotId", snapshotId)
-                .setParameter("targetType", targetType)
                 .setParameter("claimToken", newToken.toString())
                 .getResultList();
         if (rows.isEmpty()) {
@@ -49,19 +48,17 @@ class PostgresExecutionClaimAdapter implements ExecutionClaimPort {
 
     @Override
     @Transactional(readOnly = true)
-    public boolean isHeldBy(long snapshotId, String targetType, UUID claimToken) {
+    public boolean isHeldBy(long snapshotId, UUID claimToken) {
         Object held = entityManager.createNativeQuery(
                         """
                         SELECT EXISTS (
                             SELECT 1 FROM test_execution_claim
                             WHERE snapshot_id = :snapshotId
-                              AND target_type = :targetType
                               AND claim_token = CAST(:claimToken AS uuid)
                               AND lease_until > clock_timestamp()
                         )
                         """)
                 .setParameter("snapshotId", snapshotId)
-                .setParameter("targetType", targetType)
                 .setParameter("claimToken", claimToken.toString())
                 .getSingleResult();
         return Boolean.TRUE.equals(held);

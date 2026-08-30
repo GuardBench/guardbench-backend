@@ -22,27 +22,16 @@ class ExecutionContextQueryAdapter implements LoadExecutionContextPort {
     }
 
     @Override
-    public Optional<ExecutionContext> load(long snapshotId, String targetType) {
+    public Optional<ExecutionContext> load(long snapshotId) {
         return snapshotRepository.findById(snapshotId)
                 .flatMap(snapshot -> testRunRepository.findById(snapshot.testRunId)
-                        .map(testRun -> toExecutionContext(snapshot, testRun, targetType)));
+                        .map(testRun -> toExecutionContext(snapshot, testRun)));
     }
 
     private static ExecutionContext toExecutionContext(
             TestCaseSnapshotEntity snapshot,
-            TestRunEntity testRun,
-            String targetType
+            TestRunEntity testRun
     ) {
-        String guardrailId = testRun.baselineGuardrailId;
-        String version = resolveVersion(testRun, targetType);
-        return new ExecutionContext(guardrailId, version, snapshot.input, testRun.id);
-    }
-
-    private static String resolveVersion(TestRunEntity testRun, String targetType) {
-        return switch (targetType) {
-            case "BASELINE" -> testRun.baselineVersion;
-            case "CANDIDATE" -> testRun.candidateResolvedVersion;
-            default -> throw new IllegalArgumentException("unknown target type: " + targetType);
-        };
+        return new ExecutionContext(testRun.targetReferenceId, snapshot.input, testRun.id);
     }
 }

@@ -28,7 +28,7 @@ class OutboxAdapterIntegrationTest {
 
     private static final Instant BASE = Instant.parse("2026-08-25T00:00:00Z");
     private static String payload(UUID eventId, long testRunId) {
-        return "{\"eventId\":\"" + eventId + "\",\"eventType\":\"TestRunRequested\",\"schemaVersion\":1,\"testRunId\":"
+        return "{\"eventId\":\"" + eventId + "\",\"eventType\":\"TestRunRequested\",\"schemaVersion\":2,\"testRunId\":"
                 + testRunId + ",\"occurredAt\":\"2026-08-25T00:00:00Z\"}";
     }
 
@@ -57,14 +57,14 @@ class OutboxAdapterIntegrationTest {
     }
 
     @Test
-    @DisplayName("실행 이벤트 payload에 snapshotId 또는 targetType이 없으면 이벤트를 만들 수 없다")
+    @DisplayName("실행 이벤트 payload에 snapshotId가 없으면 이벤트를 만들 수 없다")
     void rejectsExecutionPayloadWithoutRequiredFields() {
         UUID eventId = UUID.randomUUID();
-        String missingTarget = "{\"eventId\":\"" + eventId
-                + "\",\"eventType\":\"TestExecutionRequested\",\"schemaVersion\":1,\"testRunId\":1,\"snapshotId\":2,\"occurredAt\":\"2026-08-25T00:00:00Z\"}";
+        String missingSnapshot = "{\"eventId\":\"" + eventId
+                + "\",\"eventType\":\"TestExecutionRequested\",\"schemaVersion\":2,\"testRunId\":1,\"occurredAt\":\"2026-08-25T00:00:00Z\"}";
 
         assertThrows(IllegalArgumentException.class, () -> OutboxEventRecord.pending(
-                eventId, "TestExecutionRequested", missingTarget, "TestExecutionRequested:2:BASELINE", BASE));
+                eventId, "TestExecutionRequested", missingSnapshot, "TestExecutionRequested:2", BASE));
     }
 
     @Test

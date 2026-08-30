@@ -95,8 +95,8 @@ class OutboxPublisherTest {
 
     private static OutboxEventRecord event(String eventType, long id) {
         UUID eventId = UUID.randomUUID();
-        String suffix = eventType.equals("TestRunRequested") ? "" : ",\"snapshotId\":%d,\"targetType\":\"BASELINE\"".formatted(id);
-        String payload = "{\"eventId\":\"%s\",\"eventType\":\"%s\",\"schemaVersion\":1,\"testRunId\":%d,\"occurredAt\":\"2026-08-26T00:00:00Z\"%s}"
+        String suffix = eventType.equals("TestRunRequested") ? "" : ",\"snapshotId\":%d".formatted(id);
+        String payload = "{\"eventId\":\"%s\",\"eventType\":\"%s\",\"schemaVersion\":2,\"testRunId\":%d,\"occurredAt\":\"2026-08-26T00:00:00Z\"%s}"
                 .formatted(eventId, eventType, id, suffix);
         return OutboxEventRecord.pending(eventId, eventType, payload, eventType + ":" + id, Instant.parse("2026-08-26T00:00:00Z"));
     }

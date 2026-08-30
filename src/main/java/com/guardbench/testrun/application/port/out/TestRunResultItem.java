@@ -13,11 +13,8 @@ public record TestRunResultItem(
         Action expectedAction,
         Severity severity,
         String category,
-        TestExecutionView baselineExecution,
-        TestExecutionView candidateExecution,
-        String assertionStatusCode,
-        String comparabilityStatusCode,
-        String changeTypeCode) {
+        TestExecutionView execution,
+        String assertionStatusCode) {
     public TestRunResultItem {
         if (snapshotId <= 0 || testCaseId <= 0) {
             throw new IllegalArgumentException("snapshotId and testCaseId must be positive");
@@ -27,18 +24,8 @@ public record TestRunResultItem(
         requireNonBlank(category, "category");
         Objects.requireNonNull(expectedAction, "expectedAction must not be null");
         Objects.requireNonNull(severity, "severity must not be null");
-        Objects.requireNonNull(baselineExecution, "baselineExecution must not be null");
-        Objects.requireNonNull(candidateExecution, "candidateExecution must not be null");
+        Objects.requireNonNull(execution, "execution must not be null");
         validateCode(assertionStatusCode, "assertionStatusCode", "PASS", "FAIL");
-        validateCode(comparabilityStatusCode, "comparabilityStatusCode", "COMPARABLE", "NOT_COMPARABLE");
-        validateCode(changeTypeCode, "changeTypeCode", "NO_CHANGE", "SECURITY_REGRESSION",
-                "USABILITY_REGRESSION", "IMPROVEMENT", "POLICY_BEHAVIOR_CHANGED");
-        if (comparabilityStatusCode == null && changeTypeCode != null) {
-            throw new IllegalArgumentException("changeTypeCode requires comparabilityStatusCode");
-        }
-        if ("NOT_COMPARABLE".equals(comparabilityStatusCode) && changeTypeCode != null) {
-            throw new IllegalArgumentException("NOT_COMPARABLE result cannot have changeTypeCode");
-        }
     }
 
     private static void requireNonBlank(String value, String field) {

@@ -21,10 +21,9 @@ final class TestRunCreateFingerprint {
         String normalized = String.join(
                 "\u0000",
                 Long.toString(intent.testSuiteId()),
-                intent.baselineGuardrailId(),
-                intent.baselineVersion(),
-                intent.candidateGuardrailId(),
-                intent.candidateSource()
+                intent.targetType(),
+                intent.targetIdentifier(),
+                intent.targetRevision()
         );
         return sha256Hex(normalized);
     }

@@ -67,8 +67,7 @@ class TestRunFinalizationIntegrationAdapter implements LoadTestRunExecutionFacts
         return new SnapshotExecutionFact(
                 source.snapshotId(),
                 source.expectedActionCode(),
-                toEvaluationTargetFact(source.baseline()),
-                toEvaluationTargetFact(source.candidate())
+                toEvaluationTargetFact(source.execution())
         );
     }
 

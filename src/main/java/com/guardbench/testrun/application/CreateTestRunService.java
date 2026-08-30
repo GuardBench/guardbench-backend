@@ -21,11 +21,11 @@ import com.guardbench.testrun.application.port.out.NextTestCaseSnapshotIdPort;
 import com.guardbench.testrun.application.port.out.NextTestRunIdPort;
 import com.guardbench.testrun.application.port.out.OutboxEventRecord;
 import com.guardbench.testrun.application.port.out.OutboxPort;
+import com.guardbench.testrun.application.port.out.RegisterTargetReferencePort;
+import com.guardbench.testrun.application.port.out.TargetRegistration;
 import com.guardbench.testrun.application.port.out.TestCaseSnapshotSource;
-import com.guardbench.testrun.domain.BaselineTarget;
-import com.guardbench.testrun.domain.CandidateSource;
-import com.guardbench.testrun.domain.CandidateTarget;
 import com.guardbench.testrun.domain.SourceTestSuiteId;
+import com.guardbench.testrun.domain.TargetReference;
 import com.guardbench.testrun.domain.TestCaseSnapshot;
 import com.guardbench.testrun.domain.TestCaseSnapshotId;
 import com.guardbench.testrun.domain.TestRun;
@@ -36,9 +36,9 @@ import com.guardbench.testrun.domain.repository.TestRunRepository;
 /**
  * TestRun을 멱등하게 접수하는 Application Service다.
  *
- * <p>ADR 0005/0008에 따라 Idempotency 판정, TestSuite/활성 TestCase 확인, TestRun 접수, Snapshot
- * 고정과 {@code TestRunRequested} Outbox 저장을 하나의 트랜잭션에서 조율한다. Candidate DRAFT
- * materialization, resolution/execution claim과 fan-out은 이 Service의 책임이 아니다(#18 범위).
+ * <p>ADR 0010에 따라 Idempotency 판정, TestSuite/활성 TestCase 확인, TestRun 접수, Target reference·Snapshot
+ * 고정과 {@code TestRunRequested} Outbox 저장을 하나의 트랜잭션에서 조율한다. Target
+ * preparation, resolution/execution claim과 fan-out은 이 Service의 책임이 아니다.
  */
 @Service
 public class CreateTestRunService {
@@ -54,6 +54,7 @@ public class CreateTestRunService {
     private final TestCaseSnapshotRepository testCaseSnapshotRepository;
     private final OutboxPort outboxPort;
     private final IdempotencyPort idempotencyPort;
+    private final RegisterTargetReferencePort registerTargetReferencePort;
     private final Clock clock;
 
     public CreateTestRunService(
@@ -65,6 +66,7 @@ public class CreateTestRunService {
             TestCaseSnapshotRepository testCaseSnapshotRepository,
             OutboxPort outboxPort,
             IdempotencyPort idempotencyPort,
+            RegisterTargetReferencePort registerTargetReferencePort,
             Clock clock
     ) {
         this.existsTestSuitePort = existsTestSuitePort;
@@ -75,6 +77,7 @@ public class CreateTestRunService {
         this.testCaseSnapshotRepository = testCaseSnapshotRepository;
         this.outboxPort = outboxPort;
         this.idempotencyPort = idempotencyPort;
+        this.registerTargetReferencePort = registerTargetReferencePort;
         this.clock = clock;
     }
 
@@ -115,15 +118,19 @@ public class CreateTestRunService {
 
         Instant now = clock.instant();
         TestRunId testRunId = nextTestRunIdPort.nextId();
+        TargetReference targetReference = new TargetReference(UUID.randomUUID().toString());
+
+        registerTargetReferencePort.register(
+                targetReference,
+                new TargetRegistration(
+                        command.targetType(),
+                        command.targetIdentifier(),
+                        command.targetRevision()));
 
         TestRun testRun = TestRun.queue(
                 testRunId,
                 new SourceTestSuiteId(command.testSuiteId()),
-                new BaselineTarget(command.baselineGuardrailId(), command.baselineVersion()),
-                new CandidateTarget(
-                        command.candidateGuardrailId(),
-                        CandidateSource.valueOf(command.candidateSource()),
-                        null),
+                targetReference,
                 sources.size(),
                 now
         );
@@ -157,7 +164,7 @@ public class CreateTestRunService {
     private OutboxEventRecord testRunRequestedEvent(TestRunId testRunId, Instant occurredAt) {
         UUID eventId = UUID.randomUUID();
         String payload = """
-                {"eventId":"%s","eventType":"TestRunRequested","schemaVersion":1,"testRunId":%d,"occurredAt":"%s"}
+                {"eventId":"%s","eventType":"TestRunRequested","schemaVersion":2,"testRunId":%d,"occurredAt":"%s"}
                 """.formatted(eventId, testRunId.value(), occurredAt).strip();
         String deduplicationKey = "TestRunRequested:" + testRunId.value();
         return OutboxEventRecord.pending(eventId, "TestRunRequested", payload, deduplicationKey, occurredAt);

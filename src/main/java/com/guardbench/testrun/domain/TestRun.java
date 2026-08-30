@@ -7,8 +7,7 @@ public final class TestRun {
 
     private final TestRunId id;
     private final SourceTestSuiteId sourceTestSuiteId;
-    private final BaselineTarget baselineTarget;
-    private CandidateTarget candidateTarget;
+    private final TargetReference targetReference;
     private final int testCaseCount;
     private int processedTestCaseCount;
     private TestRunStatus status;
@@ -18,18 +17,13 @@ public final class TestRun {
     private TestRun(
             TestRunId id,
             SourceTestSuiteId sourceTestSuiteId,
-            BaselineTarget baselineTarget,
-            CandidateTarget candidateTarget,
+            TargetReference targetReference,
             int testCaseCount,
             Instant createdAt
     ) {
         this.id = Objects.requireNonNull(id, "TestRun ID must not be null");
         this.sourceTestSuiteId = Objects.requireNonNull(sourceTestSuiteId, "source TestSuite ID must not be null");
-        this.baselineTarget = Objects.requireNonNull(baselineTarget, "baseline target must not be null");
-        this.candidateTarget = Objects.requireNonNull(candidateTarget, "candidate target must not be null");
-        if (!baselineTarget.guardrailId().equals(candidateTarget.guardrailId())) {
-            throw new IllegalArgumentException("baseline and candidate must use the same guardrail ID");
-        }
+        this.targetReference = Objects.requireNonNull(targetReference, "target reference must not be null");
         if (testCaseCount <= 0) {
             throw new IllegalArgumentException("test case count must be positive");
         }
@@ -41,19 +35,17 @@ public final class TestRun {
     public static TestRun queue(
             TestRunId id,
             SourceTestSuiteId sourceTestSuiteId,
-            BaselineTarget baselineTarget,
-            CandidateTarget candidateTarget,
+            TargetReference targetReference,
             int testCaseCount,
             Instant createdAt
     ) {
-        return new TestRun(id, sourceTestSuiteId, baselineTarget, candidateTarget, testCaseCount, createdAt);
+        return new TestRun(id, sourceTestSuiteId, targetReference, testCaseCount, createdAt);
     }
 
     public static TestRun rehydrate(
             TestRunId id,
             SourceTestSuiteId sourceTestSuiteId,
-            BaselineTarget baselineTarget,
-            CandidateTarget candidateTarget,
+            TargetReference targetReference,
             int testCaseCount,
             int processedTestCaseCount,
             TestRunStatus status,
@@ -63,8 +55,7 @@ public final class TestRun {
         TestRun testRun = new TestRun(
                 id,
                 sourceTestSuiteId,
-                baselineTarget,
-                candidateTarget,
+                targetReference,
                 testCaseCount,
                 timeline.createdAt()
         );
@@ -84,9 +75,8 @@ public final class TestRun {
         status = TestRunStatus.PREPARING;
     }
 
-    public void beginRunning(String resolvedCandidateVersion, Instant runningAt) {
+    public void beginRunning(Instant runningAt) {
         requireStatus(TestRunStatus.PREPARING, "begin execution");
-        candidateTarget = candidateTarget.resolve(resolvedCandidateVersion);
         timeline = timeline.touch(runningAt);
         status = TestRunStatus.RUNNING;
     }
@@ -124,12 +114,8 @@ public final class TestRun {
         return sourceTestSuiteId;
     }
 
-    public BaselineTarget baselineTarget() {
-        return baselineTarget;
-    }
-
-    public CandidateTarget candidateTarget() {
-        return candidateTarget;
+    public TargetReference targetReference() {
+        return targetReference;
     }
 
     public int testCaseCount() {

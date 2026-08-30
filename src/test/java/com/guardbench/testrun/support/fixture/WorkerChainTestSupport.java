@@ -1,6 +1,7 @@
 package com.guardbench.testrun.support.fixture;
 
 import java.time.Clock;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,14 +18,12 @@ import com.guardbench.evaluation.domain.repository.QualityGateResultRepository;
 import com.guardbench.evaluation.domain.repository.SnapshotEvaluationRepository;
 import com.guardbench.testrun.application.ExecuteTestRunService;
 import com.guardbench.testrun.application.ResolveTestRunService;
-import com.guardbench.testrun.application.messaging.TargetTypeCode;
 import com.guardbench.testrun.application.port.out.ExecutionClaimPort;
-import com.guardbench.testrun.application.port.out.GuardrailExecutionPort;
-import com.guardbench.testrun.application.port.out.GuardrailExecutionRequest;
-import com.guardbench.testrun.application.port.out.GuardrailExecutionResult;
-import com.guardbench.testrun.application.port.out.GuardrailMaterializationPort;
-import com.guardbench.testrun.application.port.out.GuardrailMaterializationRequest;
-import com.guardbench.testrun.application.port.out.GuardrailMaterializedVersion;
+import com.guardbench.testrun.application.port.out.TargetExecutionPort;
+import com.guardbench.testrun.application.port.out.TargetExecutionRequest;
+import com.guardbench.testrun.application.port.out.TargetExecutionResult;
+import com.guardbench.testrun.application.port.out.TargetPreparationPort;
+import com.guardbench.testrun.application.port.out.TargetPreparationRequest;
 import com.guardbench.testrun.application.port.out.LoadExecutionContextPort;
 import com.guardbench.testrun.application.port.out.LoadSnapshotIdsByTestRunPort;
 import com.guardbench.testrun.application.port.out.OutboxPort;
@@ -40,7 +39,7 @@ import com.guardbench.testrun.domain.repository.TestRunRepository;
  *
  * <p>{@code guardbench.worker.enabled=true} 없이도 실제 Repository/Port
  * Spring Bean(claim, outbox, execution context 등)을 그대로 재사용하고,
- * Bedrock 관련 두 Port({@link GuardrailMaterializationPort}, {@link GuardrailExecutionPort})만
+ * Provider 관련 두 Port({@link TargetPreparationPort}, {@link TargetExecutionPort})만
  * Test Adapter로 대체한다. LocalStack이나 실제 AWS 자격 증명이 필요하지 않다.
  *
  * <p>{@link FinalizeTestRunService#finalize}는 {@code @Transactional}이 선언 메서드
@@ -48,10 +47,10 @@ import com.guardbench.testrun.domain.repository.TestRunRepository;
  * 이 클래스는 {@code @TestConfiguration}의 {@code @Bean} 메서드로 등록해
  * 운영 조립과 동일한 프록시를 갖도록 한다({@code TestRunFinalizationConcurrencyIntegrationTest}와 동일 패턴).
  *
- * <p>{@link #materialize(Function)}과 {@link #execute(Function)}으로 각 시나리오가
- * 원하는 Candidate version 또는 Provider 응답을 설정한 뒤,
+ * <p>{@link #prepare(Consumer)}와 {@link #execute(Function)}으로 각 시나리오가
+ * 원하는 Target 준비 또는 Provider 응답을 설정한 뒤,
  * {@link #resolveService()}·{@link #executeService()}·{@link #finalizeService}로
- * Resolve → Execute(BASELINE) → Execute(CANDIDATE) → Finalize를 순차 호출하면
+ * Resolve → Execute → Finalize를 순차 호출하면
  * TestSuite → TestCase → TestRun 전체 흐름을 SQS/Bedrock 없이 재현할 수 있다.
  */
 @TestConfiguration(proxyBeanMethods = false)
@@ -127,8 +126,8 @@ public class WorkerChainTestSupport {
         private final FinalizeTestRunService finalizeTestRunService;
         private final Clock clock;
 
-        private Function<GuardrailMaterializationRequest, GuardrailMaterializedVersion> materializationBehavior;
-        private Function<GuardrailExecutionRequest, GuardrailExecutionResult> executionBehavior;
+        private Consumer<TargetPreparationRequest> preparationBehavior;
+        private Function<TargetExecutionRequest, TargetExecutionResult> executionBehavior;
 
         @Autowired
         WorkerChain(
@@ -160,18 +159,17 @@ public class WorkerChainTestSupport {
 
         /** 각 테스트 시작 전에 이전 시나리오의 Test Adapter 동작을 초기화한다. */
         public void reset() {
-            materializationBehavior =
-                    request -> new GuardrailMaterializedVersion(request.guardrailIdentifier(), "2");
-            executionBehavior = request -> GuardrailExecutionResult.succeeded("ALLOW");
+            preparationBehavior = request -> { };
+            executionBehavior = request -> TargetExecutionResult.succeeded("ALLOW");
         }
 
-        /** Candidate materialization 결과를 시나리오별로 재정의한다. */
-        public void materialize(Function<GuardrailMaterializationRequest, GuardrailMaterializedVersion> behavior) {
-            this.materializationBehavior = behavior;
+        /** Target 준비 동작을 시나리오별로 재정의한다. */
+        public void prepare(Consumer<TargetPreparationRequest> behavior) {
+            this.preparationBehavior = behavior;
         }
 
         /** Guardrail 실행 결과를 시나리오별로 재정의한다. */
-        public void execute(Function<GuardrailExecutionRequest, GuardrailExecutionResult> behavior) {
+        public void execute(Function<TargetExecutionRequest, TargetExecutionResult> behavior) {
             this.executionBehavior = behavior;
         }
 
@@ -179,7 +177,7 @@ public class WorkerChainTestSupport {
             return new ResolveTestRunService(
                     resolutionClaimPort,
                     testRunRepository,
-                    request -> materializationBehavior.apply(request),
+                    request -> preparationBehavior.accept(request),
                     loadSnapshotIdsPort,
                     outboxPort,
                     testExecutionRepository,
@@ -206,7 +204,7 @@ public class WorkerChainTestSupport {
         }
 
         /**
-         * Resolve → Execute(BASELINE) → Execute(CANDIDATE) → Finalize를 모든 Snapshot에 대해
+         * Resolve → Execute → Finalize를 모든 Snapshot에 대해
          * 순차 실행한다. Outbox에 fan-out된 이벤트를 SQS로 발행하지 않고
          * Application Service를 직접 호출해 진행시킨다.
          *
@@ -217,8 +215,7 @@ public class WorkerChainTestSupport {
             resolveService().resolve(testRunId);
             ExecuteTestRunService executeService = executeService();
             for (long snapshotId : snapshotIds) {
-                executeService.execute(snapshotId, TargetTypeCode.BASELINE);
-                executeService.execute(snapshotId, TargetTypeCode.CANDIDATE);
+                executeService.execute(snapshotId);
             }
             finalizeTestRunService.finalize(testRunId);
         }

@@ -20,21 +20,17 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import com.guardbench.testrun.application.port.out.ClaimResult;
-import com.guardbench.testrun.application.port.out.GuardrailFailureCode;
-import com.guardbench.testrun.application.port.out.GuardrailMaterializationPort;
-import com.guardbench.testrun.application.port.out.GuardrailMaterializationRequest;
-import com.guardbench.testrun.application.port.out.GuardrailMaterializedVersion;
-import com.guardbench.testrun.application.port.out.GuardrailProviderException;
+import com.guardbench.testrun.application.port.out.TargetFailureCode;
+import com.guardbench.testrun.application.port.out.TargetPreparationPort;
+import com.guardbench.testrun.application.port.out.TargetPreparationRequest;
+import com.guardbench.testrun.application.port.out.TargetProviderException;
 import com.guardbench.testrun.application.port.out.LoadSnapshotIdsByTestRunPort;
 import com.guardbench.testrun.application.port.out.OutboxEventRecord;
 import com.guardbench.testrun.application.port.out.OutboxPort;
 import com.guardbench.testrun.application.port.out.ResolutionClaimPort;
 import com.guardbench.testrun.application.port.out.SaveNotEvaluatedQualityGatePort;
-import com.guardbench.testrun.domain.BaselineTarget;
-import com.guardbench.testrun.domain.CandidateSource;
-import com.guardbench.testrun.domain.CandidateTarget;
 import com.guardbench.testrun.domain.SourceTestSuiteId;
-import com.guardbench.testrun.domain.TargetType;
+import com.guardbench.testrun.domain.TargetReference;
 import com.guardbench.testrun.domain.TestCaseSnapshotId;
 import com.guardbench.testrun.domain.TestExecution;
 import com.guardbench.testrun.domain.TestExecutionId;
@@ -88,7 +84,7 @@ class ResolveTestRunServiceTest {
             TestRun testRun = queuedTestRun(TEST_RUN_ID, 3);
             testRunRepository.store(testRun);
             claimPort.willAcquire(TEST_RUN_ID);
-            materializationPort.willReturn(new GuardrailMaterializedVersion(GUARDRAIL_ID, "5"));
+            materializationPort.willSucceed();
             loadSnapshotIdsPort.setSnapshotIds(TEST_RUN_ID, List.of(10L, 20L, 30L));
 
             ResolveTestRunService.ResolutionOutcome outcome = service.resolve(TEST_RUN_ID);
@@ -97,10 +93,7 @@ class ResolveTestRunServiceTest {
 
             TestRun saved = testRunRepository.findById(new TestRunId(TEST_RUN_ID)).orElseThrow();
             assertEquals(TestRunStatus.RUNNING, saved.status());
-            assertEquals("5", saved.candidateTarget().resolvedVersion());
-
-            // 3 snapshots × 2 targets = 6 outbox events
-            assertEquals(6, outboxPort.savedEvents().size());
+            assertEquals(3, outboxPort.savedEvents().size());
             assertAllEventTypesAre("TestExecutionRequested", outboxPort.savedEvents());
             assertDeduplicationKeysUnique(outboxPort.savedEvents());
         }
@@ -112,13 +105,13 @@ class ResolveTestRunServiceTest {
             testRun.beginPreparing(FIXED_NOW.minusSeconds(10));
             testRunRepository.store(testRun);
             claimPort.willAcquire(TEST_RUN_ID);
-            materializationPort.willReturn(new GuardrailMaterializedVersion(GUARDRAIL_ID, "3"));
+            materializationPort.willSucceed();
             loadSnapshotIdsPort.setSnapshotIds(TEST_RUN_ID, List.of(100L, 200L));
 
             ResolveTestRunService.ResolutionOutcome outcome = service.resolve(TEST_RUN_ID);
 
             assertEquals(ResolveTestRunService.ResolutionOutcome.RESOLVED, outcome);
-            assertEquals(4, outboxPort.savedEvents().size());
+            assertEquals(2, outboxPort.savedEvents().size());
         }
     }
 
@@ -183,7 +176,7 @@ class ResolveTestRunServiceTest {
             testRunRepository.store(testRun);
             claimPort.willAcquire(TEST_RUN_ID);
             claimPort.setIsHeldByResult(false); // isHeldBy 재검증 실패
-            materializationPort.willReturn(new GuardrailMaterializedVersion(GUARDRAIL_ID, "5"));
+            materializationPort.willSucceed();
 
             ResolveTestRunService.ResolutionOutcome outcome = service.resolve(TEST_RUN_ID);
 
@@ -203,7 +196,7 @@ class ResolveTestRunServiceTest {
             TestRun testRun = queuedTestRun(TEST_RUN_ID, 2);
             testRunRepository.store(testRun);
             claimPort.willAcquireWithAttempt(TEST_RUN_ID, 1); // 첫 시도
-            materializationPort.willFail(GuardrailFailureCode.PROVIDER_UNAVAILABLE);
+            materializationPort.willFail(TargetFailureCode.PROVIDER_UNAVAILABLE);
 
             ResolveTestRunService.ResolutionOutcome outcome = service.resolve(TEST_RUN_ID);
 
@@ -219,7 +212,7 @@ class ResolveTestRunServiceTest {
             TestRun testRun = queuedTestRun(TEST_RUN_ID, 2);
             testRunRepository.store(testRun);
             claimPort.willAcquireWithAttempt(TEST_RUN_ID, 3); // 최대 시도 도달
-            materializationPort.willFail(GuardrailFailureCode.TARGET_NOT_FOUND);
+            materializationPort.willFail(TargetFailureCode.TARGET_NOT_FOUND);
             loadSnapshotIdsPort.setSnapshotIds(TEST_RUN_ID, List.of(10L, 20L));
 
             ResolveTestRunService.ResolutionOutcome outcome = service.resolve(TEST_RUN_ID);
@@ -231,8 +224,7 @@ class ResolveTestRunServiceTest {
             assertEquals(TestRunStatus.FINISHED, saved.status());
             assertEquals(TestRunExecutionOutcome.ERROR, saved.executionOutcome());
 
-            // 4개의 NOT_STARTED TestExecution (2 snapshots × 2 targets)
-            assertEquals(4, executionRepository.savedExecutions().size());
+            assertEquals(2, executionRepository.savedExecutions().size());
             for (TestExecution exec : executionRepository.savedExecutions()) {
                 assertEquals(TestExecutionStatus.NOT_STARTED, exec.status());
             }
@@ -248,22 +240,19 @@ class ResolveTestRunServiceTest {
     class DeduplicationKeys {
 
         @Test
-        @DisplayName("fan-out dedup key는 eventType:snapshotId:targetType 형식이다")
+        @DisplayName("fan-out dedup key는 eventType:snapshotId 형식이다")
         void deduplicationKeyFormat() {
             TestRun testRun = queuedTestRun(TEST_RUN_ID, 1);
             testRunRepository.store(testRun);
             claimPort.willAcquire(TEST_RUN_ID);
-            materializationPort.willReturn(new GuardrailMaterializedVersion(GUARDRAIL_ID, "2"));
+            materializationPort.willSucceed();
             loadSnapshotIdsPort.setSnapshotIds(TEST_RUN_ID, List.of(42L));
 
             service.resolve(TEST_RUN_ID);
 
             List<OutboxEventRecord> events = outboxPort.savedEvents();
-            assertEquals(2, events.size());
-            assertTrue(events.stream().anyMatch(e ->
-                    e.deduplicationKey().equals("TestExecutionRequested:42:BASELINE")));
-            assertTrue(events.stream().anyMatch(e ->
-                    e.deduplicationKey().equals("TestExecutionRequested:42:CANDIDATE")));
+            assertEquals(1, events.size());
+            assertEquals("TestExecutionRequested:42", events.getFirst().deduplicationKey());
         }
 
         @Test
@@ -272,14 +261,14 @@ class ResolveTestRunServiceTest {
             TestRun testRun = queuedTestRun(TEST_RUN_ID, 1);
             testRunRepository.store(testRun);
             claimPort.willAcquire(TEST_RUN_ID);
-            materializationPort.willReturn(new GuardrailMaterializedVersion(GUARDRAIL_ID, "1"));
+            materializationPort.willSucceed();
             loadSnapshotIdsPort.setSnapshotIds(TEST_RUN_ID, List.of(1L));
 
             service.resolve(TEST_RUN_ID);
 
             assertNotNull(materializationPort.lastRequest());
             assertEquals("guardbench-test-run-" + TEST_RUN_ID,
-                    materializationPort.lastRequest().clientRequestToken());
+                    materializationPort.lastRequest().idempotencyToken());
         }
     }
 
@@ -289,8 +278,7 @@ class ResolveTestRunServiceTest {
         return TestRun.queue(
                 new TestRunId(id),
                 new SourceTestSuiteId(1L),
-                new BaselineTarget(GUARDRAIL_ID, "1"),
-                new CandidateTarget(GUARDRAIL_ID, CandidateSource.DRAFT, null),
+                new TargetReference("target-ref-" + id),
                 testCaseCount,
                 FIXED_NOW.minusSeconds(60)
         );
@@ -299,7 +287,7 @@ class ResolveTestRunServiceTest {
     private static TestRun runningTestRun(long id) {
         TestRun testRun = queuedTestRun(id, 2);
         testRun.beginPreparing(FIXED_NOW.minusSeconds(30));
-        testRun.beginRunning("3", FIXED_NOW.minusSeconds(20));
+        testRun.beginRunning(FIXED_NOW.minusSeconds(20));
         return testRun;
     }
 
@@ -364,32 +352,28 @@ class ResolveTestRunServiceTest {
         }
     }
 
-    private static final class FakeMaterializationPort implements GuardrailMaterializationPort {
-        private GuardrailMaterializedVersion successResult;
-        private GuardrailFailureCode failureCode;
-        private GuardrailMaterializationRequest lastRequest;
+    private static final class FakeMaterializationPort implements TargetPreparationPort {
+        private TargetFailureCode failureCode;
+        private TargetPreparationRequest lastRequest;
 
-        void willReturn(GuardrailMaterializedVersion version) {
-            this.successResult = version;
+        void willSucceed() {
             this.failureCode = null;
         }
 
-        void willFail(GuardrailFailureCode code) {
+        void willFail(TargetFailureCode code) {
             this.failureCode = code;
-            this.successResult = null;
         }
 
-        GuardrailMaterializationRequest lastRequest() {
+        TargetPreparationRequest lastRequest() {
             return lastRequest;
         }
 
         @Override
-        public GuardrailMaterializedVersion materialize(GuardrailMaterializationRequest request) {
+        public void prepare(TargetPreparationRequest request) {
             this.lastRequest = request;
             if (failureCode != null) {
-                throw new GuardrailProviderException(failureCode);
+                throw new TargetProviderException(failureCode);
             }
-            return successResult;
         }
     }
 

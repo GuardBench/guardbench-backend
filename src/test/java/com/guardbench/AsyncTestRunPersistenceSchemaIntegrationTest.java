@@ -96,7 +96,7 @@ class AsyncTestRunPersistenceSchemaIntegrationTest {
     }
 
     @Test
-    @DisplayName("허용하지 않은 execution claim 대상과 Outbox event 값은 저장하지 않는다")
+    @DisplayName("허용하지 않은 execution claim과 Outbox event 값은 저장하지 않는다")
     void rejectsInvalidExecutionClaimAndOutboxValues(@Autowired JdbcTemplate jdbcTemplate) {
         insertTestRunFixture();
         fixture.insertSnapshot(1000L, 100L, 11L, CREATED_AT);
@@ -106,14 +106,13 @@ class AsyncTestRunPersistenceSchemaIntegrationTest {
                 () -> jdbcTemplate.update(
                         """
                         INSERT INTO test_execution_claim(
-                            snapshot_id, target_type, claim_token, lease_until, attempt_count, claimed_at, updated_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                            snapshot_id, claim_token, lease_until, attempt_count, claimed_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?)
                         """,
                         1000L,
-                        "UNKNOWN",
                         UUID.fromString("00000000-0000-0000-0000-000000000002"),
                         Timestamp.from(EXPIRES_AT),
-                        0,
+                        -1,
                         Timestamp.from(CREATED_AT),
                         Timestamp.from(CREATED_AT)
                 )

@@ -10,7 +10,6 @@ import com.guardbench.testrun.application.port.out.TestRunDetail;
 import com.guardbench.testrun.application.port.out.TestRunListItem;
 import com.guardbench.testrun.application.port.out.TestRunProgress;
 import com.guardbench.testrun.application.port.out.TestRunResultItem;
-import com.guardbench.testrun.application.port.out.TestRunTargets;
 import com.guardbench.common.presentation.dto.PageMetaRes;
 
 /**
@@ -37,7 +36,7 @@ public final class TestRunQueryResponseMapper {
                 detail.status().name(),
                 detail.testCaseCount(),
                 toProgressRes(detail.progress()),
-                toTargetsRes(detail.targets()),
+                new TargetReferenceRes(detail.target().referenceId()),
                 detail.executionOutcome() != null ? detail.executionOutcome().name() : null,
                 detail.qualityGate() != null ? toQualityGateRes(detail.qualityGate()) : null,
                 toIso(detail.createdAt()),
@@ -76,11 +75,8 @@ public final class TestRunQueryResponseMapper {
                 item.expectedAction().name(),
                 item.severity().name(),
                 item.category(),
-                toExecutionRes(item.baselineExecution()),
-                toExecutionRes(item.candidateExecution()),
-                item.assertionStatusCode(),
-                item.comparabilityStatusCode(),
-                item.changeTypeCode());
+                toExecutionRes(item.execution()),
+                item.assertionStatusCode());
     }
 
     private static TestExecutionResultRes toExecutionRes(TestExecutionView execution) {
@@ -95,16 +91,6 @@ public final class TestRunQueryResponseMapper {
 
     private static TestRunProgressRes toProgressRes(TestRunProgress progress) {
         return new TestRunProgressRes(progress.processedTestCaseCount(), progress.percent());
-    }
-
-    private static TestRunTargetsRes toTargetsRes(TestRunTargets targets) {
-        return new TestRunTargetsRes(
-                new BaselineExecutionTargetRes(
-                        targets.baseline().guardrailId(), targets.baseline().version()),
-                new CandidateExecutionTargetRes(
-                        targets.candidate().guardrailId(),
-                        targets.candidate().requestedSource().name(),
-                        targets.candidate().resolvedVersion()));
     }
 
     private static QualityGateRes toQualityGateRes(QualityGateView qualityGate) {

@@ -9,22 +9,19 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.guardbench.testrun.application.messaging.TargetTypeCode;
 import com.guardbench.testrun.application.port.out.ClaimResult;
-import com.guardbench.testrun.application.port.out.GuardrailMaterializationPort;
-import com.guardbench.testrun.application.port.out.GuardrailMaterializationRequest;
-import com.guardbench.testrun.application.port.out.GuardrailMaterializedVersion;
-import com.guardbench.testrun.application.port.out.GuardrailProviderException;
 import com.guardbench.testrun.application.port.out.LoadSnapshotIdsByTestRunPort;
 import com.guardbench.testrun.application.port.out.OutboxEventRecord;
 import com.guardbench.testrun.application.port.out.OutboxPort;
 import com.guardbench.testrun.application.port.out.ResolutionClaimPort;
 import com.guardbench.testrun.application.port.out.SaveNotEvaluatedQualityGatePort;
 import com.guardbench.testrun.application.port.out.TransactionalPhasePort;
+import com.guardbench.testrun.application.port.out.TargetPreparationPort;
+import com.guardbench.testrun.application.port.out.TargetPreparationRequest;
+import com.guardbench.testrun.application.port.out.TargetProviderException;
 import com.guardbench.testrun.domain.TestExecution;
 import com.guardbench.testrun.domain.TestExecutionId;
 import com.guardbench.testrun.domain.TestCaseSnapshotId;
-import com.guardbench.testrun.domain.TargetType;
 import com.guardbench.testrun.domain.TestRun;
 import com.guardbench.testrun.domain.TestRunId;
 import com.guardbench.testrun.domain.TestRunStatus;
@@ -34,15 +31,14 @@ import com.guardbench.testrun.domain.repository.TestRunRepository;
 /**
  * Resolution Worker Application Service다.
  *
- * <p>ADR 0005에 따라 {@code TestRunRequested} 메시지를 소비하여 Candidate DRAFT를
- * materialization하고, 모든 Snapshot의 Baseline/Candidate {@code TestExecutionRequested}
- * Outbox를 fan-out한다.
+ * <p>ADR 0010에 따라 {@code TestRunRequested} 메시지를 소비하여 Target을
+ * 준비하고, 모든 Snapshot의 단일 {@code TestExecutionRequested} Outbox를 fan-out한다.
  *
  * <p>처리 순서:
  * <ol>
  *   <li>resolution claim 선점</li>
  *   <li>QUEUED → PREPARING 전환 (persistence phase 트랜잭션)</li>
- *   <li>Candidate DRAFT materialization (DB 트랜잭션 밖)</li>
+ *   <li>Target 준비 (DB 트랜잭션 밖)</li>
  *   <li>claim 소유 재검증</li>
  *   <li>PREPARING → RUNNING + fan-out Outbox 원자적 저장 (persistence phase 트랜잭션)</li>
  * </ol>
@@ -60,7 +56,7 @@ public class ResolveTestRunService {
 
     private final ResolutionClaimPort resolutionClaimPort;
     private final TestRunRepository testRunRepository;
-    private final GuardrailMaterializationPort materializationPort;
+    private final TargetPreparationPort preparationPort;
     private final LoadSnapshotIdsByTestRunPort loadSnapshotIdsPort;
     private final OutboxPort outboxPort;
     private final TestExecutionRepository testExecutionRepository;
@@ -71,7 +67,7 @@ public class ResolveTestRunService {
     public ResolveTestRunService(
             ResolutionClaimPort resolutionClaimPort,
             TestRunRepository testRunRepository,
-            GuardrailMaterializationPort materializationPort,
+            TargetPreparationPort preparationPort,
             LoadSnapshotIdsByTestRunPort loadSnapshotIdsPort,
             OutboxPort outboxPort,
             TestExecutionRepository testExecutionRepository,
@@ -81,7 +77,7 @@ public class ResolveTestRunService {
     ) {
         this.resolutionClaimPort = Objects.requireNonNull(resolutionClaimPort);
         this.testRunRepository = Objects.requireNonNull(testRunRepository);
-        this.materializationPort = Objects.requireNonNull(materializationPort);
+        this.preparationPort = Objects.requireNonNull(preparationPort);
         this.loadSnapshotIdsPort = Objects.requireNonNull(loadSnapshotIdsPort);
         this.outboxPort = Objects.requireNonNull(outboxPort);
         this.testExecutionRepository = Objects.requireNonNull(testExecutionRepository);
@@ -136,19 +132,17 @@ public class ResolveTestRunService {
         }
 
         // Materialization (DB 트랜잭션 밖, 외부 호출)
-        GuardrailMaterializedVersion materializedVersion;
         try {
             long materializationStartedNanos = System.nanoTime();
-            log.info("Candidate materialization started. testRunId={} attemptCount={}", testRunId, attemptCount);
-            GuardrailMaterializationRequest request = new GuardrailMaterializationRequest(
-                    testRun.candidateTarget().guardrailId(),
-                    testRunId
-            );
-            materializedVersion = materializationPort.materialize(request);
-            log.info("Candidate materialization completed. testRunId={} attemptCount={} elapsedMs={}",
+            log.info("Target preparation started. testRunId={} attemptCount={}", testRunId, attemptCount);
+            TargetPreparationRequest request = new TargetPreparationRequest(
+                    testRun.targetReference(),
+                    testRunId);
+            preparationPort.prepare(request);
+            log.info("Target preparation completed. testRunId={} attemptCount={} elapsedMs={}",
                     testRunId, attemptCount, elapsedMs(materializationStartedNanos));
-        } catch (GuardrailProviderException exception) {
-            log.warn("Candidate materialization failed. testRunId={} attemptCount={} failureCode={} elapsedMs={}",
+        } catch (TargetProviderException exception) {
+            log.warn("Target preparation failed. testRunId={} attemptCount={} failureCode={} elapsedMs={}",
                     testRunId, attemptCount, exception.failureCode(), elapsedMs(resolutionStartedNanos));
             return handleMaterializationFailure(testRun, attemptCount);
         }
@@ -164,26 +158,25 @@ public class ResolveTestRunService {
         Instant now = clock.instant();
         int[] snapshotCount = new int[1];
         transactionalPhasePort.runInTransaction(() -> {
-            testRun.beginRunning(materializedVersion.version(), now);
+            testRun.beginRunning(now);
             testRunRepository.save(testRun);
 
             List<Long> snapshotIds = loadSnapshotIdsPort.loadSnapshotIdsByTestRunId(testRunId);
             snapshotCount[0] = snapshotIds.size();
             for (long snapshotId : snapshotIds) {
-                outboxPort.save(executionRequestedEvent(testRunId, snapshotId, TargetTypeCode.BASELINE, now));
-                outboxPort.save(executionRequestedEvent(testRunId, snapshotId, TargetTypeCode.CANDIDATE, now));
+                outboxPort.save(executionRequestedEvent(testRunId, snapshotId, now));
             }
         });
 
         log.info("TestRun execution fan-out completed. testRunId={} snapshotCount={} executionEventCount={} elapsedMs={}",
-                testRunId, snapshotCount[0], snapshotCount[0] * 2, elapsedMs(resolutionStartedNanos));
+                testRunId, snapshotCount[0], snapshotCount[0], elapsedMs(resolutionStartedNanos));
 
         return ResolutionOutcome.RESOLVED;
     }
 
     private ResolutionOutcome handleMaterializationFailure(TestRun testRun, int attemptCount) {
         if (attemptCount < MAX_RESOLUTION_ATTEMPTS) {
-            log.warn("Candidate materialization will be retried. testRunId={} attemptCount={}",
+            log.warn("Target preparation will be retried. testRunId={} attemptCount={}",
                     testRun.id().value(), attemptCount);
             return ResolutionOutcome.MATERIALIZATION_FAILED_RETRYABLE;
         }
@@ -198,10 +191,7 @@ public class ResolveTestRunService {
             for (long snapshotId : snapshotIds) {
                 TestCaseSnapshotId sid = new TestCaseSnapshotId(snapshotId);
                 testExecutionRepository.save(
-                        TestExecution.notStarted(new TestExecutionId(sid, TargetType.BASELINE))
-                );
-                testExecutionRepository.save(
-                        TestExecution.notStarted(new TestExecutionId(sid, TargetType.CANDIDATE))
+                        TestExecution.notStarted(new TestExecutionId(sid))
                 );
             }
 
@@ -211,7 +201,7 @@ public class ResolveTestRunService {
             testRunRepository.save(testRun);
         });
 
-        log.error("TestRun finished after terminal candidate materialization failure. testRunId={} attemptCount={}",
+        log.error("TestRun finished after terminal target preparation failure. testRunId={} attemptCount={}",
                 testRunId, attemptCount);
 
         return ResolutionOutcome.MATERIALIZATION_FAILED_TERMINAL;
@@ -224,14 +214,13 @@ public class ResolveTestRunService {
     private OutboxEventRecord executionRequestedEvent(
             long testRunId,
             long snapshotId,
-            TargetTypeCode targetType,
             Instant occurredAt
     ) {
         UUID eventId = UUID.randomUUID();
         String payload = """
-                {"eventId":"%s","eventType":"TestExecutionRequested","schemaVersion":1,"testRunId":%d,"snapshotId":%d,"targetType":"%s","occurredAt":"%s"}
-                """.formatted(eventId, testRunId, snapshotId, targetType.name(), occurredAt).strip();
-        String deduplicationKey = "TestExecutionRequested:" + snapshotId + ":" + targetType.name();
+                {"eventId":"%s","eventType":"TestExecutionRequested","schemaVersion":2,"testRunId":%d,"snapshotId":%d,"occurredAt":"%s"}
+                """.formatted(eventId, testRunId, snapshotId, occurredAt).strip();
+        String deduplicationKey = "TestExecutionRequested:" + snapshotId;
         return OutboxEventRecord.pending(eventId, "TestExecutionRequested", payload, deduplicationKey, occurredAt);
     }
 

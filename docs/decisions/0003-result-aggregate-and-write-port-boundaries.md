@@ -1,5 +1,7 @@
 # 0003. 실행·평가 결과 Aggregate와 write-side Port 경계
 
+> ⚠️ Baseline/Candidate TestExecutionId와 실시간 ChangeResult 생성 부분은 [ADR 0010](0010-single-target-test-run-model.md)이 대체한다.
+
 > Status: APPROVED
 > Owner: Backend
 > Last reviewed: 2026-08-25
