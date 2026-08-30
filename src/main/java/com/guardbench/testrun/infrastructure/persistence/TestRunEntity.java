@@ -14,11 +14,7 @@ class TestRunEntity {
     String status;
     int testCaseCount;
     int processedTestCaseCount;
-    String baselineGuardrailId;
-    String baselineVersion;
-    String candidateGuardrailId;
-    String candidateRequestedSource;
-    String candidateResolvedVersion;
+    String targetReferenceId;
     String executionOutcome;
     Instant createdAt;
     Instant startedAt;
@@ -34,11 +30,7 @@ class TestRunEntity {
             String status,
             int testCaseCount,
             int processedTestCaseCount,
-            String baselineGuardrailId,
-            String baselineVersion,
-            String candidateGuardrailId,
-            String candidateRequestedSource,
-            String candidateResolvedVersion,
+            String targetReferenceId,
             String executionOutcome,
             Instant createdAt,
             Instant startedAt,
@@ -50,11 +42,7 @@ class TestRunEntity {
         this.status = status;
         this.testCaseCount = testCaseCount;
         this.processedTestCaseCount = processedTestCaseCount;
-        this.baselineGuardrailId = baselineGuardrailId;
-        this.baselineVersion = baselineVersion;
-        this.candidateGuardrailId = candidateGuardrailId;
-        this.candidateRequestedSource = candidateRequestedSource;
-        this.candidateResolvedVersion = candidateResolvedVersion;
+        this.targetReferenceId = targetReferenceId;
         this.executionOutcome = executionOutcome;
         this.createdAt = createdAt;
         this.startedAt = startedAt;
@@ -68,11 +56,7 @@ class TestRunEntity {
             String status,
             int testCaseCount,
             int processedTestCaseCount,
-            String baselineGuardrailId,
-            String baselineVersion,
-            String candidateGuardrailId,
-            String candidateRequestedSource,
-            String candidateResolvedVersion,
+            String targetReferenceId,
             String executionOutcome,
             Instant createdAt,
             Instant startedAt,
@@ -85,11 +69,7 @@ class TestRunEntity {
                 status,
                 testCaseCount,
                 processedTestCaseCount,
-                baselineGuardrailId,
-                baselineVersion,
-                candidateGuardrailId,
-                candidateRequestedSource,
-                candidateResolvedVersion,
+                targetReferenceId,
                 executionOutcome,
                 createdAt,
                 startedAt,

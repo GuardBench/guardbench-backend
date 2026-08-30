@@ -1,7 +1,7 @@
 package com.guardbench.testrun.application;
 
-import com.guardbench.testrun.application.port.out.GuardrailExecutionResult;
-import com.guardbench.testrun.application.port.out.GuardrailFailureCode;
+import com.guardbench.testrun.application.port.out.TargetExecutionResult;
+import com.guardbench.testrun.application.port.out.TargetFailureCode;
 import com.guardbench.testrun.domain.Action;
 import com.guardbench.testrun.domain.ActualResult;
 import com.guardbench.testrun.domain.TestExecutionError;
@@ -12,30 +12,30 @@ import com.guardbench.testrun.domain.TestExecutionErrorCode;
  *
  * <p>실제 Bedrock SDK 타입은 Guardrail Adapter에만 존재하고 이 클래스에는 들어오지 않는다.
  */
-public final class GuardrailResultNormalizer {
+public final class TargetResultNormalizer {
 
     private static final String ALLOW_ACTION = "ALLOW";
     private static final String BLOCK_ACTION = "BLOCK";
 
-    private GuardrailResultNormalizer() {
+    private TargetResultNormalizer() {
     }
 
-    public static GuardrailExecutionNormalization normalize(GuardrailExecutionResult providerResult) {
+    public static TargetExecutionNormalization normalize(TargetExecutionResult providerResult) {
         if (providerResult == null) {
-            return failed(GuardrailFailureCode.PROVIDER_RESPONSE_INVALID);
+            return failed(TargetFailureCode.PROVIDER_RESPONSE_INVALID);
         }
         if (!providerResult.isSuccess()) {
             return failed(providerResult.failureCode());
         }
 
         return switch (providerResult.actionCode()) {
-            case ALLOW_ACTION -> GuardrailExecutionNormalization.succeeded(
+            case ALLOW_ACTION -> TargetExecutionNormalization.succeeded(
                     new ActualResult(Action.ALLOW)
             );
-            case BLOCK_ACTION -> GuardrailExecutionNormalization.succeeded(
+            case BLOCK_ACTION -> TargetExecutionNormalization.succeeded(
                     new ActualResult(Action.BLOCK)
             );
-            default -> failed(GuardrailFailureCode.PROVIDER_RESPONSE_INVALID);
+            default -> failed(TargetFailureCode.PROVIDER_RESPONSE_INVALID);
         };
     }
 
@@ -45,7 +45,7 @@ public final class GuardrailResultNormalizer {
      * <p>Provider 오류는 항상 안전한 결과로 수렴해야 하므로 매핑 누락을 실행 시점 예외가 아니라
      * 컴파일 오류로 드러낸다. {@link GuardrailFailureCode}에 상수를 추가하면 이 switch가 컴파일에 실패한다.
      */
-    private static GuardrailExecutionNormalization failed(GuardrailFailureCode failureCode) {
+    private static TargetExecutionNormalization failed(TargetFailureCode failureCode) {
         TestExecutionError error = switch (failureCode) {
             case TARGET_NOT_FOUND -> new TestExecutionError(
                     TestExecutionErrorCode.TARGET_NOT_FOUND,
@@ -72,6 +72,6 @@ public final class GuardrailResultNormalizer {
                     "Guardrail provider timed out."
             );
         };
-        return GuardrailExecutionNormalization.failed(error);
+        return TargetExecutionNormalization.failed(error);
     }
 }

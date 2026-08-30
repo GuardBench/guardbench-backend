@@ -9,18 +9,14 @@ package com.guardbench.testrun.application.port.out;
  * @param testRunId           TestRun ID (완료 이벤트 발행에 필요)
  */
 public record ExecutionContext(
-        String guardrailIdentifier,
-        String guardrailVersion,
+        String targetReference,
         String input,
         long testRunId
 ) {
 
     public ExecutionContext {
-        if (guardrailIdentifier == null || guardrailIdentifier.isBlank()) {
-            throw new IllegalArgumentException("guardrail identifier must not be blank");
-        }
-        if (guardrailVersion == null || guardrailVersion.isBlank()) {
-            throw new IllegalArgumentException("guardrail version must not be blank");
+        if (targetReference == null || targetReference.isBlank()) {
+            throw new IllegalArgumentException("target reference must not be blank");
         }
         if (input == null || input.isBlank()) {
             throw new IllegalArgumentException("input must not be blank");

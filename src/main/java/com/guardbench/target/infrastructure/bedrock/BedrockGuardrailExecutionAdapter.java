@@ -1,13 +1,13 @@
-package com.guardbench.guardrail.infrastructure.bedrock;
+package com.guardbench.target.infrastructure.bedrock;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-import com.guardbench.testrun.application.port.out.GuardrailExecutionPort;
-import com.guardbench.testrun.application.port.out.GuardrailExecutionRequest;
-import com.guardbench.testrun.application.port.out.GuardrailExecutionResult;
-import com.guardbench.testrun.application.port.out.GuardrailFailureCode;
+import com.guardbench.testrun.application.port.out.TargetExecutionPort;
+import com.guardbench.testrun.application.port.out.TargetExecutionRequest;
+import com.guardbench.testrun.application.port.out.TargetExecutionResult;
+import com.guardbench.testrun.application.port.out.TargetFailureCode;
 
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
@@ -22,7 +22,7 @@ import software.amazon.awssdk.services.bedrockruntime.model.GuardrailTextBlock;
 /**
  * Bedrock Runtime {@code ApplyGuardrail} 호출을 TestRun이 소유한 실행 Port로 변환한다.
  */
-public final class BedrockGuardrailExecutionAdapter implements GuardrailExecutionPort {
+public final class BedrockGuardrailExecutionAdapter implements TargetExecutionPort {
 
     private static final String NONE_ACTION = "NONE";
     private static final String INTERVENED_ACTION = "GUARDRAIL_INTERVENED";
@@ -33,30 +33,41 @@ public final class BedrockGuardrailExecutionAdapter implements GuardrailExecutio
     private static final String NO_POLICY_ACTION = "NONE";
 
     private final BedrockRuntimeClient client;
+    private final BedrockGuardrailTargetStore targetStore;
 
-    public BedrockGuardrailExecutionAdapter(BedrockRuntimeClient client) {
+    public BedrockGuardrailExecutionAdapter(
+            BedrockRuntimeClient client,
+            BedrockGuardrailTargetStore targetStore
+    ) {
         this.client = Objects.requireNonNull(client, "BedrockRuntimeClient must not be null");
+        this.targetStore = Objects.requireNonNull(targetStore, "target store must not be null");
     }
 
     @Override
-    public GuardrailExecutionResult execute(GuardrailExecutionRequest request) {
+    public TargetExecutionResult execute(TargetExecutionRequest request) {
         Objects.requireNonNull(request, "execution request must not be null");
+        BedrockGuardrailTargetStore.BedrockGuardrailTarget target = targetStore
+                .findByReference(request.targetReference().value())
+                .orElse(null);
+        if (target == null) {
+            return TargetExecutionResult.failed(TargetFailureCode.TARGET_NOT_FOUND);
+        }
 
         try {
-            ApplyGuardrailResponse response = client.applyGuardrail(toSdkRequest(request));
+            ApplyGuardrailResponse response = client.applyGuardrail(toSdkRequest(request, target));
             return normalizeResponse(response);
         } catch (SdkException exception) {
-            return GuardrailExecutionResult.failed(BedrockGuardrailFailureCodeMapper.map(exception));
+            return TargetExecutionResult.failed(BedrockGuardrailFailureCodeMapper.map(exception));
         }
     }
 
-    private static GuardrailExecutionResult normalizeResponse(ApplyGuardrailResponse response) {
+    private static TargetExecutionResult normalizeResponse(ApplyGuardrailResponse response) {
         if (response == null || response.actionAsString() == null || response.actionAsString().isBlank()) {
             return invalidProviderResponse();
         }
 
         return switch (response.actionAsString()) {
-            case NONE_ACTION -> GuardrailExecutionResult.succeeded(ALLOW_ACTION);
+            case NONE_ACTION -> TargetExecutionResult.succeeded(ALLOW_ACTION);
             case INTERVENED_ACTION -> normalizeIntervention(response.assessments());
             default -> invalidProviderResponse();
         };
@@ -67,7 +78,7 @@ public final class BedrockGuardrailExecutionAdapter implements GuardrailExecutio
      * Only allowlisted structured policy actions are inspected; raw matches, regexes, PII, outputs, and reasons
      * never cross the Port boundary.
      */
-    private static GuardrailExecutionResult normalizeIntervention(List<GuardrailAssessment> assessments) {
+    private static TargetExecutionResult normalizeIntervention(List<GuardrailAssessment> assessments) {
         if (assessments == null || assessments.isEmpty()) {
             return invalidProviderResponse();
         }
@@ -97,10 +108,10 @@ public final class BedrockGuardrailExecutionAdapter implements GuardrailExecutio
         }
 
         if (blocked) {
-            return GuardrailExecutionResult.succeeded(BLOCK_ACTION);
+            return TargetExecutionResult.succeeded(BLOCK_ACTION);
         }
         if (anonymized) {
-            return GuardrailExecutionResult.succeeded(ALLOW_ACTION);
+            return TargetExecutionResult.succeeded(ALLOW_ACTION);
         }
         return invalidProviderResponse();
     }
@@ -139,14 +150,17 @@ public final class BedrockGuardrailExecutionAdapter implements GuardrailExecutio
         }
     }
 
-    private static GuardrailExecutionResult invalidProviderResponse() {
-        return GuardrailExecutionResult.failed(GuardrailFailureCode.PROVIDER_RESPONSE_INVALID);
+    private static TargetExecutionResult invalidProviderResponse() {
+        return TargetExecutionResult.failed(TargetFailureCode.PROVIDER_RESPONSE_INVALID);
     }
 
-    private static ApplyGuardrailRequest toSdkRequest(GuardrailExecutionRequest request) {
+    private static ApplyGuardrailRequest toSdkRequest(
+            TargetExecutionRequest request,
+            BedrockGuardrailTargetStore.BedrockGuardrailTarget target
+    ) {
         return ApplyGuardrailRequest.builder()
-                .guardrailIdentifier(request.guardrailIdentifier())
-                .guardrailVersion(request.guardrailVersion())
+                .guardrailIdentifier(target.guardrailIdentifier())
+                .guardrailVersion(target.executableRevision())
                 .source(GuardrailContentSource.INPUT)
                 .content(GuardrailContentBlock.fromText(GuardrailTextBlock.builder()
                         .text(request.input())

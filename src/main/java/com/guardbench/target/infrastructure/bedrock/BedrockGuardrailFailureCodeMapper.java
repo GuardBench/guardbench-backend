@@ -1,6 +1,6 @@
-package com.guardbench.guardrail.infrastructure.bedrock;
+package com.guardbench.target.infrastructure.bedrock;
 
-import com.guardbench.testrun.application.port.out.GuardrailFailureCode;
+import com.guardbench.testrun.application.port.out.TargetFailureCode;
 
 import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
@@ -13,24 +13,24 @@ final class BedrockGuardrailFailureCodeMapper {
     private BedrockGuardrailFailureCodeMapper() {
     }
 
-    static GuardrailFailureCode map(SdkException exception) {
+    static TargetFailureCode map(SdkException exception) {
         if (exception instanceof ApiCallTimeoutException
                 || exception instanceof ApiCallAttemptTimeoutException) {
-            return GuardrailFailureCode.PROVIDER_TIMEOUT;
+            return TargetFailureCode.PROVIDER_TIMEOUT;
         }
         if (isResourceNotFound(exception)) {
-            return GuardrailFailureCode.TARGET_NOT_FOUND;
+            return TargetFailureCode.TARGET_NOT_FOUND;
         }
         if (isAccessDenied(exception)) {
-            return GuardrailFailureCode.TARGET_ACCESS_DENIED;
+            return TargetFailureCode.TARGET_ACCESS_DENIED;
         }
         if (isInvalidConfiguration(exception)) {
-            return GuardrailFailureCode.TARGET_CONFIGURATION_INVALID;
+            return TargetFailureCode.TARGET_CONFIGURATION_INVALID;
         }
         if (exception instanceof AwsServiceException serviceException) {
             return mapServiceErrorCode(serviceException.awsErrorDetails());
         }
-        return GuardrailFailureCode.PROVIDER_UNAVAILABLE;
+        return TargetFailureCode.PROVIDER_UNAVAILABLE;
     }
 
     private static boolean isResourceNotFound(SdkException exception) {
@@ -50,15 +50,15 @@ final class BedrockGuardrailFailureCodeMapper {
                 || exception instanceof software.amazon.awssdk.services.bedrockruntime.model.ConflictException;
     }
 
-    private static GuardrailFailureCode mapServiceErrorCode(AwsErrorDetails errorDetails) {
+    private static TargetFailureCode mapServiceErrorCode(AwsErrorDetails errorDetails) {
         if (errorDetails == null || errorDetails.errorCode() == null) {
-            return GuardrailFailureCode.PROVIDER_UNAVAILABLE;
+            return TargetFailureCode.PROVIDER_UNAVAILABLE;
         }
         return switch (errorDetails.errorCode()) {
-            case "ResourceNotFoundException" -> GuardrailFailureCode.TARGET_NOT_FOUND;
-            case "AccessDeniedException" -> GuardrailFailureCode.TARGET_ACCESS_DENIED;
-            case "ValidationException", "ConflictException" -> GuardrailFailureCode.TARGET_CONFIGURATION_INVALID;
-            default -> GuardrailFailureCode.PROVIDER_UNAVAILABLE;
+            case "ResourceNotFoundException" -> TargetFailureCode.TARGET_NOT_FOUND;
+            case "AccessDeniedException" -> TargetFailureCode.TARGET_ACCESS_DENIED;
+            case "ValidationException", "ConflictException" -> TargetFailureCode.TARGET_CONFIGURATION_INVALID;
+            default -> TargetFailureCode.PROVIDER_UNAVAILABLE;
         };
     }
 }

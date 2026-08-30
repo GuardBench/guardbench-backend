@@ -17,27 +17,29 @@ public final class TestRunExecutionSummary {
         this.succeededExecutionCount = succeededExecutionCount;
     }
 
-    public static TestRunExecutionSummary from(Collection<SnapshotExecutionPair> executionPairs) {
-        Objects.requireNonNull(executionPairs, "execution pairs must not be null");
-        if (executionPairs.isEmpty()) {
-            throw new IllegalArgumentException("execution pairs must not be empty");
+    public static TestRunExecutionSummary from(Collection<SnapshotExecutionStatus> executionStatuses) {
+        Objects.requireNonNull(executionStatuses, "execution statuses must not be null");
+        if (executionStatuses.isEmpty()) {
+            throw new IllegalArgumentException("execution statuses must not be empty");
         }
 
         Set<TestCaseSnapshotId> snapshotIds = new HashSet<>();
         int processedCount = 0;
         int succeededCount = 0;
-        for (SnapshotExecutionPair executionPair : executionPairs) {
-            Objects.requireNonNull(executionPair, "execution pair must not be null");
-            if (!snapshotIds.add(executionPair.snapshotId())) {
-                throw new IllegalArgumentException("execution pairs must contain each snapshot once");
+        for (SnapshotExecutionStatus executionStatus : executionStatuses) {
+            Objects.requireNonNull(executionStatus, "execution status must not be null");
+            if (!snapshotIds.add(executionStatus.snapshotId())) {
+                throw new IllegalArgumentException("execution statuses must contain each snapshot once");
             }
-            if (executionPair.isProcessed()) {
+            if (executionStatus.isProcessed()) {
                 processedCount++;
             }
-            succeededCount += executionPair.succeededExecutionCount();
+            if (executionStatus.succeeded()) {
+                succeededCount++;
+            }
         }
 
-        return new TestRunExecutionSummary(executionPairs.size(), processedCount, succeededCount);
+        return new TestRunExecutionSummary(executionStatuses.size(), processedCount, succeededCount);
     }
 
     public int testCaseCount() {
@@ -52,7 +54,7 @@ public final class TestRunExecutionSummary {
         if (processedTestCaseCount != testCaseCount) {
             throw new IllegalStateException("execution outcome requires every snapshot to be processed");
         }
-        if (succeededExecutionCount == testCaseCount * 2) {
+        if (succeededExecutionCount == testCaseCount) {
             return TestRunExecutionOutcome.COMPLETED;
         }
         if (succeededExecutionCount > 0) {

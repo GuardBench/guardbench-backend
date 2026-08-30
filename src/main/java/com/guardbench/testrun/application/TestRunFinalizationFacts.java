@@ -29,28 +29,25 @@ public record TestRunFinalizationFacts(
     }
 
     /**
-     * 개별 Snapshot의 Baseline/Candidate 실행 사실이다.
+     * 개별 Snapshot의 단일 Target 실행 사실이다.
      *
      * @param snapshotId TestCaseSnapshot scalar ID
      * @param expectedActionCode expected action code (e.g. "ALLOW", "BLOCK")
-     * @param baseline baseline 실행 사실
-     * @param candidate candidate 실행 사실
+     * @param execution target 실행 사실
      */
     public record SnapshotExecutionFact(
             long snapshotId,
             String expectedActionCode,
-            TargetExecutionFact baseline,
-            TargetExecutionFact candidate
+            TargetExecutionFact execution
     ) {
         public SnapshotExecutionFact {
             Objects.requireNonNull(expectedActionCode, "expectedActionCode must not be null");
-            Objects.requireNonNull(baseline, "baseline must not be null");
-            Objects.requireNonNull(candidate, "candidate must not be null");
+            Objects.requireNonNull(execution, "execution must not be null");
         }
     }
 
     /**
-     * 하나의 target(Baseline 또는 Candidate) 실행 사실이다.
+     * 하나의 Target 실행 사실이다.
      *
      * @param terminal 실행 결과가 terminal 상태로 확정되었는지
      * @param statusCode 실행 상태 code(SUCCEEDED, FAILED, TIMED_OUT, NOT_STARTED), 실행 결과가 아직 없으면 null

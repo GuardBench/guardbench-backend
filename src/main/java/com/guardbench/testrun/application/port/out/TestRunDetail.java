@@ -12,7 +12,7 @@ public record TestRunDetail(
         TestRunStatus status,
         int testCaseCount,
         TestRunProgress progress,
-        TestRunTargets targets,
+        TargetReferenceView target,
         TestRunExecutionOutcome executionOutcome,
         QualityGateView qualityGate,
         Instant createdAt,
@@ -25,7 +25,7 @@ public record TestRunDetail(
         }
         Objects.requireNonNull(status, "status must not be null");
         Objects.requireNonNull(progress, "progress must not be null");
-        Objects.requireNonNull(targets, "targets must not be null");
+        Objects.requireNonNull(target, "target must not be null");
         Objects.requireNonNull(createdAt, "createdAt must not be null");
         Objects.requireNonNull(updatedAt, "updatedAt must not be null");
         if (progress.processedTestCaseCount() > testCaseCount) {

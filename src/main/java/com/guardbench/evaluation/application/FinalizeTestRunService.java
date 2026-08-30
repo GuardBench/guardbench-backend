@@ -125,18 +125,18 @@ public class FinalizeTestRunService {
         // 미완료 시에도 목록·상세 조회 진행률 계약을 만족시키기 위해 같은 잠금 트랜잭션에서
         // 절대 진행도를 먼저 갱신한 뒤 NotReady로 반환한다.
         boolean snapshotsReady = facts.snapshotFacts().size() == facts.testCaseCount();
-        boolean allPairsTerminal = facts.snapshotFacts().stream().allMatch(SnapshotExecutionFact::pairTerminal);
-        long terminalPairCount = facts.snapshotFacts().stream().filter(SnapshotExecutionFact::pairTerminal).count();
+        boolean allExecutionsTerminal = facts.snapshotFacts().stream().allMatch(SnapshotExecutionFact::terminal);
+        long terminalExecutionCount = facts.snapshotFacts().stream().filter(SnapshotExecutionFact::terminal).count();
         log.info("TestRun finalization readiness checked. testRunId={} snapshots={} expected={} terminalPairs={} snapshotsReady={} allPairsTerminal={}",
-                testRunId, facts.snapshotFacts().size(), facts.testCaseCount(), terminalPairCount,
-                snapshotsReady, allPairsTerminal);
-        if (!snapshotsReady || !allPairsTerminal) {
+                testRunId, facts.snapshotFacts().size(), facts.testCaseCount(), terminalExecutionCount,
+                snapshotsReady, allExecutionsTerminal);
+        if (!snapshotsReady || !allExecutionsTerminal) {
             if (snapshotsReady) {
                 finalizeTestRunPort.updateProgress(testRunId);
             }
             log.info("TestRun finalization not ready after readiness check. testRunId={} snapshots={} expected={} terminalPairs={} snapshotsReady={} allPairsTerminal={} elapsedMs={}",
-                    testRunId, facts.snapshotFacts().size(), facts.testCaseCount(), terminalPairCount,
-                    snapshotsReady, allPairsTerminal, elapsedMs(finalizationStartedNanos));
+                    testRunId, facts.snapshotFacts().size(), facts.testCaseCount(), terminalExecutionCount,
+                    snapshotsReady, allExecutionsTerminal, elapsedMs(finalizationStartedNanos));
             return FinalizationOutcome.notReady();
         }
 
@@ -147,10 +147,10 @@ public class FinalizeTestRunService {
 
         // 절대 개수로 진행도와 성공 pair 수를 재계산한다.
         int processedTestCaseCount = (int) facts.snapshotFacts().stream()
-                .filter(SnapshotExecutionFact::pairTerminal)
+                .filter(SnapshotExecutionFact::terminal)
                 .count();
-        long successfulExecutionPairCount = facts.snapshotFacts().stream()
-                .filter(SnapshotExecutionFact::pairSucceeded)
+        long successfulExecutionCount = facts.snapshotFacts().stream()
+                .filter(SnapshotExecutionFact::succeeded)
                 .count();
 
         // Quality Gate 계산
@@ -158,7 +158,7 @@ public class FinalizeTestRunService {
                 reference,
                 evaluations,
                 facts.testCaseCount(),
-                successfulExecutionPairCount,
+                successfulExecutionCount,
                 now
         );
 
@@ -204,19 +204,13 @@ public class FinalizeTestRunService {
         }
 
         EvaluationAction expectedAction = toAction(fact.expectedActionCode());
-        EvaluationAction baselineAction = fact.baseline().actionCode() != null
-                ? toAction(fact.baseline().actionCode()) : null;
-        EvaluationAction candidateAction = fact.candidate().actionCode() != null
-                ? toAction(fact.candidate().actionCode()) : null;
-
-        boolean comparisonConditionsSatisfied = fact.pairSucceeded();
+        EvaluationAction actualAction = fact.execution().actionCode() != null
+                ? toAction(fact.execution().actionCode()) : null;
 
         Optional<SnapshotEvaluation> newEvaluation = snapshotEvaluator.evaluate(
                 reference,
                 expectedAction,
-                baselineAction,
-                candidateAction,
-                comparisonConditionsSatisfied,
+                actualAction,
                 now
         );
 
@@ -234,13 +228,11 @@ public class FinalizeTestRunService {
     }
 
     private static String determineOutcomeCode(TestRunExecutionFacts facts) {
-        long totalExecutions = (long) facts.testCaseCount() * 2;
         long succeededExecutions = facts.snapshotFacts().stream()
-                .mapToLong(fact -> (fact.baseline().succeeded() ? 1L : 0L)
-                        + (fact.candidate().succeeded() ? 1L : 0L))
-                .sum();
+                .filter(SnapshotExecutionFact::succeeded)
+                .count();
 
-        if (succeededExecutions == totalExecutions) {
+        if (succeededExecutions == facts.testCaseCount()) {
             return "COMPLETED";
         }
         if (succeededExecutions > 0) {

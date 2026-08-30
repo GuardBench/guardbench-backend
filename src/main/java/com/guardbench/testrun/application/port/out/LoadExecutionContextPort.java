@@ -14,5 +14,5 @@ public interface LoadExecutionContextPort {
      * 지정된 Snapshot과 target type에 해당하는 실행 컨텍스트를 반환한다.
      * Snapshot 또는 TestRun이 존재하지 않으면 empty다.
      */
-    Optional<ExecutionContext> load(long snapshotId, String targetType);
+    Optional<ExecutionContext> load(long snapshotId);
 }

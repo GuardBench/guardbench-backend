@@ -12,7 +12,7 @@ public record TestRunDetailRes(
         String status,
         int testCaseCount,
         TestRunProgressRes progress,
-        TestRunTargetsRes targets,
+        TargetReferenceRes target,
         String executionOutcome,
         QualityGateRes qualityGate,
         String createdAt,

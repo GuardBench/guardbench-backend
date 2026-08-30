@@ -9,14 +9,14 @@ import org.springframework.context.annotation.Configuration;
 import com.guardbench.testrun.application.ExecuteTestRunService;
 import com.guardbench.testrun.application.ResolveTestRunService;
 import com.guardbench.testrun.application.port.out.ExecutionClaimPort;
-import com.guardbench.testrun.application.port.out.GuardrailExecutionPort;
-import com.guardbench.testrun.application.port.out.GuardrailMaterializationPort;
 import com.guardbench.testrun.application.port.out.LoadExecutionContextPort;
 import com.guardbench.testrun.application.port.out.LoadSnapshotIdsByTestRunPort;
 import com.guardbench.testrun.application.port.out.OutboxPort;
 import com.guardbench.testrun.application.port.out.ResolutionClaimPort;
 import com.guardbench.testrun.application.port.out.SaveNotEvaluatedQualityGatePort;
 import com.guardbench.testrun.application.port.out.TransactionalPhasePort;
+import com.guardbench.testrun.application.port.out.TargetExecutionPort;
+import com.guardbench.testrun.application.port.out.TargetPreparationPort;
 import com.guardbench.testrun.domain.repository.TestExecutionRepository;
 import com.guardbench.testrun.domain.repository.TestRunRepository;
 
@@ -40,7 +40,7 @@ class WorkerServiceConfiguration {
     ResolveTestRunService resolveTestRunService(
             ResolutionClaimPort resolutionClaimPort,
             TestRunRepository testRunRepository,
-            GuardrailMaterializationPort materializationPort,
+            TargetPreparationPort preparationPort,
             LoadSnapshotIdsByTestRunPort loadSnapshotIdsPort,
             OutboxPort outboxPort,
             TestExecutionRepository testExecutionRepository,
@@ -51,7 +51,7 @@ class WorkerServiceConfiguration {
         return new ResolveTestRunService(
                 resolutionClaimPort,
                 testRunRepository,
-                materializationPort,
+                preparationPort,
                 loadSnapshotIdsPort,
                 outboxPort,
                 testExecutionRepository,
@@ -66,7 +66,7 @@ class WorkerServiceConfiguration {
             ExecutionClaimPort executionClaimPort,
             TestExecutionRepository testExecutionRepository,
             LoadExecutionContextPort loadExecutionContextPort,
-            GuardrailExecutionPort guardrailExecutionPort,
+            TargetExecutionPort targetExecutionPort,
             OutboxPort outboxPort,
             TransactionalPhasePort transactionalPhasePort,
             Clock clock
@@ -75,7 +75,7 @@ class WorkerServiceConfiguration {
                 executionClaimPort,
                 testExecutionRepository,
                 loadExecutionContextPort,
-                guardrailExecutionPort,
+                targetExecutionPort,
                 outboxPort,
                 transactionalPhasePort,
                 clock

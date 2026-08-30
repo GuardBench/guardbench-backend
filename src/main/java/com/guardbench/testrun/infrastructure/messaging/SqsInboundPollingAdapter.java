@@ -99,34 +99,33 @@ public class SqsInboundPollingAdapter {
         }
 
         Long snapshotId = snapshotId(decoded);
-        String targetType = targetType(decoded);
-        log.info("SQS message received. queue={} messageId={} eventId={} eventType={} testRunId={} snapshotId={} targetType={}",
+        log.info("SQS message received. queue={} messageId={} eventId={} eventType={} testRunId={} snapshotId={}",
                 queueType.queueName(), message.messageId(), decoded.eventId(), decoded.eventType(),
-                decoded.testRunId(), snapshotId, targetType);
+                decoded.testRunId(), snapshotId);
 
         boolean shouldAck;
         try {
-            log.info("SQS message processing started. queue={} eventId={} eventType={} testRunId={} snapshotId={} targetType={}",
-                    queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId, targetType);
+            log.info("SQS message processing started. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
+                    queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId);
             shouldAck = dispatch(decoded);
         } catch (Exception exception) {
-            log.error("SQS message processing failed. queue={} eventId={} eventType={} testRunId={} snapshotId={} targetType={} failureType={}",
+            log.error("SQS message processing failed. queue={} eventId={} eventType={} testRunId={} snapshotId={} failureType={}",
                     queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId,
-                    targetType, exception.getClass().getSimpleName());
+                    exception.getClass().getSimpleName());
             return;
         }
 
         if (shouldAck) {
-            log.info("SQS message processing completed. queue={} eventId={} eventType={} testRunId={} snapshotId={} targetType={}",
-                    queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId, targetType);
+            log.info("SQS message processing completed. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
+                    queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId);
             if (deleteMessage(message)) {
-                log.info("SQS message deleted. queue={} eventId={} eventType={} testRunId={} snapshotId={} targetType={}",
-                        queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId, targetType);
+                log.info("SQS message deleted. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
+                        queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId);
             }
             return;
         }
-        log.warn("SQS message processing deferred for retry. queue={} eventId={} eventType={} testRunId={} snapshotId={} targetType={}",
-                queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId, targetType);
+        log.warn("SQS message processing deferred for retry. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
+                queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId);
         // nack: 삭제하지 않아 visibility timeout 후 재전달됨
     }
 
@@ -145,10 +144,7 @@ public class SqsInboundPollingAdapter {
                     log.error("ExecuteTestRunService not available for queue {}", queueType);
                     yield false;
                 }
-                var outcome = executeService.execute(
-                        executionRequested.snapshotId(),
-                        executionRequested.targetType()
-                );
+                var outcome = executeService.execute(executionRequested.snapshotId());
                 yield outcome.shouldAcknowledge();
             }
             case TestExecutionCompletedMessage completed -> {
@@ -194,11 +190,4 @@ public class SqsInboundPollingAdapter {
         };
     }
 
-    private static String targetType(TestRunMessage message) {
-        return switch (message) {
-            case TestRunRequestedMessage ignored -> null;
-            case TestExecutionRequestedMessage requested -> requested.targetType().name();
-            case TestExecutionCompletedMessage completed -> completed.targetType().name();
-        };
-    }
 }

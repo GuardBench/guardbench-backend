@@ -94,22 +94,22 @@ public class OutboxPublisher {
 
     private static void logPublishStart(TestRunQueue queue, OutboxEventRecord event) {
         OutboxEventRecord.ObservabilityContext context = event.observabilityContext();
-        log.info("Outbox event publish started. queue={} eventId={} eventType={} testRunId={} snapshotId={} targetType={}",
+        log.info("Outbox event publish started. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
                 queue.queueName(), event.eventId(), event.eventType(), context.testRunId(),
-                context.snapshotId(), context.targetType());
+                context.snapshotId());
     }
 
     private static void logPublishResult(TestRunQueue queue, OutboxEventRecord event, boolean succeeded) {
         OutboxEventRecord.ObservabilityContext context = event.observabilityContext();
         if (succeeded) {
-            log.info("Outbox event published. queue={} eventId={} eventType={} testRunId={} snapshotId={} targetType={}",
+            log.info("Outbox event published. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
                     queue.queueName(), event.eventId(), event.eventType(), context.testRunId(),
-                    context.snapshotId(), context.targetType());
+                    context.snapshotId());
             return;
         }
-        log.warn("Outbox event publish deferred for retry. queue={} eventId={} eventType={} testRunId={} snapshotId={} targetType={}",
+        log.warn("Outbox event publish deferred for retry. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
                 queue.queueName(), event.eventId(), event.eventType(), context.testRunId(),
-                context.snapshotId(), context.targetType());
+                context.snapshotId());
     }
 
     private static Map<TestRunQueue, List<OutboxEventRecord>> groupByQueue(List<OutboxEventRecord> events) {

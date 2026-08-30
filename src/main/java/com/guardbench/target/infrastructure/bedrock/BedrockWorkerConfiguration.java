@@ -1,4 +1,4 @@
-package com.guardbench.guardrail.infrastructure.bedrock;
+package com.guardbench.target.infrastructure.bedrock;
 
 import java.net.URI;
 import java.time.Duration;
@@ -8,8 +8,8 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import com.guardbench.testrun.application.port.out.GuardrailExecutionPort;
-import com.guardbench.testrun.application.port.out.GuardrailMaterializationPort;
+import com.guardbench.testrun.application.port.out.TargetExecutionPort;
+import com.guardbench.testrun.application.port.out.TargetPreparationPort;
 
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.awscore.client.builder.AwsClientBuilder;
@@ -48,13 +48,19 @@ class BedrockWorkerConfiguration {
     }
 
     @Bean
-    GuardrailMaterializationPort guardrailMaterializationPort(BedrockClient bedrockClient) {
-        return new BedrockGuardrailMaterializationAdapter(bedrockClient);
+    TargetPreparationPort targetPreparationPort(
+            BedrockClient bedrockClient,
+            BedrockGuardrailTargetStore targetStore
+    ) {
+        return new BedrockGuardrailPreparationAdapter(bedrockClient, targetStore);
     }
 
     @Bean
-    GuardrailExecutionPort guardrailExecutionPort(BedrockRuntimeClient bedrockRuntimeClient) {
-        return new BedrockGuardrailExecutionAdapter(bedrockRuntimeClient);
+    TargetExecutionPort targetExecutionPort(
+            BedrockRuntimeClient bedrockRuntimeClient,
+            BedrockGuardrailTargetStore targetStore
+    ) {
+        return new BedrockGuardrailExecutionAdapter(bedrockRuntimeClient, targetStore);
     }
 
     private static <B extends AwsClientBuilder<B, ?>> B configure(B builder, BedrockProperties properties) {

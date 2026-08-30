@@ -18,7 +18,7 @@ class TestExecutionRepositoryAdapter implements TestExecutionRepository {
 
     @Override
     public Optional<TestExecution> findById(TestExecutionId id) {
-        return repository.findById(new TestExecutionEntityId(id.snapshotId().value(), id.targetType().name()))
+        return repository.findById(id.snapshotId().value())
                 .map(TestRunPersistenceMapper::toDomain);
     }
 

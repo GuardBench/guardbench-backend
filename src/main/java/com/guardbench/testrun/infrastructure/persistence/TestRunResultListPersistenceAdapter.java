@@ -23,11 +23,10 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * TestRun 개별 결과 목록 조회 Port를 PostgreSQL query로 구현한다. Snapshot별 Baseline/Candidate
- * {@code test_execution}, {@code assertion_result}, {@code change_result}를 조합한다.
+ * TestRun 개별 결과 목록 조회 Port를 PostgreSQL query로 구현한다. Snapshot별 단일
+ * {@code test_execution}과 {@code assertion_result}를 조합한다.
  *
- * <p>{@code test_execution}은 Snapshot당 Baseline·Candidate 두 행이므로 같은 테이블을 target_type별로
- * 두 번 JOIN한다. Assertion·Change 결과는 evaluation Context Domain 타입을 사용하지 않고 이 Context가
+ * <p>{@code test_execution}은 Snapshot당 단일 행이며 {@code snapshot_id}로 JOIN한다. Assertion 결과는 evaluation Context Domain 타입을 사용하지 않고 이 Context가
  * 소유한 nullable scalar code로만 옮긴다.
  *
  * <p>Severity는 저장 code의 사전순 대신 승인된 LOW, MEDIUM, HIGH, CRITICAL 의미 순서로 정렬한다.
@@ -65,19 +64,14 @@ class TestRunResultListPersistenceAdapter implements LoadTestRunResultListPort {
 
         String fromAndWhere = """
                 FROM test_case_snapshot s
-                JOIN test_execution be ON be.snapshot_id = s.id AND be.target_type = 'BASELINE'
-                JOIN test_execution ce ON ce.snapshot_id = s.id AND ce.target_type = 'CANDIDATE'
+                JOIN test_execution e ON e.snapshot_id = s.id
                 LEFT JOIN assertion_result ar ON ar.snapshot_id = s.id
-                LEFT JOIN change_result cr ON cr.snapshot_id = s.id
                 """ + query.whereClause();
         String selectSql = """
                 SELECT s.id AS snapshot_id, s.source_test_case_id, s.name, s.input,
                        s.expected_action, s.severity, s.category,
-                       be.result_status AS baseline_status, be.actual_action AS baseline_action,
-                       be.error_code AS baseline_error_code, be.error_message AS baseline_error_message,
-                       ce.result_status AS candidate_status, ce.actual_action AS candidate_action,
-                       ce.error_code AS candidate_error_code, ce.error_message AS candidate_error_message,
-                       ar.assertion_status, cr.comparability_status, cr.change_type
+                       e.result_status AS execution_status, e.actual_action,
+                       e.error_code, e.error_message, ar.assertion_status
                 """ + fromAndWhere
                 + " ORDER BY " + orderBy(criteria.sort())
                 + " LIMIT ? OFFSET ?";
@@ -105,13 +99,9 @@ class TestRunResultListPersistenceAdapter implements LoadTestRunResultListPort {
                 criteria.expectedAction() == null ? null : criteria.expectedAction().name());
         addEquals(predicates, arguments, "s.severity",
                 criteria.severity() == null ? null : criteria.severity().name());
-        addEquals(predicates, arguments, "be.result_status",
-                criteria.baselineExecutionStatus() == null ? null : criteria.baselineExecutionStatus().name());
-        addEquals(predicates, arguments, "ce.result_status",
-                criteria.candidateExecutionStatus() == null ? null : criteria.candidateExecutionStatus().name());
+        addEquals(predicates, arguments, "e.result_status",
+                criteria.executionStatus() == null ? null : criteria.executionStatus().name());
         addEquals(predicates, arguments, "ar.assertion_status", criteria.assertionStatusCode());
-        addEquals(predicates, arguments, "cr.comparability_status", criteria.comparabilityStatusCode());
-        addEquals(predicates, arguments, "cr.change_type", criteria.changeTypeCode());
 
         return new QueryParts(
                 "WHERE " + String.join(" AND ", predicates) + "\n",
@@ -140,13 +130,8 @@ class TestRunResultListPersistenceAdapter implements LoadTestRunResultListPort {
                 Action.valueOf(resultSet.getString("expected_action")),
                 Severity.valueOf(resultSet.getString("severity")),
                 resultSet.getString("category"),
-                mapExecution(resultSet, "baseline_status", "baseline_action",
-                        "baseline_error_code", "baseline_error_message"),
-                mapExecution(resultSet, "candidate_status", "candidate_action",
-                        "candidate_error_code", "candidate_error_message"),
-                resultSet.getString("assertion_status"),
-                resultSet.getString("comparability_status"),
-                resultSet.getString("change_type"));
+                mapExecution(resultSet, "execution_status", "actual_action", "error_code", "error_message"),
+                resultSet.getString("assertion_status"));
     }
 
     private TestExecutionView mapExecution(

@@ -1,4 +1,4 @@
-package com.guardbench.guardrail.infrastructure.bedrock;
+package com.guardbench.target.infrastructure.bedrock;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

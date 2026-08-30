@@ -4,15 +4,16 @@ import java.time.Instant;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
-import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "test_execution_claim")
 class TestExecutionClaimEntity {
-    @EmbeddedId
-    TestExecutionClaimEntityId id;
+    @Id
+    @Column(name = "snapshot_id")
+    Long snapshotId;
 
     @Column(name = "claim_token")
     UUID claimToken;

@@ -13,17 +13,15 @@ import com.guardbench.testrun.application.TestRunCreateCommand;
 public record TestRunCreateReq(
         @NotNull(message = "testSuiteId는 필수입니다.")
         @Min(value = 1, message = "testSuiteId는 1 이상이어야 합니다.") Long testSuiteId,
-        @NotNull(message = "baseline은 필수입니다.") @Valid BaselineTargetReq baseline,
-        @NotNull(message = "candidate는 필수입니다.") @Valid CandidateTargetReq candidate
+        @NotNull(message = "target은 필수입니다.") @Valid TargetReferenceReq target
 ) {
 
     public TestRunCreateCommand toCommand(String idempotencyKey) {
         return new TestRunCreateCommand(
                 testSuiteId,
-                baseline.guardrailId(),
-                baseline.version(),
-                candidate.guardrailId(),
-                candidate.source(),
+                target.type(),
+                target.identifier(),
+                target.revision(),
                 idempotencyKey
         );
     }
