@@ -1,5 +1,7 @@
 # 0005. 비동기 TestRun 실행 계약
 
+> ⚠️ v1 role 메시지, `(snapshotId, targetType)` 작업, Baseline/Candidate fan-out 부분은 [ADR 0010](0010-single-target-test-run-model.md)이 대체한다.
+
 > Status: APPROVED
 > Owner: Backend
 > Last reviewed: 2026-08-27

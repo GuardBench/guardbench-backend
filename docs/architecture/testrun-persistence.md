@@ -2,8 +2,8 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Scope: GitHub Issue #14
-> Last reviewed: 2026-08-27
+> Scope: GitHub Issues #14, #106
+> Last reviewed: 2026-08-30
 > Related broad documentation issue: [#49](https://github.com/GuardBench/guardbench-backend/issues/49)
 
 이 문서는 #14에서 구현된 PostgreSQL 물리 Persistence 산출물의 탐색 인덱스다. 새 동작, DB 제약 또는 Context 경계를 결정하지 않으며, 구현 판단은 아래 APPROVED ADR을 따른다.
@@ -14,6 +14,7 @@
 - [ADR 0003: 실행·평가 결과 Aggregate와 write-side Port 경계](../decisions/0003-result-aggregate-and-write-port-boundaries.md)
 - [ADR 0006: 독립 Domain 경계와 Java 타입 격리](../decisions/0006-independent-domain-contract-boundaries.md)
 - [ADR 0008: 비동기 TestRun 물리 멱등성·claim·Outbox 계약](../decisions/0008-async-testrun-persistence-contract.md)
+- [ADR 0010: TestRun 단일 Target 실행 모델](../decisions/0010-single-target-test-run-model.md)
 
 ## 실제 산출물
 
@@ -21,9 +22,11 @@
 | --- | --- | --- |
 | Core schema | `src/main/resources/db/migration/V1__create_guardbench_schema.sql` | TestRun, Snapshot, Execution, Assertion, Change, Quality Gate 테이블·PK/FK/CHECK·index |
 | Async technical schema | `src/main/resources/db/migration/V2__create_async_testrun_technical_tables.sql` | HTTP idempotency, Outbox, resolution/execution claim 물리 계약 |
-| ERD | [PlantUML ERD](../diagrams/guardbench-mvp-physical-erd.puml) | V1/V2 관계와 cardinality |
+| Single Target schema | `src/main/resources/db/migration/V3__single_target_execution_model.sql` | Target reference/provider table, 단일 execution·claim PK, pending v2 Outbox 이관 |
+| ERD | [PlantUML ERD](../diagrams/guardbench-mvp-physical-erd.puml) | V1~V3 적용 후 관계와 cardinality |
 | TestRun write adapters | `testrun/infrastructure/persistence` | TestRun, Snapshot, TestExecution, idempotency, Outbox, claim Adapter |
-| Evaluation write adapters | `evaluation/infrastructure/persistence` | SnapshotEvaluation(Assertion + optional Change) 및 QualityGateResult Adapter |
+| Target adapters | `target/infrastructure/persistence`, `target/infrastructure/bedrock` | Target 등록·revision 준비·Bedrock 실행 Adapter |
+| Evaluation write adapters | `evaluation/infrastructure/persistence` | Assertion-only SnapshotEvaluation 및 NOT_EVALUATED QualityGateResult Adapter |
 | Evaluation write ports | `evaluation/domain/repository` | Evaluation 소유 local reference VO를 쓰는 write-side Port |
 | PostgreSQL integration tests | `src/test/java/com/guardbench/*Persistence*IntegrationTest.java`, `EvaluationPersistenceAdapterIntegrationTest.java` | Flyway schema와 Repository round-trip·제약 검증 |
 

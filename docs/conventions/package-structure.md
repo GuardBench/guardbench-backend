@@ -13,7 +13,7 @@
 ├─ testdefinition/
 ├─ testrun/
 ├─ evaluation/
-├─ guardrail/
+├─ target/
 └─ common/
 ```
 
@@ -33,7 +33,7 @@ testrun/
 - Repository 계약 예: `testrun/domain/repository/TestRunRepository.java`
 - 기술 구현 예: `testrun/infrastructure/persistence/TestRunRepositoryAdapter.java`
 - API DTO 예: `testrun/presentation/dto/TestRunCreateReq.java`
-- AWS Adapter 예: `guardrail/infrastructure/bedrock/BedrockGuardrailAdapter.java`
+- AWS Adapter 예: `target/infrastructure/bedrock/BedrockGuardrailExecutionAdapter.java`
 - Context 연동 Port 예: `testrun/application/port/out/LoadTestCaseSnapshotSourcesPort.java`
 - Context 연동 Adapter 예: `testrun/infrastructure/integration/testdefinition/TestDefinitionSnapshotSourceAdapter.java`
 

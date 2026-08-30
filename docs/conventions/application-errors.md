@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Last reviewed: 2026-08-27
+> Last reviewed: 2026-08-30
 > Canonical source: GitHub
 > Origin: [Notion 애플리케이션 오류 코드](https://app.notion.com/p/3c1eeed6b62d81d3a7c9f014bb788aa8)
 
@@ -86,12 +86,11 @@ Validation을 제외한 오류는 다음 구조를 사용한다.
 - Pagination 범위 위반
 - 허용되지 않은 정렬 필드 또는 방향
 - 빈 PATCH 객체
-- 서로 다른 Baseline과 Candidate Guardrail ID
 - 비어 있거나 최대 길이를 초과한 `Idempotency-Key`
 
 Field 경로는 외부 API 이름을 사용한다.
 
-- 중첩 필드: `candidate.guardrailId`
+- 중첩 필드: `target.identifier`
 - 배열 요소: `testCases[0].name`
 - Path 또는 Query: `testRunId`, `page`
 - 반복 Query: `sort[1]`
@@ -148,7 +147,7 @@ DB 연결·저장 실패, TestRun·Snapshot·OutboxEvent 접수 트랜잭션 실
 }
 ```
 
-TestRun이 이미 `202 Accepted`로 접수된 뒤 발생한 Candidate materialization 실패, Provider 호출 실패와 timeout은 기존 HTTP 요청의 `500`으로 바꾸지 않고 비동기 TestRun 실행 결과에 기록한다.
+TestRun이 이미 `202 Accepted`로 접수된 뒤 발생한 Target DRAFT materialization 실패, Provider 호출 실패와 timeout은 기존 HTTP 요청의 `500`으로 바꾸지 않고 비동기 TestRun 실행 결과에 기록한다.
 
 ## 오류 판단 우선순위
 
@@ -181,11 +180,11 @@ TestRun 재전송은 Validation 후 Idempotency 기록을 먼저 확인한다.
 
 ## TestExecution 실행 오류 Code
 
-> Primary contract: [ADR 0005: 재시도·timeout·visibility와 DLQ](../decisions/0005-async-test-run-execution-contract.md#재시도-timeout-visibility와-dlq)
+> Primary contract: [ADR 0010: 단일 Target 실행 모델](../decisions/0010-single-target-test-run-model.md)
 
-이 섹션은 ADR 0005가 승인한 공개 가능한 TestExecution 오류 code를 canonical하게 나열한다. ADR의 결정 근거와 대안은 ADR 0005에 있으며, 이 표는 API·Adapter 구현이 참조할 확정된 code 목록이다.
+이 섹션은 ADR 0010이 유지한 공개 가능한 TestExecution 오류 code를 canonical하게 나열한다. retry·timeout의 운영 근거는 ADR 0005의 대체되지 않은 부분을 참고하며, 이 표는 API·Adapter 구현이 참조할 확정된 code 목록이다.
 
-`TestExecution.error`는 HTTP Application Error와 다른 계층이며 위의 공통 오류 응답 구조를 따르지 않는다. 개별 TestExecution 결과 조회(`GET /api/v1/test-runs/{testRunId}/results`)의 `baselineExecution.error` 또는 `candidateExecution.error`에서 `ExecutionErrorDetailRes { code, message }`로만 노출한다.
+`TestExecution.error`는 HTTP Application Error와 다른 계층이며 위의 공통 오류 응답 구조를 따르지 않는다. 개별 TestExecution 결과 조회(`GET /api/v1/test-runs/{testRunId}/results`)의 `execution.error`에서 `ExecutionErrorDetailRes { code, message }`로만 노출한다.
 
 | Code | Terminal 상태 | 발생 조건 |
 | --- | --- | --- |
@@ -196,8 +195,8 @@ TestRun 재전송은 Validation 후 Idempotency 기록을 먼저 확인한다.
 | `PROVIDER_RESPONSE_INVALID` | `FAILED` | Provider 응답을 안전하게 정규화할 수 없음 |
 | `PROVIDER_TIMEOUT` | `TIMED_OUT` | Provider 호출이 전체 timeout(15초, ADR 0005) 안에 끝나지 않음 |
 
-이 6개 code는 `com.guardbench.testrun.domain.TestExecutionErrorCode`(Domain enum)와 `com.guardbench.testrun.application.port.out.GuardrailFailureCode`(소비자 소유 Port enum)에 각각 정의되어 있으며, `PROVIDER_UNAVAILABLE`과 `PROVIDER_TIMEOUT`만 재시도 가능하다(ADR 0005 참고).
+이 6개 code는 `com.guardbench.testrun.domain.TestExecutionErrorCode`(Domain enum)와 `com.guardbench.testrun.application.port.out.TargetFailureCode`(소비자 소유 Port enum)에 각각 정의되어 있으며, `PROVIDER_UNAVAILABLE`과 `PROVIDER_TIMEOUT`만 재시도 가능하다(ADR 0005의 대체되지 않은 retry 계약 참고).
 
 - 각 code는 고정된 안전한 message를 사용하며 Provider 원문, SDK 예외 메시지, stack trace, ARN, 자격 증명, 내부 endpoint를 노출하지 않는다.
-- 실제 Bedrock 예외 → `GuardrailFailureCode` 매핑은 Adapter 경계([Bedrock Guardrails Adapter 설계 근거: 오류와 timeout 매핑](../integrations/bedrock-guardrails-adapter.md#오류와-timeout-매핑))가 소유하고, `GuardrailFailureCode` → `TestExecutionErrorCode`·terminal 저장은 Worker Application Service(ADR 0005)가 소유한다.
+- 실제 Bedrock 예외 → `TargetFailureCode` 매핑은 [Bedrock Guardrails Target Adapter](../integrations/bedrock-guardrails-adapter.md)가 소유하고, `TargetFailureCode` → `TestExecutionErrorCode`·terminal 저장은 Worker Application Service가 소유한다.
 - 이 표에 없는 code를 추가하거나 기존 code의 terminal 상태·의미를 바꾸는 것은 공개 API 계약 변경이며 별도 ADR 또는 Issue 승인이 필요하다.

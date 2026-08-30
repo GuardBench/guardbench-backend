@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Team
-> Last reviewed: 2026-08-27
+> Last reviewed: 2026-08-30
 > Canonical source: GitHub
 > Origin: 없음
 
@@ -17,7 +17,7 @@
 | 도메인 타입 소유권, 기본 Aggregate, 패키지 의존 방향 | [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md), [ADR 0006](0006-independent-domain-contract-boundaries.md) | 실행·평가 결과 경계도 바꾸면 [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), 최종화 경계도 바꾸면 [ADR 0004](0004-testrun-finalization-atomicity.md) |
 | PostgreSQL, JPA, Flyway, 물리 스키마 | [ADR 0002](0002-postgresql-persistence-contract.md), [ADR 0006](0006-independent-domain-contract-boundaries.md) | 결과 테이블과 Repository 매핑은 [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), 최종화 제약은 [ADR 0004](0004-testrun-finalization-atomicity.md), Outbox·idempotency·claim DDL은 [ADR 0008](0008-async-testrun-persistence-contract.md) |
 | TestCase 논리 삭제와 동시 DELETE | [ADR 0002](0002-postgresql-persistence-contract.md), [ADR 0009](0009-testcase-soft-delete-concurrency.md) | Domain·Port 경계를 바꾸면 [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md)과 [ADR 0006](0006-independent-domain-contract-boundaries.md) |
-| TestRun Candidate HTTP 입력 | [ADR 0007](0007-testrun-candidate-draft-input.md), [API 안내](../api/README.md) | 접수+Outbox 원자 저장은 ADR 0005와 ADR 0008을 추가한다. |
+| TestRun Target HTTP 입력 | [ADR 0010](0010-single-target-test-run-model.md), [API 안내](../api/README.md) | 접수+Outbox 원자 저장은 ADR 0005와 ADR 0008을 추가한다. |
 | TestExecution·SnapshotEvaluation·QualityGateResult Aggregate와 write-side Repository | [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md), [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), [ADR 0006](0006-independent-domain-contract-boundaries.md) | 물리 매핑은 [ADR 0002](0002-postgresql-persistence-contract.md), TestRun 최종화는 [ADR 0004](0004-testrun-finalization-atomicity.md), Worker 중복 처리는 [ADR 0005](0005-async-test-run-execution-contract.md) |
 | TestRun `FINISHED` 전환과 Quality Gate 원자 저장 | [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), [ADR 0004](0004-testrun-finalization-atomicity.md), [ADR 0006](0006-independent-domain-contract-boundaries.md) | PostgreSQL 제약은 [ADR 0002](0002-postgresql-persistence-contract.md), Worker 선점·잠금/CAS·retry는 [ADR 0005](0005-async-test-run-execution-contract.md) |
 | Context 간 Port, Integration Adapter, 로컬 ID·VO와 Java 타입 격리 | [ADR 0006](0006-independent-domain-contract-boundaries.md) | Aggregate 저장 경계는 [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md)과 [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), 최종화는 [ADR 0004](0004-testrun-finalization-atomicity.md) |
@@ -42,11 +42,13 @@ ADR 0007  Candidate HTTP 입력을 DRAFT 전용으로 확정
 
 ADR 0009  ADR 0002의 활성 행 조건을 동시 TestCase 논리 삭제의 원자 저장 조건으로 구체화
 
+ADR 0010  ADR 0002·0003·0005·0007·0008의 Baseline/Candidate 부분을 단일 Target 모델로 대체
+
 ADR 0006  0001·0002·0003·0004·0005의 경계 간 Java 타입 공유와 직접 의존만 부분 대체
           Aggregate·Persistence·최종화·비동기 실행 결정은 유지
 ```
 
-ADR 0003은 ADR 0001을 대체하지 않는다. ADR 0004도 0003의 Aggregate와 Repository 소유권을 유지한다. ADR 0002는 Domain 경계를 물리 구조로 매핑하고, ADR 0009는 그 활성 행 조건을 TestCase 삭제 저장 경쟁에도 적용한다. ADR 0005는 기존 경계를 바꾸지 않은 채 비동기 실행·Worker·메시지 계약을 추가한다. ADR 0008은 ADR 0005의 의미를 바꾸지 않고 Outbox·claim·HTTP Idempotency의 물리 표현과 DB 시간 규칙을 확정한다. ADR 0007은 Candidate HTTP 입력 의미만 소유하며 resolution 흐름을 대체하지 않는다. ADR 0006은 기존 Aggregate와 런타임 결정을 유지하면서 Context 사이의 Java 타입 공유, ID VO 재사용과 직접 패키지 의존만 소비자 소유 Port와 로컬 모델로 대체한다.
+ADR 0010이 명시적으로 대체한 Baseline/Candidate·role 메시지·복합 key 부분은 이전 ADR을 현재 계약으로 사용하지 않는다. 그 외 ADR 0003의 결과 저장 경계, ADR 0004의 최종화 원자성, ADR 0008의 claim·Outbox·HTTP Idempotency 기술 보장, ADR 0006의 Context 간 타입 격리는 유지한다.
 
 ## 상태와 작성
 

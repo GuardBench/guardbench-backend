@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: KOSA AWS 3팀
-> Last reviewed: 2026-08-27
+> Last reviewed: 2026-08-30
 > Canonical source: GitHub
 > Origin: [Notion Dashboard](https://app.notion.com/p/3c0eeed6b62d80fbb64eec69796cc56d)
 
@@ -24,15 +24,16 @@
 - `DRAFT`: 검토 중인 초안. 구현을 확정하는 근거로 단독 사용하지 않는다.
 - `APPROVED`: 팀이 승인한 구현 계약. 승격할 때 초안 검토 상태를 나타내는 `AI assistance` 메타데이터를 제거한다.
 - `DEPRECATED`: 더 이상 사용하지 않는 계약. 대체 문서를 확인한다.
+- `SUPERSEDED`: 일부 또는 전체 결정을 후속 ADR이 대체했다. 대체 ADR을 현재 계약으로 사용한다.
 
 ## 문서 지도
 
 | 영역 | 문서 | 상태 | 담당 | 최종 검토일 | Notion 원본 |
 | --- | --- | --- | --- | --- | --- |
 | 제품 | [MVP 범위](product/mvp-scope.md) | APPROVED | KOSA AWS 3팀 | 2026-08-23 | [최신 PRD](https://app.notion.com/p/3c0eeed6b62d80759d77f0ab0d5bcbd3) |
-| 도메인 | [핵심 모델](domain/core-model.md) | APPROVED | Backend | 2026-08-24 | [도메인 모델 정의](https://app.notion.com/p/3c0eeed6b62d81b48c03ed6034440936) |
-| 도메인 | [평가 계약](domain/evaluation-contract.md) | APPROVED | Backend | 2026-08-24 | [MVP 평가 계약](https://app.notion.com/p/3c3eeed6b62d8120a57eebaa13b6ed27) |
-| API | [API 안내](api/README.md) · [OpenAPI](api/openapi.yaml) | APPROVED | Backend | 2026-08-24 | [API 명세서](https://app.notion.com/p/3c0eeed6b62d805dac0be8db487b1359) |
+| 도메인 | [핵심 모델](domain/core-model.md) | APPROVED | Backend | 2026-08-30 | [도메인 모델 정의](https://app.notion.com/p/3c0eeed6b62d81b48c03ed6034440936) |
+| 도메인 | [평가 계약](domain/evaluation-contract.md) | APPROVED | Backend | 2026-08-30 | [MVP 평가 계약](https://app.notion.com/p/3c3eeed6b62d8120a57eebaa13b6ed27) |
+| API | [API 안내](api/README.md) · [OpenAPI](api/openapi.yaml) | APPROVED | Backend | 2026-08-30 | [API 명세서](https://app.notion.com/p/3c0eeed6b62d805dac0be8db487b1359) |
 | 아키텍처 | [시스템 개요](architecture/system-overview.md) | APPROVED | Backend | 2026-08-23 | [도메인 모델 정의](https://app.notion.com/p/3c0eeed6b62d81b48c03ed6034440936) |
 | 아키텍처 | [인프라](architecture/infrastructure.md) | APPROVED | Infra | 2026-08-27 | [인프라 구성 설계](https://app.notion.com/p/3c0eeed6b62d81269f60e1c69fbf9fcc) |
 | 아키텍처 | [TestRun Persistence 구현 인덱스](architecture/testrun-persistence.md) | APPROVED | Backend | 2026-08-27 | 없음 |
@@ -45,9 +46,10 @@
 | 결정 | [ADR 0004: TestRun 최종 평가와 종료의 원자성](decisions/0004-testrun-finalization-atomicity.md) | APPROVED | Backend | 2026-08-24 | 없음 |
 | 결정 | [ADR 0005: 비동기 TestRun 실행 계약](decisions/0005-async-test-run-execution-contract.md) | APPROVED | Backend | 2026-08-27 | 없음 |
 | 결정 | [ADR 0006: 독립 도메인 개발을 위한 경계 계약과 Java 타입 격리](decisions/0006-independent-domain-contract-boundaries.md) | APPROVED | Backend | 2026-08-25 | 없음 |
-| 결정 | [ADR 0007: TestRun Candidate 입력은 DRAFT만 허용](decisions/0007-testrun-candidate-draft-input.md) | APPROVED | Backend | 2026-08-25 | 없음 |
+| 결정 | [ADR 0007: TestRun Candidate 입력은 DRAFT만 허용](decisions/0007-testrun-candidate-draft-input.md) | SUPERSEDED | Backend | 2026-08-25 | 없음 |
 | 결정 | [ADR 0008: 비동기 TestRun 물리 멱등성·claim·Outbox 계약](decisions/0008-async-testrun-persistence-contract.md) | APPROVED | Backend | 2026-08-25 | 없음 |
 | 결정 | [ADR 0009: TestCase 논리 삭제의 동시 요청 처리](decisions/0009-testcase-soft-delete-concurrency.md) | APPROVED | Backend | 2026-08-25 | 없음 |
+| 결정 | [ADR 0010: TestRun 단일 Target 실행 모델](decisions/0010-single-target-test-run-model.md) | APPROVED | Backend | 2026-08-30 | 없음 |
 | AI 개발 | [작업 워크플로](ai-development/workflow.md) | APPROVED | Team | 2026-08-24 | 현재 대화에서 승격 |
 | AI 개발 | [Backend CI와 dev Merge Gate](ai-development/backend-ci-merge-gate.md) | DRAFT | Backend | 2026-08-26 | 없음 |
 | AI 개발 | [코드 리뷰](ai-development/review.md) | APPROVED | Team | 2026-08-24 | PR #20·#23 사례와 Issue #33 |

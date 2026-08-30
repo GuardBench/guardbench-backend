@@ -18,7 +18,7 @@ tags:
   - name: TestCase
     description: 현재 편집 가능한 정책 테스트 정의 관리
   - name: TestRun
-    description: Baseline과 Candidate의 비동기 실행 및 결과 조회
+    description: 단일 Target의 비동기 실행 및 결과 조회
 paths:
   /api/v1/test-suites:
     post:
@@ -324,8 +324,8 @@ paths:
         실행 완료가 아니라 TestRun 실행 요청을 안전하게 접수한다.
         TestRun, 현재 활성 TestCase의 불변 Snapshot, 선택적인 Idempotency 정보,
         TestRunRequested OutboxEvent를 하나의 RDS 트랜잭션으로 저장한다.
-        커밋 후 발생한 SQS 발행·Candidate materialization·실행 오류는 이 HTTP 요청의 실패로 바꾸지 않고 TestRun 결과로 기록한다.
-        Candidate는 POST 호출 순간이 아니라 PREPARING 단계에서 DRAFT를 numbered version으로 materialize하여 고정한다.
+        커밋 후 발생한 SQS 발행·Target 준비·실행 오류는 이 HTTP 요청의 실패로 바꾸지 않고 TestRun 결과로 기록한다.
+        BEDROCK_GUARDRAIL DRAFT는 POST 호출 순간이 아니라 PREPARING 단계에서 numbered revision으로 고정한다.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -335,12 +335,10 @@ paths:
             schema: { $ref: '#/components/schemas/TestRunCreateReq' }
             example:
               testSuiteId: 1
-              baseline:
-                guardrailId: guardrail-123
-                version: '4'
-              candidate:
-                guardrailId: guardrail-123
-                source: DRAFT
+              target:
+                type: BEDROCK_GUARDRAIL
+                identifier: guardrail-123
+                revision: DRAFT
       responses:
         '202':
           description: |
@@ -400,7 +398,7 @@ paths:
         프론트엔드 Polling을 위한 가벼운 상태·진행률·요약 결과 조회다.
         QUEUED, PREPARING, RUNNING, FINISHED 어느 상태라도 TestRun이 존재하면 200으로 응답한다.
         Quality Gate FAIL 또는 TestRun ERROR여도 조회 자체가 성공하면 HTTP 200이다.
-        TestCase별 Snapshot·Execution·Assertion·Change 결과 배열은 포함하지 않으며 개별 결과 목록 API에서 조회한다.
+        TestCase별 Snapshot·Execution·Assertion 결과 배열은 포함하지 않으며 개별 결과 목록 API에서 조회한다.
       responses:
         '200':
           description: 조회 성공
@@ -418,14 +416,8 @@ paths:
                   progress:
                     processedTestCaseCount: 120
                     percent: 47.43
-                  targets:
-                    baseline:
-                      guardrailId: guardrail-123
-                      version: '4'
-                    candidate:
-                      guardrailId: guardrail-123
-                      requestedSource: DRAFT
-                      resolvedVersion: '5'
+                  target:
+                    referenceId: 0b31c698-0ec1-44ec-bdbb-2bb28d7b9582
                   executionOutcome: null
                   qualityGate: null
                   createdAt: '2026-08-24T14:30:00Z'
@@ -442,7 +434,7 @@ paths:
       operationId: listTestRunResults
       summary: TestRun 개별 결과 목록 조회
       description: |
-        FINISHED인 TestRun의 불변 Snapshot별 실행·Assertion·Change 결과를 조회한다.
+        FINISHED인 TestRun의 불변 Snapshot별 실행·Assertion 결과를 조회한다.
         종료 전 상태에서는 409 TEST_RUN_NOT_FINISHED로 응답한다.
         FINISHED이면 executionOutcome이 INCOMPLETE 또는 ERROR여도 조회 자체는 200이다.
         실패 결과를 별도 배열로 중복 제공하지 않고 필터를 통해 조회한다.
@@ -455,11 +447,8 @@ paths:
         - $ref: '#/components/parameters/TestRunResultCategory'
         - $ref: '#/components/parameters/TestRunResultExpectedAction'
         - $ref: '#/components/parameters/TestRunResultSeverity'
-        - $ref: '#/components/parameters/BaselineExecutionStatusFilter'
-        - $ref: '#/components/parameters/CandidateExecutionStatusFilter'
+        - $ref: '#/components/parameters/ExecutionStatusFilter'
         - $ref: '#/components/parameters/AssertionStatusFilter'
-        - $ref: '#/components/parameters/ComparabilityStatusFilter'
-        - $ref: '#/components/parameters/ChangeTypeFilter'
       responses:
         '200':
           description: 조회 성공
@@ -478,17 +467,11 @@ paths:
                       expectedAction: BLOCK
                       severity: CRITICAL
                       category: PII
-                      baselineExecution:
-                        status: SUCCEEDED
-                        actualAction: BLOCK
-                        error: null
-                      candidateExecution:
+                      execution:
                         status: SUCCEEDED
                         actualAction: ALLOW
                         error: null
                       assertionStatus: FAIL
-                      comparabilityStatus: COMPARABLE
-                      changeType: SECURITY_REGRESSION
                   page:
                     number: 1
                     size: 20
@@ -748,31 +731,16 @@ components:
       in: query
       description: Snapshot Severity 정확히 일치 Filter
       schema: { $ref: '#/components/schemas/Severity' }
-    BaselineExecutionStatusFilter:
-      name: baselineExecutionStatus
+    ExecutionStatusFilter:
+      name: executionStatus
       in: query
-      description: Baseline 실행 상태 정확히 일치 Filter
-      schema: { $ref: '#/components/schemas/TestExecutionResultStatus' }
-    CandidateExecutionStatusFilter:
-      name: candidateExecutionStatus
-      in: query
-      description: Candidate 실행 상태 정확히 일치 Filter
+      description: Target 실행 상태 정확히 일치 Filter
       schema: { $ref: '#/components/schemas/TestExecutionResultStatus' }
     AssertionStatusFilter:
       name: assertionStatus
       in: query
-      description: Candidate Assertion 상태 정확히 일치 Filter. null 결과는 일치하지 않는다.
+      description: Assertion 상태 정확히 일치 Filter. null 결과는 일치하지 않는다.
       schema: { $ref: '#/components/schemas/AssertionStatus' }
-    ComparabilityStatusFilter:
-      name: comparabilityStatus
-      in: query
-      description: 비교 가능성 상태 정확히 일치 Filter. ChangeResult가 없는 null 결과는 일치하지 않는다.
-      schema: { $ref: '#/components/schemas/ComparabilityStatus' }
-    ChangeTypeFilter:
-      name: changeType
-      in: query
-      description: 변화 유형 정확히 일치 Filter. changeType이 null인 결과는 일치하지 않는다.
-      schema: { $ref: '#/components/schemas/ChangeType' }
   responses:
     ValidationError:
       description: 요청값 검증 실패
@@ -976,42 +944,32 @@ components:
           type: array
           items: { $ref: '#/components/schemas/TestCaseListItemRes' }
         page: { $ref: '#/components/schemas/PageMetaRes' }
-    BaselineTargetReq:
+    TargetReferenceReq:
       type: object
-      description: DRAFT가 아닌 불변 numbered Guardrail version
-      required: [guardrailId, version]
+      description: TestRun이 실행할 단일 Target
+      required: [type, identifier, revision]
       additionalProperties: false
       properties:
-        guardrailId: { type: string, minLength: 1, pattern: '.*\S.*' }
-        version:
+        type: { type: string, enum: [BEDROCK_GUARDRAIL] }
+        identifier: { type: string, minLength: 1, pattern: '.*\S.*' }
+        revision:
           type: string
-          pattern: '^[0-9]+$'
-          description: 불변 numbered Guardrail version. DRAFT는 허용하지 않는다.
-          example: '4'
-    CandidateTargetReq:
-      type: object
-      description: PREPARING 단계에서 numbered version으로 materialize할 Guardrail DRAFT
-      required: [guardrailId, source]
-      additionalProperties: false
-      properties:
-        guardrailId: { type: string, minLength: 1, pattern: '.*\S.*' }
-        source: { type: string, enum: [DRAFT] }
+          pattern: '^(DRAFT|[1-9][0-9]{0,7})$'
+          description: DRAFT 또는 불변 numbered revision
     TestRunCreateReq:
       type: object
       description: |
         TestSuite의 활성 TestCase 전체를 실행 대상으로 사용하며 TestCase ID 목록은 받지 않는다.
-        baseline.guardrailId와 candidate.guardrailId는 같아야 한다.
         논리 삭제된 TestCase는 제외하고 활성 TestCase가 없으면 409 TEST_SUITE_EMPTY로 응답한다.
-      required: [testSuiteId, baseline, candidate]
+      required: [testSuiteId, target]
       additionalProperties: false
       properties:
         testSuiteId: { type: integer, format: int64, minimum: 1 }
-        baseline: { $ref: '#/components/schemas/BaselineTargetReq' }
-        candidate: { $ref: '#/components/schemas/CandidateTargetReq' }
+        target: { $ref: '#/components/schemas/TargetReferenceReq' }
     TestRunStatus:
       type: string
       description: |
-        QUEUED는 접수 트랜잭션 완료, PREPARING은 Candidate materialization과 대상 고정,
+        QUEUED는 접수 트랜잭션 완료, PREPARING은 Target 준비와 대상 고정,
         RUNNING은 테스트 실행 중, FINISHED는 정상 완료 또는 오류로 처리가 종료된 상태다.
       enum: [QUEUED, PREPARING, RUNNING, FINISHED]
     TestRunCreateRes:
@@ -1093,39 +1051,19 @@ components:
     TestRunProgressRes:
       type: object
       description: |
-        Snapshot의 Baseline과 Candidate 처리가 모두 터미널 상태가 되면 처리 완료 한 건으로 계산한다.
+        Snapshot의 단일 Target 처리가 터미널 상태가 되면 처리 완료 한 건으로 계산한다.
         실패와 timeout도 더 이상 재시도하지 않는 터미널 상태라면 processedTestCaseCount에 포함한다.
       required: [processedTestCaseCount, percent]
       additionalProperties: false
       properties:
         processedTestCaseCount: { type: integer, minimum: 0 }
         percent: { type: number, format: double, minimum: 0, maximum: 100 }
-    BaselineExecutionTargetRes:
+    TargetReferenceRes:
       type: object
-      required: [guardrailId, version]
+      required: [referenceId]
       additionalProperties: false
       properties:
-        guardrailId: { type: string }
-        version: { type: string, pattern: '^[0-9]+$' }
-    CandidateExecutionTargetRes:
-      type: object
-      required: [guardrailId, requestedSource, resolvedVersion]
-      additionalProperties: false
-      properties:
-        guardrailId: { type: string }
-        requestedSource: { type: string, enum: [DRAFT] }
-        resolvedVersion:
-          type: string
-          pattern: '^[0-9]+$'
-          nullable: true
-          description: Materialization 완료 전 또는 실패 시 null
-    TestRunTargetsRes:
-      type: object
-      required: [baseline, candidate]
-      additionalProperties: false
-      properties:
-        baseline: { $ref: '#/components/schemas/BaselineExecutionTargetRes' }
-        candidate: { $ref: '#/components/schemas/CandidateExecutionTargetRes' }
+        referenceId: { type: string, minLength: 1 }
     QualityGateMetricsRes:
       type: object
       required:
@@ -1166,7 +1104,7 @@ components:
         - status
         - testCaseCount
         - progress
-        - targets
+        - target
         - executionOutcome
         - qualityGate
         - createdAt
@@ -1180,7 +1118,7 @@ components:
         status: { $ref: '#/components/schemas/TestRunStatus' }
         testCaseCount: { type: integer, minimum: 1 }
         progress: { $ref: '#/components/schemas/TestRunProgressRes' }
-        targets: { $ref: '#/components/schemas/TestRunTargetsRes' }
+        target: { $ref: '#/components/schemas/TargetReferenceRes' }
         executionOutcome:
           type: string
           allOf:
@@ -1202,17 +1140,6 @@ components:
     AssertionStatus:
       type: string
       enum: [PASS, FAIL]
-    ComparabilityStatus:
-      type: string
-      enum: [COMPARABLE, NOT_COMPARABLE]
-    ChangeType:
-      type: string
-      enum:
-        - NO_CHANGE
-        - SECURITY_REGRESSION
-        - USABILITY_REGRESSION
-        - IMPROVEMENT
-        - POLICY_BEHAVIOR_CHANGED
     ExecutionErrorDetailRes:
       type: object
       description: |
@@ -1247,11 +1174,9 @@ components:
     TestRunResultListItemRes:
       type: object
       description: |
-        실행 당시 Snapshot과 그 Snapshot의 Baseline/Candidate 결과다.
+        실행 당시 Snapshot과 그 Snapshot의 단일 Target 결과다.
         현재 TestCase 수정·논리 삭제와 무관하게 값이 유지된다.
-        Candidate ActualResult가 없으면 assertionStatus는 null이다.
-        ChangeResult가 없으면 comparabilityStatus와 changeType이 null이다.
-        NOT_COMPARABLE이면 changeType은 null이다.
+        ActualResult가 없으면 assertionStatus는 null이다.
       required:
         - snapshotId
         - testCaseId
@@ -1260,11 +1185,8 @@ components:
         - expectedAction
         - severity
         - category
-        - baselineExecution
-        - candidateExecution
+        - execution
         - assertionStatus
-        - comparabilityStatus
-        - changeType
       additionalProperties: false
       properties:
         snapshotId: { type: integer, format: int64, minimum: 1 }
@@ -1274,22 +1196,11 @@ components:
         expectedAction: { $ref: '#/components/schemas/Action' }
         severity: { $ref: '#/components/schemas/Severity' }
         category: { type: string, minLength: 1 }
-        baselineExecution: { $ref: '#/components/schemas/TestExecutionResultRes' }
-        candidateExecution: { $ref: '#/components/schemas/TestExecutionResultRes' }
+        execution: { $ref: '#/components/schemas/TestExecutionResultRes' }
         assertionStatus:
           type: string
           allOf:
             - $ref: '#/components/schemas/AssertionStatus'
-          nullable: true
-        comparabilityStatus:
-          type: string
-          allOf:
-            - $ref: '#/components/schemas/ComparabilityStatus'
-          nullable: true
-        changeType:
-          type: string
-          allOf:
-            - $ref: '#/components/schemas/ChangeType'
           nullable: true
     TestRunResultListRes:
       type: object

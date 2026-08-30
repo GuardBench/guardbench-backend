@@ -1,5 +1,7 @@
 # 0008. 비동기 TestRun 물리 멱등성·claim·Outbox 계약
 
+> ⚠️ execution claim 복합 key, role 포함 deduplication key, v1 pending payload 부분은 [ADR 0010](0010-single-target-test-run-model.md)이 대체한다.
+
 > Status: APPROVED
 > Owner: Backend
 > Last reviewed: 2026-08-25

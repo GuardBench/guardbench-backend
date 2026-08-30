@@ -1,118 +1,51 @@
-# Bedrock Guardrails Adapter 설계 근거
+# Bedrock Guardrails Target Adapter 설계 근거
 
 > Status: APPROVED
 > Owner: Backend
-> Last reviewed: 2026-08-25
+> Last reviewed: 2026-08-30
 > Canonical source: GitHub
-> Origin: Issue #17, PR #58 리뷰 반영
+> Related: [ADR 0010](../decisions/0010-single-target-test-run-model.md)
 
-이 문서는 #17의 Port와 Normalizer, concrete Adapter가 실제 Amazon Bedrock API/Java SDK 계약을 어떻게 반영하는지 기록한다. 이 문서는 운영 인프라나 AWS 자격 증명을 승인하지 않으며, SDK client의 Spring credentials/region 조립과 실제 AWS E2E는 별도 범위다.
+Bedrock Guardrails는 GuardBench의 상위 Domain이 아니라 Target 경계의 하나의 provider 구현이다. AWS SDK를 아는 코드는 `com.guardbench.target.infrastructure.bedrock`에만 두고, TestRun Application이 소유한 provider-independent Port와 값 계약으로 변환한다.
 
-`ApplyGuardrail`은 foundation model 호출과 분리된 독립 평가 API다. 따라서 GuardBench가 평가할 입력 텍스트를 직접 전달하며, 모델 ID나 모델 응답을 요청하지 않는다. #17의 Candidate 경로에서는 먼저 DRAFT를 숫자 버전으로 materialize한 뒤 그 버전을 평가하지만, API 자체는 사전 구성된 Guardrail의 `DRAFT` 버전을 직접 평가하는 것도 허용한다.
+## 경계
 
-## 공식 참고 자료
-
-- [CreateGuardrailVersion API](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_CreateGuardrailVersion.html)
-- [ApplyGuardrail API](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ApplyGuardrail.html)
-- [GuardrailCoverage API](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_GuardrailCoverage.html)
-- [독립 ApplyGuardrail 사용 가이드](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-use-independent-api.html)
-- [AWS SDK for Java BedrockClient](https://docs.aws.amazon.com/java/api/latest/software/amazon/awssdk/services/bedrock/BedrockClient.html)
-- [AWS SDK for Java BedrockRuntimeClient](https://docs.aws.amazon.com/java/api/latest/software/amazon/awssdk/services/bedrockruntime/BedrockRuntimeClient.html)
-- [AWS SDK for Java ApplyGuardrailResponse](https://docs.aws.amazon.com/java/api/latest/software/amazon/awssdk/services/bedrockruntime/model/ApplyGuardrailResponse.html)
-
-## API와 SDK 경계
-
-| GuardBench 작업 | AWS API | Java SDK client | SDK module |
-| --- | --- | --- | --- |
-| Candidate DRAFT materialization | CreateGuardrailVersion | BedrockClient | bedrock |
-| Snapshot input 평가 | ApplyGuardrail | BedrockRuntimeClient | bedrockruntime |
-
-`testrun/application/port/out`은 AWS SDK를 import하지 않는다. 추후 `guardrail/infrastructure/bedrock` Adapter만 SDK client와 SDK model을 알고 Port의 scalar/value contract로 변환한다.
-
-## Candidate materialization
-
-### 요청
-
-CreateGuardrailVersion에는 다음 값을 전달한다.
-
-| AWS 필드 | 설계 값 |
-| --- | --- |
-| guardrailIdentifier | TestRun의 고정 target identifier. AWS Pattern과 2048자 제약은 실행 요청과 동일하며 현재 Port는 non-blank만 검증한다 |
-| clientRequestToken | `guardbench-test-run-{testRunId}` |
-| description | MVP에서는 선택 사항이며 별도 의미를 부여하지 않음 |
-
-AWS 문서상 `clientRequestToken`은 1~256자의 영숫자/하이픈 값이며 같은 token의 재요청은 idempotent하게 처리된다. 따라서 TestRun별 결정적 token을 `GuardrailMaterializationRequest.java`가 생성한다.
-
-### 응답
-
-HTTP 202 응답의 `guardrailId`와 숫자형 `version`을 `GuardrailMaterializedVersion.java`로 변환한다. #17의 Candidate materialization 결과는 반드시 숫자형 version이어야 하며, Candidate DRAFT를 그대로 실행 대상으로 전달하지 않는다.
-
-## Guardrail 실행
-
-### 요청
-
-ApplyGuardrail에는 다음을 전달한다.
-
-| AWS 필드 | 설계 값 |
-| --- | --- |
-| guardrailIdentifier | materialized target identifier. AWS Pattern은 `(\|([a-z0-9]+)\|(arn:aws(-[^:]+)?:bedrock:[a-z0-9-]{1,20}:[0-9]{12}:guardrail/[a-z0-9]+))`이고 최대 2048자다. 현재 Port는 non-blank만 검증한다 |
-| guardrailVersion | Candidate 경로에서는 1~8자리 숫자형 resolved version. AWS API 자체는 사전 구성된 Guardrail의 `DRAFT`도 허용 |
-| source | MVP input 실행이므로 `INPUT` |
-| content | Snapshot input을 하나의 text content block으로 변환 |
-| outputScope | MVP에서는 `INTERVENTIONS`로 고정. `FULL`은 detected/non-detected 항목 전체를 반환하는 enhanced debugging 용도이며 PII detection 값까지 포함할 수 있으므로 MVP에서는 사용하지 않는다 |
-
-ApplyGuardrailRequest의 `content`는 필수이며 `source`는 `INPUT` 또는 `OUTPUT`이다. MVP는 TestCaseSnapshot input 평가이므로 `INPUT`만 사용한다. `outputScope`는 Required: No이고 유효한 값은 `INTERVENTIONS`와 `FULL`이다. API Reference는 기본값을 명시하지 않으므로 이 문서도 기본값을 단정하지 않는다. MVP 판정 입력은 action뿐이므로 `INTERVENTIONS`로 고정하고, PII를 포함한 assessment 원문을 응답에 담을 수 있는 `FULL`은 별도 telemetry 계약이 승인되기 전까지 요청하지 않는다.
-
-`guardrailVersion` Pattern은 `(|([1-9][0-9]{0,7})|(DRAFT))`이므로 `GuardrailExecutionRequest`와 `GuardrailMaterializedVersion`의 `[1-9][0-9]{0,7}` 검증은 AWS 계약을 따른다. 다만 `docs/api/openapi.yaml`과 `ck_test_run_versions`는 `^[0-9]+$`를 허용해 `"0"`과 9자리 값이 입력·저장될 수 있고, 그 값은 Port 생성 시점에 `IllegalArgumentException`으로 거부된다.
-
-### 응답 정규화
-
-AWS top-level `action`만으로는 hard block과 masking을 구분할 수 없다. `GUARDRAIL_INTERVENED`는 AWS에서 두 결과 모두에 사용된다. 따라서 Bedrock Adapter는 `INTERVENTIONS` scope의 structured assessment action만 내부적으로 allowlist 분류하고, raw provider 내용 없이 provider-independent binary action을 Port에 전달한다.
-
-| AWS 응답 조건 | TestRun 결과 |
-| --- | --- |
-| top-level `NONE` | ActualResult(`ALLOW`) |
-| `GUARDRAIL_INTERVENED` + assessment에 `BLOCKED` 하나 이상 | ActualResult(`BLOCK`) |
-| `GUARDRAIL_INTERVENED` + `BLOCKED` 없이 `ANONYMIZED` 하나 이상 | ActualResult(`ALLOW`) |
-| `GUARDRAIL_INTERVENED` + 알 수 없는/누락된 structured policy action | `PROVIDER_RESPONSE_INVALID` |
-
-`BLOCKED`와 `ANONYMIZED`가 함께 있으면 실제 흐름을 거부하는 `BLOCKED`를 우선한다. `ANONYMIZED`는 Guardrail 처리 뒤 흐름이 계속되는 현재 MVP의 binary `ALLOW`로 축약한다. 이로 인해 no-intervention ALLOW와 masked ALLOW를 Evaluation이 구분하거나, masking 자체를 기대값으로 검증하지는 않는다. 그런 redaction correctness와 별도 masking 기대값은 후속 계약 범위다.
-
-`GuardrailResultNormalizer.java`는 Adapter가 이미 만든 `ALLOW` 또는 `BLOCK`만 Domain ActualResult로 변환한다. Adapter가 AWS raw `action`, assessment, output을 Port에 전달하지 않으므로, null/unknown provider response나 분류 불가 intervention은 `PROVIDER_RESPONSE_INVALID`로 실패 처리하고 ActualResult를 만들지 않는다.
-
-`guardrailCoverage`와 `textCharacters`는 AWS API에서 optional이므로 실행 성공/실패의 조건으로 두지 않는다. 값이 누락되거나 `guarded != total`이어도 그 자체만으로 유효한 action을 실패로 바꾸지 않는다. guarded/total 숫자는 추후 내부 telemetry 후보로만 검토하며, MVP evaluator와 `GuardrailExecutionResult`에는 포함하지 않는다.
-
-실제 응답에는 `actionReason`, `assessments`, `outputs`, `usage`, `coverage`가 포함될 수 있지만 Adapter는 위 allowlisted action code만 내부적으로 읽는다. `actionReason`, assessment 내 match/regex/custom word/PII 값, output text, ARN, provider raw error, 원문 content는 Port·Domain·DB·API·일반 로그 어디에도 전달하거나 저장하지 않는다. `usage`와 guardrail processing latency는 raw text 없이 수치 메트릭으로만, 별도 telemetry 계약이 승인된 뒤에 추가한다. 정책 family의 allowlisted summary도 별도 계약 없이는 추가하지 않는다.
-
-## 오류와 timeout 매핑
-
-| AWS/SDK 상황 | GuardBench code | 처리 |
+| 단계 | 소비자 소유 Port | Bedrock API |
 | --- | --- | --- |
-| ResourceNotFoundException | TARGET_NOT_FOUND | FAILED |
-| AccessDeniedException | TARGET_ACCESS_DENIED | FAILED |
-| ValidationException 또는 materialization ConflictException | TARGET_CONFIGURATION_INVALID | FAILED |
-| ThrottlingException, InternalServerException, ServiceUnavailableException, ServiceQuotaExceededException | PROVIDER_UNAVAILABLE | retry 후 FAILED |
-| SDK 응답 action 누락/미지원 값 | PROVIDER_RESPONSE_INVALID | FAILED |
-| SDK/client timeout | PROVIDER_TIMEOUT | timeout 재시도 후 TIMED_OUT |
-| SDK 원문 메시지/stack trace | 공개하지 않음 | 고정 안전 메시지 사용 |
+| Target 등록 | `RegisterTargetReferencePort` | 외부 호출 없음 |
+| DRAFT 준비 | `TargetPreparationPort` | `CreateGuardrailVersion` |
+| Snapshot input 실행 | `TargetExecutionPort` | `ApplyGuardrail` |
 
-DB commit, SQS publish/ack 같은 기술 실패는 이 Adapter에서 TestExecution 실패로 바꾸지 않는다. Provider 호출 결과가 정상적으로 정규화된 뒤의 claim, 저장, retry와 최종화는 #18과 ADR 0005의 책임이다.
+TestRun은 `TargetReference`만 전달한다. Adapter는 Target 저장소에서 `guardrailIdentifier`, `requestedRevision`, `resolvedRevision`을 조회하며 이 값을 TestRun Domain에 복제하지 않는다.
 
-## 현재 구현과 후속 범위
+## 등록과 준비
 
-현재 PR에는 다음을 구현한다.
+- 공개 Target type은 `BEDROCK_GUARDRAIL`이다.
+- revision은 `DRAFT` 또는 `[1-9][0-9]{0,7}` numbered revision이다.
+- numbered revision은 등록 시 `resolvedRevision`으로 고정한다.
+- DRAFT는 PREPARING에서 `CreateGuardrailVersion`으로 materialize한다. `guardbench-test-run-{testRunId}` 형태의 결정적 `clientRequestToken`을 사용한다.
+- 이미 `resolvedRevision`이 있으면 준비 호출을 반복하지 않는다.
+- AWS 호출은 DB 트랜잭션 밖에서 수행하고, 성공 후 확정 revision을 Target 저장소에 반영한다.
 
-- 소비자 소유 materialization/execution Port와 provider-independent request/result/failure value contract
-- action과 failure code를 Core 결과로 바꾸는 Normalizer
-- `guardrail/infrastructure/bedrock`의 `BedrockClient`/`BedrockRuntimeClient` concrete Adapter
-- AWS SDK request·response·exception mock 단위 테스트
-- `software.amazon.awssdk:bedrock:2.54.3`, `software.amazon.awssdk:bedrockruntime:2.54.3` production dependency
+AWS 근거: [CreateGuardrailVersion API](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_CreateGuardrailVersion.html), [ApplyGuardrail API](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ApplyGuardrail.html), [독립 ApplyGuardrail 사용 가이드](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-use-independent-api.html).
 
-아직 구현하지 않은 항목:
+## 실행과 정규화
 
-- Spring credentials/region 및 SDK client bean 조립
-- 실제 AWS credential을 이용한 E2E
-- version 제약 세 계층(`openapi.yaml`·`ck_test_run_versions`·Guardrail Port) 정렬과 거부 값을 `TARGET_CONFIGURATION_INVALID`로 정규화하는 변환은 #18의 Worker orchestration에서 처리한다
-- `guardrailIdentifier`에 AWS Pattern 검증을 도입할지는 Port 계약을 좁히는 결정이므로 별도 판단이 필요하다
+`ApplyGuardrail` 요청은 Target 저장소의 identifier/resolved revision, Snapshot input, `source=INPUT`, `outputScope=INTERVENTIONS`를 사용한다. DRAFT 상태로는 실행하지 않는다.
 
-이 문서는 #49에서 APPROVED로 승격됐으며 [비동기 TestRun 계약 맵](../contracts/README.md)의 `resolution-flow`, `provider-retry-and-dlq` 계약 키에서 보조 참조로 라우팅된다. Primary contract는 여전히 [ADR 0005](../decisions/0005-async-test-run-execution-contract.md)이며, 이 문서는 그 계약이 실제 AWS API/SDK 필드에 대응하는 설계 근거를 소유한다.
+| Bedrock action | Target action |
+| --- | --- |
+| `GUARDRAIL_INTERVENED` | `BLOCK` |
+| `NONE` | `ALLOW` |
+
+null/알 수 없는 action은 `PROVIDER_RESPONSE_INVALID`다. SDK 예외은 `TARGET_NOT_FOUND`, `TARGET_ACCESS_DENIED`, `TARGET_CONFIGURATION_INVALID`, `PROVIDER_TIMEOUT`, `PROVIDER_UNAVAILABLE`, `PROVIDER_RESPONSE_INVALID`의 안전한 코드로 매핑한다. Provider 원문 오류, assessment, output text, input content, ARN, stack trace는 Port·Domain·DB·API·일반 로그에 전달하지 않는다.
+
+## Retry와 timeout
+
+- SDK 전체 timeout, 개별 시도 timeout, SDK retry는 `guardbench.bedrock.*` 설정을 사용한다.
+- Application retry, claim lease, stale token 차단은 TestRun Worker 계약을 유지한다.
+- `ApplyGuardrail`은 fencing token을 받지 않으므로 lease 경계에서 provider 호출이 중복될 수 있지만 stale 응답은 terminal TestExecution에 반영하지 않는다.
+
+## 범위 외
+
+다른 provider, 범용 HTTP auth, 자연어 출력, provider raw payload 저장, 새 Quality Gate, comparison/regression 생성은 #106 범위가 아니다.

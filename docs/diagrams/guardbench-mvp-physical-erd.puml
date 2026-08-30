@@ -42,16 +42,26 @@ entity "test_run" as test_run {
   * status : VARCHAR(16)
   * test_case_count : INTEGER
   * processed_test_case_count : INTEGER
-  * baseline_guardrail_id : TEXT
-  * baseline_version : TEXT
-  * candidate_guardrail_id : TEXT
-  * candidate_requested_source : VARCHAR(16)
-    candidate_resolved_version : TEXT
+  * target_reference_id : TEXT <<UK, FK>>
     execution_outcome : VARCHAR(16)
   * created_at : TIMESTAMPTZ(6)
     started_at : TIMESTAMPTZ(6)
     completed_at : TIMESTAMPTZ(6)
   * updated_at : TIMESTAMPTZ(6)
+}
+
+entity "target_reference" as target_reference {
+  * reference_id : TEXT <<PK>>
+  --
+  * target_type : VARCHAR(32)
+}
+
+entity "bedrock_guardrail_target" as bedrock_target {
+  * reference_id : TEXT <<PK, FK>>
+  --
+  * guardrail_identifier : TEXT
+  * requested_revision : TEXT
+    resolved_revision : TEXT
 }
 
 entity "test_case_snapshot" as snapshot {
@@ -71,7 +81,6 @@ entity "test_case_snapshot" as snapshot {
 
 entity "test_execution" as execution {
   * snapshot_id : BIGINT <<PK, FK>>
-  * target_type : VARCHAR(16) <<PK>>
   --
   * result_status : VARCHAR(16)
     actual_action : VARCHAR(16)
@@ -129,7 +138,6 @@ entity "test_run_resolution_claim" as resolution_claim {
 
 entity "test_execution_claim" as execution_claim {
   * snapshot_id : BIGINT <<PK, FK>>
-  * target_type : VARCHAR(16) <<PK>>
   --
   * claim_token : UUID
   * lease_until : TIMESTAMPTZ(6)
@@ -152,14 +160,16 @@ entity "outbox_event" as outbox {
 
 test_suite ||--o{ test_case : contains
 test_suite ||--o{ test_run : selected by
+target_reference ||--|| test_run : referenced by
+target_reference ||--o| bedrock_target : provider detail
 test_run ||--|{ snapshot : fixes
 test_case ||--o{ snapshot : source of
-snapshot ||--o{ execution : BASELINE / CANDIDATE
+snapshot ||--o| execution : single target
 snapshot ||--o| execution_claim : technical lease
 test_run ||--o| idempotency : request replay
 test_run ||--o| resolution_claim : technical lease
-snapshot ||--o| assertion : candidate assertion
-snapshot ||--o| change_result : baseline comparison
+snapshot ||--o| assertion : expected vs actual
+snapshot ||--o| change_result : legacy, no new writes
 test_run ||--o| quality_gate : final evaluation
 outbox ..> test_run : payload reference only
 
@@ -169,9 +179,13 @@ note right of test_case
 end note
 
 note bottom of execution
-  PK limits each Snapshot to one row
-  per BASELINE/CANDIDATE target.
+  PK limits each Snapshot to one row.
   Only terminal result states are stored.
+end note
+
+note bottom of change_result
+  V3 removes existing rows.
+  Single-target TestRun creates no new rows.
 end note
 
 note bottom of quality_gate
