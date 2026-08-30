@@ -20,9 +20,7 @@ class UnicodeBlankValidationTest {
     @DisplayName("Unicode 공백만 있는 TestRun 필수 문자열은 모두 거부한다")
     void rejectsWhitespaceOnlyRequiredStrings(String whitespace) {
         assertThrows(IllegalArgumentException.class,
-                () -> new BaselineTarget(whitespace, "1"));
-        assertThrows(IllegalArgumentException.class,
-                () -> new CandidateTarget(whitespace, CandidateSource.DRAFT, null));
+                () -> new TargetReference(whitespace));
         assertThrows(IllegalArgumentException.class,
                 () -> new TestExecutionError(TestExecutionErrorCode.PROVIDER_TIMEOUT, whitespace));
         assertThrows(IllegalArgumentException.class,
@@ -38,8 +36,7 @@ class UnicodeBlankValidationTest {
     @ValueSource(strings = {"개인정보\u00A0차단", "개인정보\u2007차단", "개인정보\u202F차단", "개인정보\uFEFF차단"})
     @DisplayName("정상 문자 사이에 Unicode 공백이 있는 TestRun 문자열은 허용한다")
     void acceptsUnicodeWhitespaceBetweenNonWhitespaceCharacters(String value) {
-        assertDoesNotThrow(() -> new BaselineTarget(value, "1"));
-        assertDoesNotThrow(() -> new CandidateTarget(value, CandidateSource.DRAFT, null));
+        assertDoesNotThrow(() -> new TargetReference(value));
         assertDoesNotThrow(() -> new TestExecutionError(TestExecutionErrorCode.PROVIDER_TIMEOUT, value));
         assertDoesNotThrow(() -> snapshot(value, value, value));
         assertDoesNotThrow(() -> source(value, value, value, value, value));

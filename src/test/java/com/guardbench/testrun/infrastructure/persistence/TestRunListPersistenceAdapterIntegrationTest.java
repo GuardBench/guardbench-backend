@@ -121,16 +121,18 @@ class TestRunListPersistenceAdapterIntegrationTest {
             long id, long suiteId, TestRunStatus status, TestRunExecutionOutcome outcome, Instant createdAt) {
         boolean finished = status == TestRunStatus.FINISHED;
         boolean started = status != TestRunStatus.QUEUED;
+        String targetReference = "target-ref-" + id;
+        jdbcTemplate.update("INSERT INTO target_reference(reference_id, target_type) VALUES (?, 'BEDROCK_GUARDRAIL')",
+                targetReference);
         jdbcTemplate.update("""
                 INSERT INTO test_run (
                     id, test_suite_id, status, test_case_count, processed_test_case_count,
-                    baseline_guardrail_id, baseline_version, candidate_guardrail_id,
-                    candidate_requested_source, candidate_resolved_version, execution_outcome,
+                    target_reference_id, execution_outcome,
                     created_at, started_at, completed_at, updated_at)
-                VALUES (?, ?, ?, 1, ?, 'guardrail-1', '1', 'guardrail-1', 'DRAFT', ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 id, suiteId, status.name(), finished ? 1 : 0,
-                started ? "2" : null,
+                targetReference,
                 outcome == null ? null : outcome.name(),
                 Timestamp.from(createdAt),
                 started ? Timestamp.from(createdAt) : null,

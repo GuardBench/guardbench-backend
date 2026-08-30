@@ -1,20 +1,22 @@
-package com.guardbench.guardrail.infrastructure.bedrock;
+package com.guardbench.target.infrastructure.bedrock;
 
-import static com.guardbench.guardrail.support.fixture.BedrockGuardrailFixture.anonymizedPiiAssessment;
-import static com.guardbench.guardrail.support.fixture.BedrockGuardrailFixture.blockedAndAnonymizedAssessment;
-import static com.guardbench.guardrail.support.fixture.BedrockGuardrailFixture.blockedContentAssessment;
-import static com.guardbench.guardrail.support.fixture.BedrockGuardrailFixture.executionRequest;
-import static com.guardbench.guardrail.support.fixture.BedrockGuardrailFixture.intervenedResponse;
-import static com.guardbench.guardrail.support.fixture.BedrockGuardrailFixture.noInterventionResponse;
-import static com.guardbench.guardrail.support.fixture.BedrockGuardrailFixture.responseWithoutAction;
+import static com.guardbench.target.support.fixture.BedrockGuardrailFixture.anonymizedPiiAssessment;
+import static com.guardbench.target.support.fixture.BedrockGuardrailFixture.blockedAndAnonymizedAssessment;
+import static com.guardbench.target.support.fixture.BedrockGuardrailFixture.blockedContentAssessment;
+import static com.guardbench.target.support.fixture.BedrockGuardrailFixture.executionRequest;
+import static com.guardbench.target.support.fixture.BedrockGuardrailFixture.intervenedResponse;
+import static com.guardbench.target.support.fixture.BedrockGuardrailFixture.noInterventionResponse;
+import static com.guardbench.target.support.fixture.BedrockGuardrailFixture.responseWithoutAction;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.guardbench.testrun.application.port.out.GuardrailExecutionResult;
-import com.guardbench.testrun.application.port.out.GuardrailFailureCode;
+import java.util.Optional;
+
+import com.guardbench.testrun.application.port.out.TargetExecutionResult;
+import com.guardbench.testrun.application.port.out.TargetFailureCode;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,6 +40,9 @@ class BedrockGuardrailExecutionAdapterTest {
     @Mock
     private BedrockRuntimeClient client;
 
+    @Mock
+    private BedrockGuardrailTargetStore targetStore;
+
     @Captor
     private ArgumentCaptor<ApplyGuardrailRequest> requestCaptor;
 
@@ -45,9 +50,9 @@ class BedrockGuardrailExecutionAdapterTest {
     @DisplayName("ApplyGuardrail은 INPUT 단일 text와 INTERVENTIONS scope로 호출하고 무개입 결과를 ALLOW로 반환한다")
     void executesSnapshotInputWithInterventionsScope() {
         when(client.applyGuardrail(any(ApplyGuardrailRequest.class))).thenReturn(noInterventionResponse());
-        BedrockGuardrailExecutionAdapter adapter = new BedrockGuardrailExecutionAdapter(client);
+        BedrockGuardrailExecutionAdapter adapter = adapter();
 
-        GuardrailExecutionResult result = adapter.execute(executionRequest());
+        TargetExecutionResult result = adapter.execute(executionRequest());
 
         verify(client).applyGuardrail(requestCaptor.capture());
         ApplyGuardrailRequest sdkRequest = requestCaptor.getValue();
@@ -66,9 +71,9 @@ class BedrockGuardrailExecutionAdapterTest {
     void mapsBlockedInterventionToBlock() {
         when(client.applyGuardrail(any(ApplyGuardrailRequest.class)))
                 .thenReturn(intervenedResponse(blockedContentAssessment()));
-        BedrockGuardrailExecutionAdapter adapter = new BedrockGuardrailExecutionAdapter(client);
+        BedrockGuardrailExecutionAdapter adapter = adapter();
 
-        GuardrailExecutionResult result = adapter.execute(executionRequest());
+        TargetExecutionResult result = adapter.execute(executionRequest());
 
         assertEquals("BLOCK", result.actionCode());
         assertNull(result.failureCode());
@@ -80,9 +85,9 @@ class BedrockGuardrailExecutionAdapterTest {
         when(client.applyGuardrail(any(ApplyGuardrailRequest.class))).thenReturn(intervenedResponse(
                 anonymizedPiiAssessment(GuardrailSensitiveInformationPolicyAction.ANONYMIZED)
         ));
-        BedrockGuardrailExecutionAdapter adapter = new BedrockGuardrailExecutionAdapter(client);
+        BedrockGuardrailExecutionAdapter adapter = adapter();
 
-        GuardrailExecutionResult result = adapter.execute(executionRequest());
+        TargetExecutionResult result = adapter.execute(executionRequest());
 
         assertEquals("ALLOW", result.actionCode());
         assertNull(result.failureCode());
@@ -93,9 +98,9 @@ class BedrockGuardrailExecutionAdapterTest {
     void prioritizesBlockOverMasking() {
         when(client.applyGuardrail(any(ApplyGuardrailRequest.class)))
                 .thenReturn(intervenedResponse(blockedAndAnonymizedAssessment()));
-        BedrockGuardrailExecutionAdapter adapter = new BedrockGuardrailExecutionAdapter(client);
+        BedrockGuardrailExecutionAdapter adapter = adapter();
 
-        GuardrailExecutionResult result = adapter.execute(executionRequest());
+        TargetExecutionResult result = adapter.execute(executionRequest());
 
         assertEquals("BLOCK", result.actionCode());
         assertNull(result.failureCode());
@@ -107,24 +112,24 @@ class BedrockGuardrailExecutionAdapterTest {
         when(client.applyGuardrail(any(ApplyGuardrailRequest.class))).thenReturn(intervenedResponse(
                 anonymizedPiiAssessment(GuardrailSensitiveInformationPolicyAction.UNKNOWN_TO_SDK_VERSION)
         ));
-        BedrockGuardrailExecutionAdapter adapter = new BedrockGuardrailExecutionAdapter(client);
+        BedrockGuardrailExecutionAdapter adapter = adapter();
 
-        GuardrailExecutionResult result = adapter.execute(executionRequest());
+        TargetExecutionResult result = adapter.execute(executionRequest());
 
         assertNull(result.actionCode());
-        assertEquals(GuardrailFailureCode.PROVIDER_RESPONSE_INVALID, result.failureCode());
+        assertEquals(TargetFailureCode.PROVIDER_RESPONSE_INVALID, result.failureCode());
     }
 
     @Test
     @DisplayName("action이 없는 ApplyGuardrail 응답은 PROVIDER_RESPONSE_INVALID로 변환한다")
     void mapsMissingActionToInvalidProviderResponse() {
         when(client.applyGuardrail(any(ApplyGuardrailRequest.class))).thenReturn(responseWithoutAction());
-        BedrockGuardrailExecutionAdapter adapter = new BedrockGuardrailExecutionAdapter(client);
+        BedrockGuardrailExecutionAdapter adapter = adapter();
 
-        GuardrailExecutionResult result = adapter.execute(executionRequest());
+        TargetExecutionResult result = adapter.execute(executionRequest());
 
         assertNull(result.actionCode());
-        assertEquals(GuardrailFailureCode.PROVIDER_RESPONSE_INVALID, result.failureCode());
+        assertEquals(TargetFailureCode.PROVIDER_RESPONSE_INVALID, result.failureCode());
     }
 
     @Test
@@ -132,11 +137,11 @@ class BedrockGuardrailExecutionAdapterTest {
     void mapsResourceNotFoundToTargetNotFound() {
         when(client.applyGuardrail(any(ApplyGuardrailRequest.class)))
                 .thenThrow(ResourceNotFoundException.builder().build());
-        BedrockGuardrailExecutionAdapter adapter = new BedrockGuardrailExecutionAdapter(client);
+        BedrockGuardrailExecutionAdapter adapter = adapter();
 
-        GuardrailExecutionResult result = adapter.execute(executionRequest());
+        TargetExecutionResult result = adapter.execute(executionRequest());
 
-        assertEquals(GuardrailFailureCode.TARGET_NOT_FOUND, result.failureCode());
+        assertEquals(TargetFailureCode.TARGET_NOT_FOUND, result.failureCode());
     }
 
     @Test
@@ -144,10 +149,17 @@ class BedrockGuardrailExecutionAdapterTest {
     void mapsSdkTimeoutToProviderTimeout() {
         when(client.applyGuardrail(any(ApplyGuardrailRequest.class)))
                 .thenThrow(ApiCallTimeoutException.create(1));
-        BedrockGuardrailExecutionAdapter adapter = new BedrockGuardrailExecutionAdapter(client);
+        BedrockGuardrailExecutionAdapter adapter = adapter();
 
-        GuardrailExecutionResult result = adapter.execute(executionRequest());
+        TargetExecutionResult result = adapter.execute(executionRequest());
 
-        assertEquals(GuardrailFailureCode.PROVIDER_TIMEOUT, result.failureCode());
+        assertEquals(TargetFailureCode.PROVIDER_TIMEOUT, result.failureCode());
+    }
+
+    private BedrockGuardrailExecutionAdapter adapter() {
+        when(targetStore.findByReference("target-ref"))
+                .thenReturn(Optional.of(new BedrockGuardrailTargetStore.BedrockGuardrailTarget(
+                        "target-ref", "gr-123", "DRAFT", "7")));
+        return new BedrockGuardrailExecutionAdapter(client, targetStore);
     }
 }

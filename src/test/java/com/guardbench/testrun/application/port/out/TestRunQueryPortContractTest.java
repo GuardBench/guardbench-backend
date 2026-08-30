@@ -67,20 +67,15 @@ class TestRunQueryPortContractTest {
                 com.guardbench.testrun.domain.Action.BLOCK,
                 com.guardbench.testrun.domain.Severity.HIGH,
                 "category",
-                new TestExecutionView(com.guardbench.testrun.domain.TestExecutionStatus.SUCCEEDED,
-                        com.guardbench.testrun.domain.Action.BLOCK, null, null),
                 new TestExecutionView(com.guardbench.testrun.domain.TestExecutionStatus.FAILED,
                         null, "PROVIDER_ERROR", "safe message"),
-                null,
-                null,
                 null);
 
         assertEquals(List.of(SortOrder.asc(TestRunResultSortField.SNAPSHOT_ID)), criteria.sort());
         assertFalse(item.assertionStatusCode() != null);
         assertThrows(IllegalArgumentException.class, () -> new TestRunResultItem(
                 10L, 20L, "case", "input", com.guardbench.testrun.domain.Action.BLOCK,
-                com.guardbench.testrun.domain.Severity.HIGH, "category", item.baselineExecution(),
-                item.candidateExecution(), "PASS", "NOT_COMPARABLE", "NO_CHANGE"));
+                com.guardbench.testrun.domain.Severity.HIGH, "category", item.execution(), "UNKNOWN"));
     }
 
     @Test

@@ -75,20 +75,17 @@ class ClaimJpaEntityMappingIntegrationTest {
     }
 
     @Test
-    @DisplayName("execution claim 획득 결과를 JPA Entity의 복합 식별자와 scalar column으로 조회한다")
+    @DisplayName("execution claim 획득 결과를 Snapshot 식별자와 scalar column으로 조회한다")
     void readsExecutionClaimThroughJpaEntity() {
         ClaimResult.Acquired acquired = assertInstanceOf(
                 ClaimResult.Acquired.class,
-                executionClaimPort.tryAcquire(803L, "BASELINE"));
+                executionClaimPort.tryAcquire(803L));
 
         entityManager.clear();
-        TestExecutionClaimEntity claim = entityManager.find(
-                TestExecutionClaimEntity.class,
-                new TestExecutionClaimEntityId(803L, "BASELINE"));
+        TestExecutionClaimEntity claim = entityManager.find(TestExecutionClaimEntity.class, 803L);
 
         assertNotNull(claim);
-        assertEquals(803L, claim.id.snapshotId);
-        assertEquals("BASELINE", claim.id.targetType);
+        assertEquals(803L, claim.snapshotId);
         assertEquals(acquired.claimToken(), claim.claimToken);
         assertEquals(acquired.attemptCount(), claim.attemptCount);
         assertNotNull(claim.claimedAt);

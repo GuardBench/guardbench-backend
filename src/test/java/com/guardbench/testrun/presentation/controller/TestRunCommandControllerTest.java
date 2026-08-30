@@ -38,8 +38,7 @@ class TestRunCommandControllerTest {
     private static final String VALID_BODY = """
             {
               "testSuiteId": 1,
-              "baseline": { "guardrailId": "guardrail-123", "version": "4" },
-              "candidate": { "guardrailId": "guardrail-123", "source": "DRAFT" }
+              "target": { "type": "BEDROCK_GUARDRAIL", "identifier": "guardrail-123", "revision": "DRAFT" }
             }
             """;
 
@@ -90,8 +89,7 @@ class TestRunCommandControllerTest {
     void missingTestSuiteIdReturnsValidationError() throws Exception {
         String body = """
                 {
-                  "baseline": { "guardrailId": "guardrail-123", "version": "4" },
-                  "candidate": { "guardrailId": "guardrail-123", "source": "DRAFT" }
+                  "target": { "type": "BEDROCK_GUARDRAIL", "identifier": "guardrail-123", "revision": "DRAFT" }
                 }
                 """;
 
@@ -101,13 +99,12 @@ class TestRunCommandControllerTest {
     }
 
     @Test
-    @DisplayName("candidate.source가 DRAFT가 아니면 400 VALIDATION_ERROR를 반환한다")
-    void nonDraftCandidateSourceReturnsValidationError() throws Exception {
+    @DisplayName("지원하지 않는 Target type이면 400 VALIDATION_ERROR를 반환한다")
+    void unsupportedTargetTypeReturnsValidationError() throws Exception {
         String body = """
                 {
                   "testSuiteId": 1,
-                  "baseline": { "guardrailId": "guardrail-123", "version": "4" },
-                  "candidate": { "guardrailId": "guardrail-123", "source": "4" }
+                  "target": { "type": "HTTP", "identifier": "target-123", "revision": "DRAFT" }
                 }
                 """;
 
@@ -117,13 +114,12 @@ class TestRunCommandControllerTest {
     }
 
     @Test
-    @DisplayName("baseline.version이 숫자가 아니면 400 VALIDATION_ERROR를 반환한다")
-    void nonNumberedBaselineVersionReturnsValidationError() throws Exception {
+    @DisplayName("Target revision이 DRAFT나 숫자 버전이 아니면 400 VALIDATION_ERROR를 반환한다")
+    void invalidTargetRevisionReturnsValidationError() throws Exception {
         String body = """
                 {
                   "testSuiteId": 1,
-                  "baseline": { "guardrailId": "guardrail-123", "version": "DRAFT" },
-                  "candidate": { "guardrailId": "guardrail-123", "source": "DRAFT" }
+                  "target": { "type": "BEDROCK_GUARDRAIL", "identifier": "guardrail-123", "revision": "LATEST" }
                 }
                 """;
 

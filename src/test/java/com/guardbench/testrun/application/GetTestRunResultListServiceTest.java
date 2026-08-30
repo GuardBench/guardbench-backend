@@ -18,9 +18,8 @@ import com.guardbench.testrun.application.port.out.TestRunDetail;
 import com.guardbench.testrun.application.port.out.TestRunProgress;
 import com.guardbench.testrun.application.port.out.TestRunResultItem;
 import com.guardbench.testrun.application.port.out.TestRunResultListCriteria;
-import com.guardbench.testrun.application.port.out.TestRunTargets;
+import com.guardbench.testrun.application.port.out.TargetReferenceView;
 import com.guardbench.testrun.domain.Action;
-import com.guardbench.testrun.domain.CandidateSource;
 import com.guardbench.testrun.domain.Severity;
 import com.guardbench.testrun.domain.TestExecutionStatus;
 import com.guardbench.testrun.domain.TestRunStatus;
@@ -30,9 +29,7 @@ import org.junit.jupiter.api.Test;
 
 class GetTestRunResultListServiceTest {
 
-    private static final TestRunTargets TARGETS = new TestRunTargets(
-            new TestRunTargets.BaselineTargetView("guardrail-123", "4"),
-            new TestRunTargets.CandidateTargetView("guardrail-123", CandidateSource.DRAFT, "5"));
+    private static final TargetReferenceView TARGET = new TargetReferenceView("target-ref");
 
     @Test
     @DisplayName("FINISHED TestRun의 결과를 조회하면 Port의 결과 페이지를 그대로 반환한다")
@@ -40,9 +37,8 @@ class GetTestRunResultListServiceTest {
         TestRunDetail finishedTestRun = detailWithStatus(TestRunStatus.FINISHED);
         TestRunResultItem resultItem = new TestRunResultItem(
                 1001L, 10L, "case", "input", Action.BLOCK, Severity.HIGH, "category",
-                new TestExecutionView(TestExecutionStatus.SUCCEEDED, Action.BLOCK, null, null),
                 new TestExecutionView(TestExecutionStatus.SUCCEEDED, Action.ALLOW, null, null),
-                "FAIL", "COMPARABLE", "SECURITY_REGRESSION");
+                "FAIL");
         PageResult<TestRunResultItem> expected =
                 PageResult.of(List.of(resultItem), new PageCriteria(1, 20), 1L);
         LoadTestRunDetailPort detailPort = testRunId -> Optional.of(finishedTestRun);
@@ -89,7 +85,7 @@ class GetTestRunResultListServiceTest {
     private static TestRunDetail detailWithStatus(TestRunStatus status) {
         return new TestRunDetail(
                 901L, 1L, status, 253,
-                new TestRunProgress(253, 100.0), TARGETS, null, null,
+                new TestRunProgress(253, 100.0), TARGET, null, null,
                 Instant.parse("2026-08-24T14:30:00Z"), Instant.parse("2026-08-24T14:30:03Z"),
                 null, Instant.parse("2026-08-24T14:31:20Z"));
     }

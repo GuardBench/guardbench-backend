@@ -1,4 +1,4 @@
-package com.guardbench.guardrail.infrastructure.bedrock;
+package com.guardbench.target.infrastructure.bedrock;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -12,8 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.core.env.MapPropertySource;
 
-import com.guardbench.testrun.application.port.out.GuardrailExecutionPort;
-import com.guardbench.testrun.application.port.out.GuardrailMaterializationPort;
+import com.guardbench.testrun.application.port.out.TargetExecutionPort;
+import com.guardbench.testrun.application.port.out.TargetPreparationPort;
 
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.retries.api.RetryStrategy;
@@ -51,17 +51,17 @@ class BedrockWorkerConfigurationTest {
         try (var context = createContext(Map.of(
                 "guardbench.worker.enabled", "false"
         ))) {
-            assertThat(context.getBeanNamesForType(GuardrailMaterializationPort.class)).isEmpty();
+            assertThat(context.getBeanNamesForType(TargetPreparationPort.class)).isEmpty();
         }
     }
 
     @Test
-    @DisplayName("guardbench.worker.enabled=false이면 GuardrailExecutionPort 빈이 없다")
+    @DisplayName("guardbench.worker.enabled=false이면 TargetExecutionPort 빈이 없다")
     void executionPortNotRegisteredWhenDisabled() {
         try (var context = createContext(Map.of(
                 "guardbench.worker.enabled", "false"
         ))) {
-            assertThat(context.getBeanNamesForType(GuardrailExecutionPort.class)).isEmpty();
+            assertThat(context.getBeanNamesForType(TargetExecutionPort.class)).isEmpty();
         }
     }
 
@@ -71,8 +71,8 @@ class BedrockWorkerConfigurationTest {
         try (var context = createContext(Map.of())) {
             assertThat(context.getBeanNamesForType(BedrockClient.class)).isEmpty();
             assertThat(context.getBeanNamesForType(BedrockRuntimeClient.class)).isEmpty();
-            assertThat(context.getBeanNamesForType(GuardrailMaterializationPort.class)).isEmpty();
-            assertThat(context.getBeanNamesForType(GuardrailExecutionPort.class)).isEmpty();
+            assertThat(context.getBeanNamesForType(TargetPreparationPort.class)).isEmpty();
+            assertThat(context.getBeanNamesForType(TargetExecutionPort.class)).isEmpty();
         }
     }
 

@@ -1,6 +1,7 @@
-package com.guardbench.guardrail.support.fixture;
+package com.guardbench.target.support.fixture;
 
-import com.guardbench.testrun.application.port.out.GuardrailExecutionRequest;
+import com.guardbench.testrun.application.port.out.TargetExecutionRequest;
+import com.guardbench.testrun.domain.TargetReference;
 
 import software.amazon.awssdk.services.bedrockruntime.model.ApplyGuardrailResponse;
 import software.amazon.awssdk.services.bedrockruntime.model.GuardrailAction;
@@ -13,15 +14,13 @@ import software.amazon.awssdk.services.bedrockruntime.model.GuardrailSensitiveIn
 import software.amazon.awssdk.services.bedrockruntime.model.GuardrailSensitiveInformationPolicyAssessment;
 
 public final class BedrockGuardrailFixture {
-    private static final String GUARDRAIL_IDENTIFIER = "gr-123";
-    private static final String GUARDRAIL_VERSION = "7";
     private static final String INPUT = "test input";
 
     private BedrockGuardrailFixture() {
     }
 
-    public static GuardrailExecutionRequest executionRequest() {
-        return new GuardrailExecutionRequest(GUARDRAIL_IDENTIFIER, GUARDRAIL_VERSION, INPUT);
+    public static TargetExecutionRequest executionRequest() {
+        return new TargetExecutionRequest(new TargetReference("target-ref"), INPUT);
     }
 
     public static ApplyGuardrailResponse noInterventionResponse() {

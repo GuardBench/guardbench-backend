@@ -65,12 +65,12 @@ class FinalizeTestRunServiceTest {
     }
 
     @Nested
-    @DisplayName("PASS - 모든 실행 성공 + COMPARABLE + 정책 통과")
+    @DisplayName("NOT_EVALUATED - 단일 Target 실행")
     class PassScenario {
 
         @Test
-        @DisplayName("모든 Baseline/Candidate가 같은 BLOCK action이면 PASS다")
-        void allPassWithNoChange() {
+        @DisplayName("모든 Target이 Expected와 같아도 비교가 없으면 NOT_EVALUATED다")
+        void allAssertionsPassWithoutComparison() {
             loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
                     succeededPair(10L, "BLOCK", "BLOCK", "BLOCK"),
                     succeededPair(20L, "BLOCK", "BLOCK", "BLOCK")
@@ -80,10 +80,8 @@ class FinalizeTestRunServiceTest {
 
             assertInstanceOf(FinalizationOutcome.Finalized.class, outcome);
             QualityGateResult result = ((FinalizationOutcome.Finalized) outcome).result();
-            assertEquals(QualityGateStatus.PASS, result.status());
-            assertNotNull(result.metrics());
-            assertEquals(1.0, result.metrics().candidateAssertionPassRate());
-            assertEquals(0, result.metrics().securityRegressionCount());
+            assertEquals(QualityGateStatus.NOT_EVALUATED, result.status());
+            assertNull(result.metrics());
 
             assertEquals(1, finalizeTestRunPort.callCount());
             assertEquals("COMPLETED", finalizeTestRunPort.lastOutcomeCode());
@@ -102,8 +100,7 @@ class FinalizeTestRunServiceTest {
         void incompleteExecution() {
             loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
                     succeededPair(10L, "BLOCK", "BLOCK", "BLOCK"),
-                    new SnapshotExecutionFact(20L, "BLOCK",
-                            terminal("SUCCEEDED", "BLOCK"), terminal("FAILED", null))
+                    new SnapshotExecutionFact(20L, "BLOCK", terminal("FAILED", null))
             )));
 
             FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
@@ -123,10 +120,8 @@ class FinalizeTestRunServiceTest {
         @DisplayName("COMPARABLE ChangeResult가 없으면 NOT_EVALUATED다")
         void notEvaluatedWhenNoComparableChanges() {
             loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
-                    new SnapshotExecutionFact(10L, "BLOCK",
-                            terminal("TIMED_OUT", null), terminal("SUCCEEDED", "BLOCK")),
-                    new SnapshotExecutionFact(20L, "BLOCK",
-                            terminal("TIMED_OUT", null), terminal("SUCCEEDED", "BLOCK"))
+                    new SnapshotExecutionFact(10L, "BLOCK", terminal("SUCCEEDED", "BLOCK")),
+                    new SnapshotExecutionFact(20L, "BLOCK", terminal("SUCCEEDED", "BLOCK"))
             )));
 
             FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
@@ -141,8 +136,7 @@ class FinalizeTestRunServiceTest {
         @DisplayName("모든 실행이 NOT_STARTED terminal이면 outcome=ERROR로 최종화한다")
         void notStartedExecutionsFinalizeAsError() {
             loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(1, List.of(
-                    new SnapshotExecutionFact(10L, "BLOCK",
-                            terminal("NOT_STARTED", null), terminal("NOT_STARTED", null))
+                    new SnapshotExecutionFact(10L, "BLOCK", terminal("NOT_STARTED", null))
             )));
 
             FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
@@ -163,8 +157,7 @@ class FinalizeTestRunServiceTest {
         void notReadyWhenPairHasNoExecutionYet() {
             loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
                     succeededPair(10L, "BLOCK", "BLOCK", "BLOCK"),
-                    new SnapshotExecutionFact(20L, "BLOCK",
-                            terminal("SUCCEEDED", "BLOCK"), TargetExecutionFact.notExecuted())
+                    new SnapshotExecutionFact(20L, "BLOCK", TargetExecutionFact.notExecuted())
             )));
 
             FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
@@ -196,8 +189,7 @@ class FinalizeTestRunServiceTest {
         void finalizesWhenLastPairBecomesTerminal() {
             loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
                     succeededPair(10L, "BLOCK", "BLOCK", "BLOCK"),
-                    new SnapshotExecutionFact(20L, "BLOCK",
-                            terminal("SUCCEEDED", "BLOCK"), TargetExecutionFact.notExecuted())
+                    new SnapshotExecutionFact(20L, "BLOCK", TargetExecutionFact.notExecuted())
             )));
             assertInstanceOf(FinalizationOutcome.NotReady.class, service.finalize(TEST_RUN_ID));
 
@@ -315,14 +307,13 @@ class FinalizeTestRunServiceTest {
     private static SnapshotExecutionFact succeededPair(
             long snapshotId,
             String expectedActionCode,
-            String baselineActionCode,
-            String candidateActionCode
+            String ignoredBaselineActionCode,
+            String targetActionCode
     ) {
         return new SnapshotExecutionFact(
                 snapshotId,
                 expectedActionCode,
-                terminal("SUCCEEDED", baselineActionCode),
-                terminal("SUCCEEDED", candidateActionCode)
+                terminal("SUCCEEDED", targetActionCode)
         );
     }
 

@@ -120,7 +120,7 @@ class ClaimAdapterIntegrationTest {
         @Test
         @DisplayName("첫 선점은 Acquired를 반환하고 attemptCount는 1이다")
         void firstAcquire_returnsAcquiredWithAttempt1() {
-            ClaimResult result = executionClaimPort.tryAcquire(803, "BASELINE");
+            ClaimResult result = executionClaimPort.tryAcquire(803);
             assertInstanceOf(ClaimResult.Acquired.class, result);
             assertEquals(1, ((ClaimResult.Acquired) result).attemptCount());
         }
@@ -128,24 +128,24 @@ class ClaimAdapterIntegrationTest {
         @Test
         @DisplayName("유효 lease 동안 중복 선점은 AlreadyHeld를 반환한다")
         void duplicateAcquire_whileValid_returnsAlreadyHeld() {
-            executionClaimPort.tryAcquire(803, "BASELINE");
-            ClaimResult second = executionClaimPort.tryAcquire(803, "BASELINE");
+            executionClaimPort.tryAcquire(803);
+            ClaimResult second = executionClaimPort.tryAcquire(803);
             assertInstanceOf(ClaimResult.AlreadyHeld.class, second);
         }
 
         @Test
         @DisplayName("만료된 claim은 새 token으로 재선점되고 attemptCount가 증가한다")
         void expiredClaim_canBeReacquired() {
-            executionClaimPort.tryAcquire(803, "CANDIDATE");
+            executionClaimPort.tryAcquire(803);
             jdbcTemplate.update(
                     """
                     UPDATE test_execution_claim
                     SET claimed_at = clock_timestamp() - INTERVAL '50 seconds',
                         lease_until = clock_timestamp() - INTERVAL '1 second'
-                    WHERE snapshot_id = 803 AND target_type = 'CANDIDATE'
+                    WHERE snapshot_id = 803
                     """);
 
-            ClaimResult result = executionClaimPort.tryAcquire(803, "CANDIDATE");
+            ClaimResult result = executionClaimPort.tryAcquire(803);
             assertInstanceOf(ClaimResult.Acquired.class, result);
             assertEquals(2, ((ClaimResult.Acquired) result).attemptCount());
         }
@@ -153,24 +153,24 @@ class ClaimAdapterIntegrationTest {
         @Test
         @DisplayName("stale token으로 isHeldBy하면 false를 반환한다")
         void staleToken_isHeldBy_returnsFalse() {
-            ClaimResult.Acquired first = (ClaimResult.Acquired) executionClaimPort.tryAcquire(803, "BASELINE");
+            ClaimResult.Acquired first = (ClaimResult.Acquired) executionClaimPort.tryAcquire(803);
             jdbcTemplate.update(
                     """
                     UPDATE test_execution_claim
                     SET claimed_at = clock_timestamp() - INTERVAL '50 seconds',
                         lease_until = clock_timestamp() - INTERVAL '1 second'
-                    WHERE snapshot_id = 803 AND target_type = 'BASELINE'
+                    WHERE snapshot_id = 803
                     """);
-            executionClaimPort.tryAcquire(803, "BASELINE");
+            executionClaimPort.tryAcquire(803);
 
-            assertFalse(executionClaimPort.isHeldBy(803, "BASELINE", first.claimToken()));
+            assertFalse(executionClaimPort.isHeldBy(803, first.claimToken()));
         }
 
         @Test
         @DisplayName("유효한 token으로 isHeldBy하면 true를 반환한다")
         void validToken_isHeldBy_returnsTrue() {
-            ClaimResult.Acquired acquired = (ClaimResult.Acquired) executionClaimPort.tryAcquire(803, "BASELINE");
-            assertTrue(executionClaimPort.isHeldBy(803, "BASELINE", acquired.claimToken()));
+            ClaimResult.Acquired acquired = (ClaimResult.Acquired) executionClaimPort.tryAcquire(803);
+            assertTrue(executionClaimPort.isHeldBy(803, acquired.claimToken()));
         }
     }
 }

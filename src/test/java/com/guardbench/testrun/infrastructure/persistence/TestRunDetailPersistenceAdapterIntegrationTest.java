@@ -47,7 +47,7 @@ class TestRunDetailPersistenceAdapterIntegrationTest {
     }
 
     @Test
-    @DisplayName("RUNNING TestRun은 Quality Gate가 null이고 candidate resolvedVersion을 포함한다")
+    @DisplayName("RUNNING TestRun은 Quality Gate가 null이고 target reference를 포함한다")
     void returnsNullQualityGateForRunningTestRun() {
         insertSuite(50_001L);
         insertTestRun(60_001L, 50_001L, "RUNNING", "2", null, null, true, false);
@@ -55,7 +55,7 @@ class TestRunDetailPersistenceAdapterIntegrationTest {
         TestRunDetail detail = port.load(60_001L).orElseThrow();
 
         assertEquals("RUNNING", detail.status().name());
-        assertEquals("2", detail.targets().candidate().resolvedVersion());
+        assertEquals("target-ref-60001", detail.target().referenceId());
         assertNull(detail.executionOutcome());
         assertNull(detail.qualityGate());
     }
@@ -96,15 +96,17 @@ class TestRunDetailPersistenceAdapterIntegrationTest {
     private void insertTestRun(
             long id, long suiteId, String status, String resolvedVersion, String executionOutcome,
             String unused, boolean started, boolean finished) {
+        String targetReference = "target-ref-" + id;
+        jdbcTemplate.update("INSERT INTO target_reference(reference_id, target_type) VALUES (?, 'BEDROCK_GUARDRAIL')",
+                targetReference);
         jdbcTemplate.update("""
                 INSERT INTO test_run (
                     id, test_suite_id, status, test_case_count, processed_test_case_count,
-                    baseline_guardrail_id, baseline_version, candidate_guardrail_id,
-                    candidate_requested_source, candidate_resolved_version, execution_outcome,
+                    target_reference_id, execution_outcome,
                     created_at, started_at, completed_at, updated_at)
-                VALUES (?, ?, ?, 1, ?, 'guardrail-1', '1', 'guardrail-1', 'DRAFT', ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                id, suiteId, status, finished ? 1 : 0, resolvedVersion, executionOutcome,
+                id, suiteId, status, finished ? 1 : 0, targetReference, executionOutcome,
                 Timestamp.from(T0),
                 started ? Timestamp.from(T0) : null,
                 finished ? Timestamp.from(T0) : null,

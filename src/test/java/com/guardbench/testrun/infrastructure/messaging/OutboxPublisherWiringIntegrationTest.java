@@ -183,7 +183,7 @@ class OutboxPublisherWiringIntegrationTest {
     }
 
     private static OutboxEventRecord pendingRequested(UUID eventId, long testRunId) {
-        String payload = "{\"eventId\":\"%s\",\"eventType\":\"TestRunRequested\",\"schemaVersion\":1,\"testRunId\":%d,\"occurredAt\":\"2026-08-26T00:00:00Z\"}"
+        String payload = "{\"eventId\":\"%s\",\"eventType\":\"TestRunRequested\",\"schemaVersion\":2,\"testRunId\":%d,\"occurredAt\":\"2026-08-26T00:00:00Z\"}"
                 .formatted(eventId, testRunId);
         return OutboxEventRecord.pending(eventId, "TestRunRequested", payload, "TestRunRequested:" + testRunId, BASE);
     }

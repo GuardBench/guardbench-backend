@@ -48,17 +48,14 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
         insertSuite(70_001L);
         insertTestRun(80_001L, 70_001L);
         insertSnapshot(90_001L, 80_001L, 1L, "case", "input", "ALLOW", "LOW", "PII");
-        insertExecution(90_001L, "BASELINE", "SUCCEEDED", "ALLOW", null, null);
-        insertExecution(90_001L, "CANDIDATE", "FAILED", null, "PROVIDER_ERROR", "안전한 오류");
+        insertExecution(90_001L, "FAILED", null, "PROVIDER_ERROR", "안전한 오류");
 
         PageResult<TestRunResultItem> result = port.load(
                 80_001L, TestRunResultListCriteria.firstPage());
 
         TestRunResultItem item = result.items().getFirst();
         assertNull(item.assertionStatusCode());
-        assertNull(item.comparabilityStatusCode());
-        assertNull(item.changeTypeCode());
-        assertEquals("PROVIDER_ERROR", item.candidateExecution().errorCode());
+        assertEquals("PROVIDER_ERROR", item.execution().errorCode());
     }
 
     @Test
@@ -67,19 +64,15 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
         insertSuite(70_011L);
         insertTestRun(80_011L, 70_011L);
         insertSnapshot(90_011L, 80_011L, 1L, "comparable", "input", "BLOCK", "HIGH", "PII");
-        insertExecution(90_011L, "BASELINE", "SUCCEEDED", "BLOCK", null, null);
-        insertExecution(90_011L, "CANDIDATE", "SUCCEEDED", "ALLOW", null, null);
+        insertExecution(90_011L, "SUCCEEDED", "ALLOW", null, null);
         insertAssertion(90_011L, "FAIL");
-        insertChangeResult(90_011L, "COMPARABLE", "SECURITY_REGRESSION");
 
         insertSnapshot(90_012L, 80_011L, 2L, "not comparable", "input", "BLOCK", "HIGH", "PII");
-        insertExecution(90_012L, "BASELINE", "FAILED", null, "PROVIDER_ERROR", "오류");
-        insertExecution(90_012L, "CANDIDATE", "SUCCEEDED", "ALLOW", null, null);
-        insertChangeResult(90_012L, "NOT_COMPARABLE", null);
+        insertExecution(90_012L, "FAILED", null, "PROVIDER_ERROR", "오류");
 
         PageResult<TestRunResultItem> result = port.load(80_011L, new TestRunResultListCriteria(
-                null, null, null, null, null, null, null, null, null,
-                "SECURITY_REGRESSION", List.of(), com.guardbench.testrun.application.port.out.PageCriteria.firstPage()));
+                null, null, null, null, null, null, "FAIL",
+                List.of(), com.guardbench.testrun.application.port.out.PageCriteria.firstPage()));
 
         assertEquals(List.of(90_011L), result.items().stream().map(TestRunResultItem::snapshotId).toList());
     }
@@ -90,14 +83,12 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
         insertSuite(70_021L);
         insertTestRun(80_021L, 70_021L);
         insertSnapshot(90_021L, 80_021L, 1L, "critical", "input", "BLOCK", "CRITICAL", "PII");
-        insertExecution(90_021L, "BASELINE", "SUCCEEDED", "BLOCK", null, null);
-        insertExecution(90_021L, "CANDIDATE", "SUCCEEDED", "BLOCK", null, null);
+        insertExecution(90_021L, "SUCCEEDED", "BLOCK", null, null);
         insertSnapshot(90_022L, 80_021L, 2L, "low", "input", "BLOCK", "LOW", "PII");
-        insertExecution(90_022L, "BASELINE", "SUCCEEDED", "BLOCK", null, null);
-        insertExecution(90_022L, "CANDIDATE", "SUCCEEDED", "BLOCK", null, null);
+        insertExecution(90_022L, "SUCCEEDED", "BLOCK", null, null);
 
         PageResult<TestRunResultItem> result = port.load(80_021L, new TestRunResultListCriteria(
-                null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null,
                 List.of(SortOrder.asc(TestRunResultSortField.SEVERITY)),
                 com.guardbench.testrun.application.port.out.PageCriteria.firstPage()));
 
@@ -112,15 +103,17 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
     }
 
     private void insertTestRun(long id, long suiteId) {
+        String targetReference = "target-ref-" + id;
+        jdbcTemplate.update("INSERT INTO target_reference(reference_id, target_type) VALUES (?, 'BEDROCK_GUARDRAIL')",
+                targetReference);
         jdbcTemplate.update("""
                 INSERT INTO test_run (
                     id, test_suite_id, status, test_case_count, processed_test_case_count,
-                    baseline_guardrail_id, baseline_version, candidate_guardrail_id,
-                    candidate_requested_source, candidate_resolved_version, execution_outcome,
+                    target_reference_id, execution_outcome,
                     created_at, started_at, completed_at, updated_at)
-                VALUES (?, ?, 'FINISHED', 1, 1, 'guardrail-1', '1', 'guardrail-1', 'DRAFT', '2',
-                        'COMPLETED', ?, ?, ?, ?)
-                """, id, suiteId, Timestamp.from(T0), Timestamp.from(T0), Timestamp.from(T0), Timestamp.from(T0));
+                VALUES (?, ?, 'FINISHED', 1, 1, ?, 'COMPLETED', ?, ?, ?, ?)
+                """, id, suiteId, targetReference,
+                Timestamp.from(T0), Timestamp.from(T0), Timestamp.from(T0), Timestamp.from(T0));
     }
 
     private void insertTestCase(long id, long suiteId) {
@@ -147,15 +140,14 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
     }
 
     private void insertExecution(
-            long snapshotId, String targetType, String status, String actualAction,
+            long snapshotId, String status, String actualAction,
             String errorCode, String errorMessage) {
-        boolean succeeded = "SUCCEEDED".equals(status);
         jdbcTemplate.update("""
                 INSERT INTO test_execution (
-                    snapshot_id, target_type, result_status, actual_action, error_code,
+                    snapshot_id, result_status, actual_action, error_code,
                     error_message, started_at, completed_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, snapshotId, targetType, status, actualAction, errorCode, errorMessage,
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, snapshotId, status, actualAction, errorCode, errorMessage,
                 Timestamp.from(T0), Timestamp.from(T0));
     }
 
@@ -166,10 +158,4 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
                 """, snapshotId, status, Timestamp.from(T0));
     }
 
-    private void insertChangeResult(long snapshotId, String comparabilityStatus, String changeType) {
-        jdbcTemplate.update("""
-                INSERT INTO change_result (snapshot_id, comparability_status, change_type, created_at)
-                VALUES (?, ?, ?, ?)
-                """, snapshotId, comparabilityStatus, changeType, Timestamp.from(T0));
-    }
 }

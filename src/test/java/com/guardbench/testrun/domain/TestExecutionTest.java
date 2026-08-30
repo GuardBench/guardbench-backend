@@ -1,7 +1,6 @@
 package com.guardbench.testrun.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -19,7 +18,7 @@ class TestExecutionTest {
     @DisplayName("SUCCEEDED 실행은 ActualResult와 Application Clock lifecycle 시각만 가진다")
     void succeededExecutionContainsActualResultAndApplicationTimeline() {
         TestExecution execution = TestExecution.succeeded(
-                executionId(TargetType.BASELINE),
+                executionId(),
                 new ActualResult(Action.ALLOW),
                 STARTED_AT,
                 COMPLETED_AT
@@ -41,7 +40,7 @@ class TestExecutionTest {
         );
 
         TestExecution execution = TestExecution.failed(
-                executionId(TargetType.CANDIDATE),
+                executionId(),
                 error,
                 STARTED_AT,
                 COMPLETED_AT
@@ -65,7 +64,7 @@ class TestExecutionTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> TestExecution.timedOut(
-                        executionId(TargetType.CANDIDATE),
+                        executionId(),
                         wrongError,
                         STARTED_AT,
                         COMPLETED_AT
@@ -79,7 +78,7 @@ class TestExecutionTest {
         assertThrows(
                 NullPointerException.class,
                 () -> TestExecution.succeeded(
-                        executionId(TargetType.BASELINE),
+                        executionId(),
                         new ActualResult(Action.ALLOW),
                         null,
                         COMPLETED_AT
@@ -93,7 +92,7 @@ class TestExecutionTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> TestExecution.failed(
-                        executionId(TargetType.BASELINE),
+                        executionId(),
                         new TestExecutionError(TestExecutionErrorCode.PROVIDER_UNAVAILABLE, "Provider is unavailable."),
                         COMPLETED_AT,
                         STARTED_AT
@@ -104,7 +103,7 @@ class TestExecutionTest {
     @Test
     @DisplayName("NOT_STARTED 실행은 ActualResult, 오류와 lifecycle 시각을 모두 가지지 않는다")
     void notStartedExecutionContainsNeitherResultErrorNorTimeline() {
-        TestExecution execution = TestExecution.notStarted(executionId(TargetType.BASELINE));
+        TestExecution execution = TestExecution.notStarted(executionId());
 
         assertEquals(TestExecutionStatus.NOT_STARTED, execution.status());
         assertNull(execution.actualResult());
@@ -113,17 +112,7 @@ class TestExecutionTest {
         assertNull(execution.completedAt());
     }
 
-    @Test
-    @DisplayName("Baseline과 Candidate 실행은 같은 Snapshot에서 다른 식별자를 가진다")
-    void baselineAndCandidateUseDifferentIdsForSameSnapshot() {
-        TestExecutionId baselineId = executionId(TargetType.BASELINE);
-        TestExecutionId candidateId = executionId(TargetType.CANDIDATE);
-
-        assertEquals(baselineId.snapshotId(), candidateId.snapshotId());
-        assertNotEquals(baselineId, candidateId);
-    }
-
-    private static TestExecutionId executionId(TargetType targetType) {
-        return new TestExecutionId(new TestCaseSnapshotId(1), targetType);
+    private static TestExecutionId executionId() {
+        return new TestExecutionId(new TestCaseSnapshotId(1));
     }
 }

@@ -19,14 +19,14 @@ import com.guardbench.testsupport.PostgresTestConfiguration;
 class PersistenceFoundationIntegrationTest {
 
     @Test
-    @DisplayName("빈 PostgreSQL에 승인된 Flyway V1/V2 스키마를 적용한다")
+    @DisplayName("빈 PostgreSQL에 Flyway V1~V3 스키마를 적용한다")
     void appliesApprovedSchemaToPostgreSql(
             @Autowired Flyway flyway,
             @Autowired JdbcTemplate jdbcTemplate) {
         MigrationInfo current = flyway.info().current();
 
         assertNotNull(current);
-        assertEquals("2", current.getVersion().getVersion());
+        assertEquals("3", current.getVersion().getVersion());
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 """
@@ -39,11 +39,11 @@ class PersistenceFoundationIntegrationTest {
                       'assertion_result', 'change_result',
                       'quality_gate_result', 'test_run_idempotency',
                       'outbox_event', 'test_run_resolution_claim',
-                      'test_execution_claim'
+                      'test_execution_claim', 'target_reference', 'bedrock_guardrail_target'
                   )
                 """,
                 Integer.class);
 
-        assertEquals(12, tableCount);
+        assertEquals(14, tableCount);
     }
 }

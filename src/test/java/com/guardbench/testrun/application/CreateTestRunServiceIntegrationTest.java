@@ -54,7 +54,7 @@ class CreateTestRunServiceIntegrationTest {
             @Autowired CreateTestRunService service,
             @Autowired JdbcTemplate jdbcTemplate) {
         TestRunCreateCommand command = new TestRunCreateCommand(
-                900L, "guardrail-123", "4", "guardrail-123", "DRAFT", null);
+                900L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", null);
 
         TestRunCreateResult result = service.create(command);
 
@@ -79,7 +79,7 @@ class CreateTestRunServiceIntegrationTest {
     @DisplayName("같은 Idempotency-Key와 같은 요청을 재전송하면 새 행을 만들지 않고 기존 TestRun을 반환한다")
     void reusesExistingTestRunAcrossRequestsWithSameKey(@Autowired CreateTestRunService service) {
         TestRunCreateCommand command = new TestRunCreateCommand(
-                900L, "guardrail-123", "4", "guardrail-123", "DRAFT", "idem-key-integration-1");
+                900L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", "idem-key-integration-1");
 
         TestRunCreateResult first = service.create(command);
         TestRunCreateResult second = service.create(command);
@@ -93,9 +93,9 @@ class CreateTestRunServiceIntegrationTest {
         fixture.insertTestSuite(910L, CREATED_AT);
         fixture.insertTestCase(911L, 910L, CREATED_AT);
         TestRunCreateCommand first = new TestRunCreateCommand(
-                900L, "guardrail-123", "4", "guardrail-123", "DRAFT", "idem-key-integration-2");
+                900L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", "idem-key-integration-2");
         TestRunCreateCommand different = new TestRunCreateCommand(
-                910L, "guardrail-123", "4", "guardrail-123", "DRAFT", "idem-key-integration-2");
+                910L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", "idem-key-integration-2");
 
         service.create(first);
         ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(different));
@@ -111,7 +111,7 @@ class CreateTestRunServiceIntegrationTest {
     void doesNotPersistAnythingWhenTestSuiteMissing(
             @Autowired CreateTestRunService service, @Autowired JdbcTemplate jdbcTemplate) {
         TestRunCreateCommand command = new TestRunCreateCommand(
-                999L, "guardrail-123", "4", "guardrail-123", "DRAFT", null);
+                999L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", null);
 
         assertThrows(ApplicationException.class, () -> service.create(command));
 
@@ -127,7 +127,7 @@ class CreateTestRunServiceIntegrationTest {
             @Autowired CreateTestRunService service, @Autowired JdbcTemplate jdbcTemplate) {
         fixture.insertTestSuite(920L, CREATED_AT);
         TestRunCreateCommand command = new TestRunCreateCommand(
-                920L, "guardrail-123", "4", "guardrail-123", "DRAFT", null);
+                920L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", null);
 
         ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(command));
 
@@ -142,7 +142,7 @@ class CreateTestRunServiceIntegrationTest {
     void createdTestRunHasQueuedStatusAndFixedTestCaseCount(
             @Autowired CreateTestRunService service, @Autowired JdbcTemplate jdbcTemplate) {
         TestRunCreateCommand command = new TestRunCreateCommand(
-                900L, "guardrail-123", "4", "guardrail-123", "DRAFT", null);
+                900L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", null);
 
         TestRunCreateResult result = service.create(command);
 

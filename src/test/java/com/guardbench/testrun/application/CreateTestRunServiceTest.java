@@ -26,7 +26,7 @@ class CreateTestRunServiceTest {
         adapters.givenTestSuite(1L, List.of(SOURCE, SOURCE));
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand command = new TestRunCreateCommand(
-                1L, "guardrail-123", "4", "guardrail-123", "DRAFT", null);
+                1L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", null);
 
         TestRunCreateResult result = service.create(command);
 
@@ -48,7 +48,7 @@ class CreateTestRunServiceTest {
         CreateTestRunFakeAdapters adapters = new CreateTestRunFakeAdapters();
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand command = new TestRunCreateCommand(
-                404L, "guardrail-123", "4", "guardrail-123", "DRAFT", null);
+                404L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", null);
 
         ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(command));
 
@@ -62,7 +62,7 @@ class CreateTestRunServiceTest {
         adapters.givenTestSuite(2L, List.of());
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand command = new TestRunCreateCommand(
-                2L, "guardrail-123", "4", "guardrail-123", "DRAFT", null);
+                2L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", null);
 
         ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(command));
 
@@ -76,7 +76,7 @@ class CreateTestRunServiceTest {
         adapters.givenTestSuite(1L, List.of(SOURCE));
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand command = new TestRunCreateCommand(
-                1L, "guardrail-123", "4", "guardrail-123", "DRAFT", "idem-key-1");
+                1L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", "idem-key-1");
 
         TestRunCreateResult first = service.create(command);
         TestRunCreateResult second = service.create(command);
@@ -93,9 +93,9 @@ class CreateTestRunServiceTest {
         adapters.givenTestSuite(2L, List.of(SOURCE));
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand first = new TestRunCreateCommand(
-                1L, "guardrail-123", "4", "guardrail-123", "DRAFT", "idem-key-2");
+                1L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", "idem-key-2");
         TestRunCreateCommand different = new TestRunCreateCommand(
-                2L, "guardrail-123", "4", "guardrail-123", "DRAFT", "idem-key-2");
+                2L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", "idem-key-2");
 
         service.create(first);
         ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(different));
@@ -110,7 +110,7 @@ class CreateTestRunServiceTest {
         adapters.givenTestSuite(1L, List.of(SOURCE));
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand command = new TestRunCreateCommand(
-                1L, "guardrail-123", "4", "guardrail-123", "DRAFT", null);
+                1L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", null);
 
         TestRunCreateResult first = service.create(command);
         TestRunCreateResult second = service.create(command);
@@ -125,6 +125,7 @@ class CreateTestRunServiceTest {
                 adapters,
                 adapters.nextTestRunIdPort(),
                 adapters.nextTestCaseSnapshotIdPort(),
+                adapters,
                 adapters,
                 adapters,
                 adapters,

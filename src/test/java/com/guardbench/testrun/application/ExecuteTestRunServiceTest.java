@@ -19,21 +19,19 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import com.guardbench.testrun.application.messaging.TargetTypeCode;
 import com.guardbench.testrun.application.port.out.ClaimResult;
 import com.guardbench.testrun.application.port.out.ExecutionClaimPort;
 import com.guardbench.testrun.application.port.out.ExecutionContext;
-import com.guardbench.testrun.application.port.out.GuardrailExecutionPort;
-import com.guardbench.testrun.application.port.out.GuardrailExecutionRequest;
-import com.guardbench.testrun.application.port.out.GuardrailExecutionResult;
-import com.guardbench.testrun.application.port.out.GuardrailFailureCode;
-import com.guardbench.testrun.application.port.out.GuardrailProviderException;
+import com.guardbench.testrun.application.port.out.TargetExecutionPort;
+import com.guardbench.testrun.application.port.out.TargetExecutionRequest;
+import com.guardbench.testrun.application.port.out.TargetExecutionResult;
+import com.guardbench.testrun.application.port.out.TargetFailureCode;
+import com.guardbench.testrun.application.port.out.TargetProviderException;
 import com.guardbench.testrun.application.port.out.LoadExecutionContextPort;
 import com.guardbench.testrun.application.port.out.OutboxEventRecord;
 import com.guardbench.testrun.application.port.out.OutboxPort;
 import com.guardbench.testrun.domain.ActualResult;
 import com.guardbench.testrun.domain.Action;
-import com.guardbench.testrun.domain.TargetType;
 import com.guardbench.testrun.domain.TestCaseSnapshotId;
 import com.guardbench.testrun.domain.TestExecution;
 import com.guardbench.testrun.domain.TestExecutionErrorCode;
@@ -47,14 +45,13 @@ class ExecuteTestRunServiceTest {
     private static final Clock FIXED_CLOCK = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
     private static final long SNAPSHOT_ID = 100L;
     private static final long TEST_RUN_ID = 1L;
-    private static final String GUARDRAIL_ID = "my-guardrail";
-    private static final String GUARDRAIL_VERSION = "5";
+    private static final String TARGET_REFERENCE = "target-ref-1";
     private static final String INPUT_TEXT = "Hello, block this content";
 
     private FakeExecutionClaimPort claimPort;
     private FakeTestExecutionRepository executionRepository;
     private FakeLoadExecutionContextPort contextPort;
-    private FakeGuardrailExecutionPort guardrailPort;
+    private FakeTargetExecutionPort guardrailPort;
     private FakeOutboxPort outboxPort;
     private ExecuteTestRunService service;
 
@@ -63,7 +60,7 @@ class ExecuteTestRunServiceTest {
         claimPort = new FakeExecutionClaimPort();
         executionRepository = new FakeTestExecutionRepository();
         contextPort = new FakeLoadExecutionContextPort();
-        guardrailPort = new FakeGuardrailExecutionPort();
+        guardrailPort = new FakeTargetExecutionPort();
         outboxPort = new FakeOutboxPort();
         service = new ExecuteTestRunService(
                 claimPort, executionRepository, contextPort,
@@ -76,14 +73,14 @@ class ExecuteTestRunServiceTest {
     class HappyPath {
 
         @Test
-        @DisplayName("ALLOW 결과의 Baseline 실행을 SUCCEEDED로 저장하고 Outbox를 생성한다")
+        @DisplayName("ALLOW 결과의 Target 실행을 SUCCEEDED로 저장하고 Outbox를 생성한다")
         void executesBaselineAllow() {
-            claimPort.willAcquire(SNAPSHOT_ID, "BASELINE");
-            contextPort.setContext(SNAPSHOT_ID, "BASELINE", defaultContext());
-            guardrailPort.willReturn(GuardrailExecutionResult.succeeded("ALLOW"));
+            claimPort.willAcquire(SNAPSHOT_ID);
+            contextPort.setContext(SNAPSHOT_ID, defaultContext());
+            guardrailPort.willReturn(TargetExecutionResult.succeeded("ALLOW"));
 
             ExecuteTestRunService.ExecutionOutcome outcome =
-                    service.execute(SNAPSHOT_ID, TargetTypeCode.BASELINE);
+                    service.execute(SNAPSHOT_ID);
 
             assertEquals(ExecuteTestRunService.ExecutionOutcome.EXECUTED, outcome);
             assertTrue(outcome.shouldAcknowledge());
@@ -100,41 +97,39 @@ class ExecuteTestRunServiceTest {
             OutboxEventRecord event = outboxPort.savedEvents().getFirst();
             assertEquals("TestExecutionCompleted", event.eventType());
             assertTrue(event.payload().contains("\"snapshotId\":" + SNAPSHOT_ID));
-            assertTrue(event.payload().contains("\"targetType\":\"BASELINE\""));
+            assertTrue(!event.payload().contains("targetType"));
             assertTrue(event.payload().contains("\"testRunId\":" + TEST_RUN_ID));
         }
 
         @Test
-        @DisplayName("BLOCK 결과의 Candidate 실행을 SUCCEEDED로 저장한다")
+        @DisplayName("BLOCK 결과의 Target 실행을 SUCCEEDED로 저장한다")
         void executesCandidateBlock() {
-            claimPort.willAcquire(SNAPSHOT_ID, "CANDIDATE");
-            contextPort.setContext(SNAPSHOT_ID, "CANDIDATE", defaultContext());
-            guardrailPort.willReturn(GuardrailExecutionResult.succeeded("BLOCK"));
+            claimPort.willAcquire(SNAPSHOT_ID);
+            contextPort.setContext(SNAPSHOT_ID, defaultContext());
+            guardrailPort.willReturn(TargetExecutionResult.succeeded("BLOCK"));
 
             ExecuteTestRunService.ExecutionOutcome outcome =
-                    service.execute(SNAPSHOT_ID, TargetTypeCode.CANDIDATE);
+                    service.execute(SNAPSHOT_ID);
 
             assertEquals(ExecuteTestRunService.ExecutionOutcome.EXECUTED, outcome);
 
             TestExecution saved = executionRepository.savedExecutions().getFirst();
             assertEquals(TestExecutionStatus.SUCCEEDED, saved.status());
             assertEquals(new ActualResult(Action.BLOCK), saved.actualResult());
-            assertEquals(TargetType.CANDIDATE, saved.id().targetType());
         }
 
         @Test
-        @DisplayName("Provider 호출에 올바른 guardrail identifier, version, input을 전달한다")
+        @DisplayName("Provider 호출에 올바른 target reference와 input을 전달한다")
         void passesCorrectRequestToProvider() {
-            claimPort.willAcquire(SNAPSHOT_ID, "BASELINE");
-            contextPort.setContext(SNAPSHOT_ID, "BASELINE", defaultContext());
-            guardrailPort.willReturn(GuardrailExecutionResult.succeeded("ALLOW"));
+            claimPort.willAcquire(SNAPSHOT_ID);
+            contextPort.setContext(SNAPSHOT_ID, defaultContext());
+            guardrailPort.willReturn(TargetExecutionResult.succeeded("ALLOW"));
 
-            service.execute(SNAPSHOT_ID, TargetTypeCode.BASELINE);
+            service.execute(SNAPSHOT_ID);
 
-            GuardrailExecutionRequest request = guardrailPort.lastRequest();
+            TargetExecutionRequest request = guardrailPort.lastRequest();
             assertNotNull(request);
-            assertEquals(GUARDRAIL_ID, request.guardrailIdentifier());
-            assertEquals(GUARDRAIL_VERSION, request.guardrailVersion());
+            assertEquals(TARGET_REFERENCE, request.targetReference().value());
             assertEquals(INPUT_TEXT, request.input());
         }
     }
@@ -146,15 +141,13 @@ class ExecuteTestRunServiceTest {
         @Test
         @DisplayName("이미 terminal TestExecution이 있으면 ALREADY_TERMINAL을 반환한다")
         void alreadyTerminal() {
-            TestExecutionId id = new TestExecutionId(
-                    new TestCaseSnapshotId(SNAPSHOT_ID), TargetType.BASELINE
-            );
+            TestExecutionId id = new TestExecutionId(new TestCaseSnapshotId(SNAPSHOT_ID));
             executionRepository.store(
                     TestExecution.succeeded(id, new ActualResult(Action.ALLOW), FIXED_NOW, FIXED_NOW)
             );
 
             ExecuteTestRunService.ExecutionOutcome outcome =
-                    service.execute(SNAPSHOT_ID, TargetTypeCode.BASELINE);
+                    service.execute(SNAPSHOT_ID);
 
             assertEquals(ExecuteTestRunService.ExecutionOutcome.ALREADY_TERMINAL, outcome);
             assertTrue(outcome.shouldAcknowledge());
@@ -167,9 +160,7 @@ class ExecuteTestRunServiceTest {
         @Test
         @DisplayName("FAILED terminal이 존재해도 ALREADY_TERMINAL을 반환한다")
         void alreadyTerminalFailed() {
-            TestExecutionId id = new TestExecutionId(
-                    new TestCaseSnapshotId(SNAPSHOT_ID), TargetType.CANDIDATE
-            );
+            TestExecutionId id = new TestExecutionId(new TestCaseSnapshotId(SNAPSHOT_ID));
             executionRepository.store(
                     TestExecution.failed(
                             id,
@@ -183,7 +174,7 @@ class ExecuteTestRunServiceTest {
             );
 
             ExecuteTestRunService.ExecutionOutcome outcome =
-                    service.execute(SNAPSHOT_ID, TargetTypeCode.CANDIDATE);
+                    service.execute(SNAPSHOT_ID);
 
             assertEquals(ExecuteTestRunService.ExecutionOutcome.ALREADY_TERMINAL, outcome);
             assertTrue(outcome.shouldAcknowledge());
@@ -197,10 +188,10 @@ class ExecuteTestRunServiceTest {
         @Test
         @DisplayName("다른 Worker가 유효한 claim을 보유하면 CLAIM_HELD_BY_OTHER를 반환한다")
         void claimHeldByOther() {
-            claimPort.willBeHeld(SNAPSHOT_ID, "BASELINE");
+            claimPort.willBeHeld(SNAPSHOT_ID);
 
             ExecuteTestRunService.ExecutionOutcome outcome =
-                    service.execute(SNAPSHOT_ID, TargetTypeCode.BASELINE);
+                    service.execute(SNAPSHOT_ID);
 
             assertEquals(ExecuteTestRunService.ExecutionOutcome.CLAIM_HELD_BY_OTHER, outcome);
             assertTrue(!outcome.shouldAcknowledge());
@@ -210,13 +201,13 @@ class ExecuteTestRunServiceTest {
         @Test
         @DisplayName("Provider 호출 후 claim을 잃으면 CLAIM_LOST_AFTER_EXECUTION을 반환한다")
         void claimLostAfterExecution() {
-            claimPort.willAcquire(SNAPSHOT_ID, "CANDIDATE");
+            claimPort.willAcquire(SNAPSHOT_ID);
             claimPort.setIsHeldByResult(false); // 재검증 실패
-            contextPort.setContext(SNAPSHOT_ID, "CANDIDATE", defaultContext());
-            guardrailPort.willReturn(GuardrailExecutionResult.succeeded("ALLOW"));
+            contextPort.setContext(SNAPSHOT_ID, defaultContext());
+            guardrailPort.willReturn(TargetExecutionResult.succeeded("ALLOW"));
 
             ExecuteTestRunService.ExecutionOutcome outcome =
-                    service.execute(SNAPSHOT_ID, TargetTypeCode.CANDIDATE);
+                    service.execute(SNAPSHOT_ID);
 
             assertEquals(ExecuteTestRunService.ExecutionOutcome.CLAIM_LOST_AFTER_EXECUTION, outcome);
             assertTrue(!outcome.shouldAcknowledge());
@@ -233,12 +224,12 @@ class ExecuteTestRunServiceTest {
         @Test
         @DisplayName("retryable 오류 + attempt 미초과 시 PROVIDER_FAILED_RETRYABLE을 반환한다")
         void retryableUnavailable() {
-            claimPort.willAcquireWithAttempt(SNAPSHOT_ID, "BASELINE", 1);
-            contextPort.setContext(SNAPSHOT_ID, "BASELINE", defaultContext());
-            guardrailPort.willThrow(GuardrailFailureCode.PROVIDER_UNAVAILABLE);
+            claimPort.willAcquireWithAttempt(SNAPSHOT_ID, 1);
+            contextPort.setContext(SNAPSHOT_ID, defaultContext());
+            guardrailPort.willThrow(TargetFailureCode.PROVIDER_UNAVAILABLE);
 
             ExecuteTestRunService.ExecutionOutcome outcome =
-                    service.execute(SNAPSHOT_ID, TargetTypeCode.BASELINE);
+                    service.execute(SNAPSHOT_ID);
 
             assertEquals(ExecuteTestRunService.ExecutionOutcome.PROVIDER_FAILED_RETRYABLE, outcome);
             assertTrue(!outcome.shouldAcknowledge());
@@ -249,12 +240,12 @@ class ExecuteTestRunServiceTest {
         @Test
         @DisplayName("retryable TIMEOUT + attempt 미초과 시 PROVIDER_FAILED_RETRYABLE을 반환한다")
         void retryableTimeout() {
-            claimPort.willAcquireWithAttempt(SNAPSHOT_ID, "BASELINE", 2);
-            contextPort.setContext(SNAPSHOT_ID, "BASELINE", defaultContext());
-            guardrailPort.willThrow(GuardrailFailureCode.PROVIDER_TIMEOUT);
+            claimPort.willAcquireWithAttempt(SNAPSHOT_ID, 2);
+            contextPort.setContext(SNAPSHOT_ID, defaultContext());
+            guardrailPort.willThrow(TargetFailureCode.PROVIDER_TIMEOUT);
 
             ExecuteTestRunService.ExecutionOutcome outcome =
-                    service.execute(SNAPSHOT_ID, TargetTypeCode.BASELINE);
+                    service.execute(SNAPSHOT_ID);
 
             assertEquals(ExecuteTestRunService.ExecutionOutcome.PROVIDER_FAILED_RETRYABLE, outcome);
         }
@@ -262,12 +253,12 @@ class ExecuteTestRunServiceTest {
         @Test
         @DisplayName("retryable 오류 + attempt 소진 시 TIMED_OUT으로 저장한다 (PROVIDER_TIMEOUT)")
         void exhaustedTimeout() {
-            claimPort.willAcquireWithAttempt(SNAPSHOT_ID, "BASELINE", 3);
-            contextPort.setContext(SNAPSHOT_ID, "BASELINE", defaultContext());
-            guardrailPort.willThrow(GuardrailFailureCode.PROVIDER_TIMEOUT);
+            claimPort.willAcquireWithAttempt(SNAPSHOT_ID, 3);
+            contextPort.setContext(SNAPSHOT_ID, defaultContext());
+            guardrailPort.willThrow(TargetFailureCode.PROVIDER_TIMEOUT);
 
             ExecuteTestRunService.ExecutionOutcome outcome =
-                    service.execute(SNAPSHOT_ID, TargetTypeCode.BASELINE);
+                    service.execute(SNAPSHOT_ID);
 
             assertEquals(ExecuteTestRunService.ExecutionOutcome.EXECUTED, outcome);
             assertTrue(outcome.shouldAcknowledge());
@@ -281,12 +272,12 @@ class ExecuteTestRunServiceTest {
         @Test
         @DisplayName("retryable 오류(PROVIDER_UNAVAILABLE) + attempt 소진 시 FAILED로 저장한다")
         void exhaustedUnavailable() {
-            claimPort.willAcquireWithAttempt(SNAPSHOT_ID, "BASELINE", 3);
-            contextPort.setContext(SNAPSHOT_ID, "BASELINE", defaultContext());
-            guardrailPort.willThrow(GuardrailFailureCode.PROVIDER_UNAVAILABLE);
+            claimPort.willAcquireWithAttempt(SNAPSHOT_ID, 3);
+            contextPort.setContext(SNAPSHOT_ID, defaultContext());
+            guardrailPort.willThrow(TargetFailureCode.PROVIDER_UNAVAILABLE);
 
             ExecuteTestRunService.ExecutionOutcome outcome =
-                    service.execute(SNAPSHOT_ID, TargetTypeCode.BASELINE);
+                    service.execute(SNAPSHOT_ID);
 
             assertEquals(ExecuteTestRunService.ExecutionOutcome.EXECUTED, outcome);
 
@@ -298,12 +289,12 @@ class ExecuteTestRunServiceTest {
         @Test
         @DisplayName("영구 오류(TARGET_NOT_FOUND)는 첫 시도에서 FAILED로 저장한다")
         void permanentFailureFirstAttempt() {
-            claimPort.willAcquireWithAttempt(SNAPSHOT_ID, "CANDIDATE", 1);
-            contextPort.setContext(SNAPSHOT_ID, "CANDIDATE", defaultContext());
-            guardrailPort.willThrow(GuardrailFailureCode.TARGET_NOT_FOUND);
+            claimPort.willAcquireWithAttempt(SNAPSHOT_ID, 1);
+            contextPort.setContext(SNAPSHOT_ID, defaultContext());
+            guardrailPort.willThrow(TargetFailureCode.TARGET_NOT_FOUND);
 
             ExecuteTestRunService.ExecutionOutcome outcome =
-                    service.execute(SNAPSHOT_ID, TargetTypeCode.CANDIDATE);
+                    service.execute(SNAPSHOT_ID);
 
             assertEquals(ExecuteTestRunService.ExecutionOutcome.EXECUTED, outcome);
             assertTrue(outcome.shouldAcknowledge());
@@ -316,12 +307,12 @@ class ExecuteTestRunServiceTest {
         @Test
         @DisplayName("TARGET_ACCESS_DENIED는 영구 실패로 첫 시도에서 저장한다")
         void permanentAccessDenied() {
-            claimPort.willAcquireWithAttempt(SNAPSHOT_ID, "BASELINE", 1);
-            contextPort.setContext(SNAPSHOT_ID, "BASELINE", defaultContext());
-            guardrailPort.willThrow(GuardrailFailureCode.TARGET_ACCESS_DENIED);
+            claimPort.willAcquireWithAttempt(SNAPSHOT_ID, 1);
+            contextPort.setContext(SNAPSHOT_ID, defaultContext());
+            guardrailPort.willThrow(TargetFailureCode.TARGET_ACCESS_DENIED);
 
             ExecuteTestRunService.ExecutionOutcome outcome =
-                    service.execute(SNAPSHOT_ID, TargetTypeCode.BASELINE);
+                    service.execute(SNAPSHOT_ID);
 
             assertEquals(ExecuteTestRunService.ExecutionOutcome.EXECUTED, outcome);
 
@@ -333,12 +324,12 @@ class ExecuteTestRunServiceTest {
         @Test
         @DisplayName("TARGET_CONFIGURATION_INVALID는 영구 실패로 저장한다")
         void permanentConfigInvalid() {
-            claimPort.willAcquireWithAttempt(SNAPSHOT_ID, "BASELINE", 2);
-            contextPort.setContext(SNAPSHOT_ID, "BASELINE", defaultContext());
-            guardrailPort.willThrow(GuardrailFailureCode.TARGET_CONFIGURATION_INVALID);
+            claimPort.willAcquireWithAttempt(SNAPSHOT_ID, 2);
+            contextPort.setContext(SNAPSHOT_ID, defaultContext());
+            guardrailPort.willThrow(TargetFailureCode.TARGET_CONFIGURATION_INVALID);
 
             ExecuteTestRunService.ExecutionOutcome outcome =
-                    service.execute(SNAPSHOT_ID, TargetTypeCode.BASELINE);
+                    service.execute(SNAPSHOT_ID);
 
             assertEquals(ExecuteTestRunService.ExecutionOutcome.EXECUTED, outcome);
 
@@ -350,12 +341,12 @@ class ExecuteTestRunServiceTest {
         @Test
         @DisplayName("PROVIDER_RESPONSE_INVALID는 영구 실패로 저장한다")
         void permanentResponseInvalid() {
-            claimPort.willAcquireWithAttempt(SNAPSHOT_ID, "BASELINE", 1);
-            contextPort.setContext(SNAPSHOT_ID, "BASELINE", defaultContext());
-            guardrailPort.willReturn(GuardrailExecutionResult.failed(GuardrailFailureCode.PROVIDER_RESPONSE_INVALID));
+            claimPort.willAcquireWithAttempt(SNAPSHOT_ID, 1);
+            contextPort.setContext(SNAPSHOT_ID, defaultContext());
+            guardrailPort.willReturn(TargetExecutionResult.failed(TargetFailureCode.PROVIDER_RESPONSE_INVALID));
 
             ExecuteTestRunService.ExecutionOutcome outcome =
-                    service.execute(SNAPSHOT_ID, TargetTypeCode.BASELINE);
+                    service.execute(SNAPSHOT_ID);
 
             assertEquals(ExecuteTestRunService.ExecutionOutcome.EXECUTED, outcome);
 
@@ -372,11 +363,11 @@ class ExecuteTestRunServiceTest {
         @Test
         @DisplayName("Snapshot이 없으면 CONTEXT_NOT_FOUND를 반환한다")
         void snapshotNotFound() {
-            claimPort.willAcquire(SNAPSHOT_ID, "BASELINE");
+            claimPort.willAcquire(SNAPSHOT_ID);
             // contextPort에 아무것도 설정하지 않음
 
             ExecuteTestRunService.ExecutionOutcome outcome =
-                    service.execute(SNAPSHOT_ID, TargetTypeCode.BASELINE);
+                    service.execute(SNAPSHOT_ID);
 
             assertEquals(ExecuteTestRunService.ExecutionOutcome.CONTEXT_NOT_FOUND, outcome);
             assertTrue(outcome.shouldAcknowledge());
@@ -389,16 +380,16 @@ class ExecuteTestRunServiceTest {
     class DeduplicationKeys {
 
         @Test
-        @DisplayName("Outbox dedup key는 TestExecutionCompleted:snapshotId:targetType 형식이다")
+        @DisplayName("Outbox dedup key는 TestExecutionCompleted:snapshotId 형식이다")
         void deduplicationKeyFormat() {
-            claimPort.willAcquire(SNAPSHOT_ID, "CANDIDATE");
-            contextPort.setContext(SNAPSHOT_ID, "CANDIDATE", defaultContext());
-            guardrailPort.willReturn(GuardrailExecutionResult.succeeded("BLOCK"));
+            claimPort.willAcquire(SNAPSHOT_ID);
+            contextPort.setContext(SNAPSHOT_ID, defaultContext());
+            guardrailPort.willReturn(TargetExecutionResult.succeeded("BLOCK"));
 
-            service.execute(SNAPSHOT_ID, TargetTypeCode.CANDIDATE);
+            service.execute(SNAPSHOT_ID);
 
             OutboxEventRecord event = outboxPort.savedEvents().getFirst();
-            assertEquals("TestExecutionCompleted:" + SNAPSHOT_ID + ":CANDIDATE", event.deduplicationKey());
+            assertEquals("TestExecutionCompleted:" + SNAPSHOT_ID, event.deduplicationKey());
         }
     }
 
@@ -446,26 +437,26 @@ class ExecuteTestRunServiceTest {
     // ─── Test Fixtures ────────────────────────────────────────────────────────
 
     private static ExecutionContext defaultContext() {
-        return new ExecutionContext(GUARDRAIL_ID, GUARDRAIL_VERSION, INPUT_TEXT, TEST_RUN_ID);
+        return new ExecutionContext(TARGET_REFERENCE, INPUT_TEXT, TEST_RUN_ID);
     }
 
     // ─── Fake Adapters ────────────────────────────────────────────────────────
 
     private static final class FakeExecutionClaimPort implements ExecutionClaimPort {
-        private final Map<String, ClaimResult> acquireResults = new HashMap<>();
+        private final Map<Long, ClaimResult> acquireResults = new HashMap<>();
         private boolean isHeldByResult = true;
 
-        void willAcquire(long snapshotId, String targetType) {
-            willAcquireWithAttempt(snapshotId, targetType, 1);
+        void willAcquire(long snapshotId) {
+            willAcquireWithAttempt(snapshotId, 1);
         }
 
-        void willAcquireWithAttempt(long snapshotId, String targetType, int attemptCount) {
+        void willAcquireWithAttempt(long snapshotId, int attemptCount) {
             UUID token = UUID.randomUUID();
-            acquireResults.put(key(snapshotId, targetType), new ClaimResult.Acquired(token, attemptCount));
+            acquireResults.put(snapshotId, new ClaimResult.Acquired(token, attemptCount));
         }
 
-        void willBeHeld(long snapshotId, String targetType) {
-            acquireResults.put(key(snapshotId, targetType), new ClaimResult.AlreadyHeld());
+        void willBeHeld(long snapshotId) {
+            acquireResults.put(snapshotId, new ClaimResult.AlreadyHeld());
         }
 
         void setIsHeldByResult(boolean result) {
@@ -473,17 +464,13 @@ class ExecuteTestRunServiceTest {
         }
 
         @Override
-        public ClaimResult tryAcquire(long snapshotId, String targetType) {
-            return acquireResults.getOrDefault(key(snapshotId, targetType), new ClaimResult.AlreadyHeld());
+        public ClaimResult tryAcquire(long snapshotId) {
+            return acquireResults.getOrDefault(snapshotId, new ClaimResult.AlreadyHeld());
         }
 
         @Override
-        public boolean isHeldBy(long snapshotId, String targetType, UUID claimToken) {
+        public boolean isHeldBy(long snapshotId, UUID claimToken) {
             return isHeldByResult;
-        }
-
-        private static String key(long snapshotId, String targetType) {
-            return snapshotId + ":" + targetType;
         }
     }
 
@@ -516,35 +503,35 @@ class ExecuteTestRunServiceTest {
     }
 
     private static final class FakeLoadExecutionContextPort implements LoadExecutionContextPort {
-        private final Map<String, ExecutionContext> contexts = new HashMap<>();
+        private final Map<Long, ExecutionContext> contexts = new HashMap<>();
 
-        void setContext(long snapshotId, String targetType, ExecutionContext context) {
-            contexts.put(snapshotId + ":" + targetType, context);
+        void setContext(long snapshotId, ExecutionContext context) {
+            contexts.put(snapshotId, context);
         }
 
         @Override
-        public Optional<ExecutionContext> load(long snapshotId, String targetType) {
-            return Optional.ofNullable(contexts.get(snapshotId + ":" + targetType));
+        public Optional<ExecutionContext> load(long snapshotId) {
+            return Optional.ofNullable(contexts.get(snapshotId));
         }
     }
 
-    private static final class FakeGuardrailExecutionPort implements GuardrailExecutionPort {
-        private GuardrailExecutionResult successResult;
-        private GuardrailFailureCode throwFailureCode;
-        private GuardrailExecutionRequest lastRequest;
+    private static final class FakeTargetExecutionPort implements TargetExecutionPort {
+        private TargetExecutionResult successResult;
+        private TargetFailureCode throwFailureCode;
+        private TargetExecutionRequest lastRequest;
         private int callCount;
 
-        void willReturn(GuardrailExecutionResult result) {
+        void willReturn(TargetExecutionResult result) {
             this.successResult = result;
             this.throwFailureCode = null;
         }
 
-        void willThrow(GuardrailFailureCode failureCode) {
+        void willThrow(TargetFailureCode failureCode) {
             this.throwFailureCode = failureCode;
             this.successResult = null;
         }
 
-        GuardrailExecutionRequest lastRequest() {
+        TargetExecutionRequest lastRequest() {
             return lastRequest;
         }
 
@@ -553,11 +540,11 @@ class ExecuteTestRunServiceTest {
         }
 
         @Override
-        public GuardrailExecutionResult execute(GuardrailExecutionRequest request) {
+        public TargetExecutionResult execute(TargetExecutionRequest request) {
             this.lastRequest = request;
             this.callCount++;
             if (throwFailureCode != null) {
-                throw new GuardrailProviderException(throwFailureCode);
+                throw new TargetProviderException(throwFailureCode);
             }
             return successResult;
         }

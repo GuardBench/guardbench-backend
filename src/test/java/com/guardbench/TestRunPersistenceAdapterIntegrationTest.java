@@ -18,14 +18,11 @@ import com.guardbench.testrun.application.port.out.NextTestCaseSnapshotIdPort;
 import com.guardbench.testrun.application.port.out.NextTestRunIdPort;
 import com.guardbench.testrun.domain.Action;
 import com.guardbench.testrun.domain.ActualResult;
-import com.guardbench.testrun.domain.BaselineTarget;
-import com.guardbench.testrun.domain.CandidateSource;
-import com.guardbench.testrun.domain.CandidateTarget;
 import com.guardbench.testrun.domain.ExpectedResult;
 import com.guardbench.testrun.domain.Severity;
 import com.guardbench.testrun.domain.SourceTestCaseId;
 import com.guardbench.testrun.domain.SourceTestSuiteId;
-import com.guardbench.testrun.domain.TargetType;
+import com.guardbench.testrun.domain.TargetReference;
 import com.guardbench.testrun.domain.TestCaseSnapshot;
 import com.guardbench.testrun.domain.TestExecution;
 import com.guardbench.testrun.domain.TestExecutionId;
@@ -65,11 +62,11 @@ class TestRunPersistenceAdapterIntegrationTest {
             @Autowired TestRunRepository testRunRepository,
             @Autowired TestCaseSnapshotRepository snapshotRepository) {
         TestRunId runId = nextTestRunIdPort.nextId();
+        fixture.insertTargetReference("target-ref-1");
         TestRun testRun = TestRun.queue(
                 runId,
                 new SourceTestSuiteId(500),
-                new BaselineTarget("guardrail", "1"),
-                new CandidateTarget("guardrail", CandidateSource.DRAFT, null),
+                new TargetReference("target-ref-1"),
                 1,
                 CREATED_AT
         );
@@ -98,16 +95,16 @@ class TestRunPersistenceAdapterIntegrationTest {
             @Autowired TestCaseSnapshotRepository snapshotRepository,
             @Autowired TestExecutionRepository executionRepository) {
         TestRunId runId = nextTestRunIdPort.nextId();
+        fixture.insertTargetReference("target-ref-2");
         testRunRepository.save(TestRun.queue(
-                runId, new SourceTestSuiteId(500), new BaselineTarget("guardrail", "1"),
-                new CandidateTarget("guardrail", CandidateSource.DRAFT, null), 1, CREATED_AT));
+                runId, new SourceTestSuiteId(500), new TargetReference("target-ref-2"), 1, CREATED_AT));
         TestCaseSnapshot snapshot = TestCaseSnapshot.of(
                 nextSnapshotIdPort.nextId(), runId, new SourceTestCaseId(501), "case", "input",
                 new ExpectedResult(Action.ALLOW), Severity.HIGH, "category", CREATED_AT);
         snapshotRepository.save(snapshot);
 
         TestExecution execution = TestExecution.succeeded(
-                new TestExecutionId(snapshot.id(), TargetType.BASELINE),
+                new TestExecutionId(snapshot.id()),
                 new ActualResult(Action.ALLOW),
                 CREATED_AT.plusSeconds(1),
                 CREATED_AT.plusSeconds(2));

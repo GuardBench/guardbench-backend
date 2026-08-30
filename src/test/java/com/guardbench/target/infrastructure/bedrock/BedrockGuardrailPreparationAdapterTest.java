@@ -1,4 +1,4 @@
-package com.guardbench.guardrail.infrastructure.bedrock;
+package com.guardbench.target.infrastructure.bedrock;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -6,10 +6,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.guardbench.testrun.application.port.out.GuardrailFailureCode;
-import com.guardbench.testrun.application.port.out.GuardrailMaterializationRequest;
-import com.guardbench.testrun.application.port.out.GuardrailMaterializedVersion;
-import com.guardbench.testrun.application.port.out.GuardrailProviderException;
+import java.util.Optional;
+
+import com.guardbench.testrun.application.port.out.TargetFailureCode;
+import com.guardbench.testrun.application.port.out.TargetPreparationRequest;
+import com.guardbench.testrun.application.port.out.TargetProviderException;
+import com.guardbench.testrun.domain.TargetReference;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,10 +27,13 @@ import software.amazon.awssdk.services.bedrock.model.CreateGuardrailVersionReque
 import software.amazon.awssdk.services.bedrock.model.CreateGuardrailVersionResponse;
 
 @ExtendWith(MockitoExtension.class)
-class BedrockGuardrailMaterializationAdapterTest {
+class BedrockGuardrailPreparationAdapterTest {
 
     @Mock
     private BedrockClient client;
+
+    @Mock
+    private BedrockGuardrailTargetStore targetStore;
 
     @Captor
     private ArgumentCaptor<CreateGuardrailVersionRequest> requestCaptor;
@@ -41,15 +46,14 @@ class BedrockGuardrailMaterializationAdapterTest {
                         .guardrailId("gr-123")
                         .version("7")
                         .build());
-        BedrockGuardrailMaterializationAdapter adapter = new BedrockGuardrailMaterializationAdapter(client);
+        BedrockGuardrailPreparationAdapter adapter = adapter();
 
-        GuardrailMaterializedVersion result = adapter.materialize(new GuardrailMaterializationRequest("gr-123", 42));
+        adapter.prepare(request());
 
         verify(client).createGuardrailVersion(requestCaptor.capture());
         assertEquals("gr-123", requestCaptor.getValue().guardrailIdentifier());
         assertEquals("guardbench-test-run-42", requestCaptor.getValue().clientRequestToken());
-        assertEquals("gr-123", result.guardrailIdentifier());
-        assertEquals("7", result.version());
+        verify(targetStore).saveResolvedRevision("target-ref", "7");
     }
 
     @Test
@@ -57,12 +61,12 @@ class BedrockGuardrailMaterializationAdapterTest {
     void mapsConflictToTargetConfigurationInvalid() {
         when(client.createGuardrailVersion(any(CreateGuardrailVersionRequest.class)))
                 .thenThrow(ConflictException.builder().build());
-        BedrockGuardrailMaterializationAdapter adapter = new BedrockGuardrailMaterializationAdapter(client);
+        BedrockGuardrailPreparationAdapter adapter = adapter();
 
-        GuardrailProviderException exception = assertThrows(GuardrailProviderException.class,
-                () -> adapter.materialize(new GuardrailMaterializationRequest("gr-123", 42)));
+        TargetProviderException exception = assertThrows(TargetProviderException.class,
+                () -> adapter.prepare(request()));
 
-        assertEquals(GuardrailFailureCode.TARGET_CONFIGURATION_INVALID, exception.failureCode());
+        assertEquals(TargetFailureCode.TARGET_CONFIGURATION_INVALID, exception.failureCode());
     }
 
     @Test
@@ -73,11 +77,22 @@ class BedrockGuardrailMaterializationAdapterTest {
                         .guardrailId("gr-123")
                         .version("DRAFT")
                         .build());
-        BedrockGuardrailMaterializationAdapter adapter = new BedrockGuardrailMaterializationAdapter(client);
+        BedrockGuardrailPreparationAdapter adapter = adapter();
 
-        GuardrailProviderException exception = assertThrows(GuardrailProviderException.class,
-                () -> adapter.materialize(new GuardrailMaterializationRequest("gr-123", 42)));
+        TargetProviderException exception = assertThrows(TargetProviderException.class,
+                () -> adapter.prepare(request()));
 
-        assertEquals(GuardrailFailureCode.PROVIDER_RESPONSE_INVALID, exception.failureCode());
+        assertEquals(TargetFailureCode.PROVIDER_RESPONSE_INVALID, exception.failureCode());
+    }
+
+    private BedrockGuardrailPreparationAdapter adapter() {
+        when(targetStore.findByReference("target-ref"))
+                .thenReturn(Optional.of(new BedrockGuardrailTargetStore.BedrockGuardrailTarget(
+                        "target-ref", "gr-123", "DRAFT", null)));
+        return new BedrockGuardrailPreparationAdapter(client, targetStore);
+    }
+
+    private TargetPreparationRequest request() {
+        return new TargetPreparationRequest(new TargetReference("target-ref"), 42);
     }
 }

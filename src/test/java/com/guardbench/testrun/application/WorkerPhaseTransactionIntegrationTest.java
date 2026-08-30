@@ -18,14 +18,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import com.guardbench.testrun.application.messaging.TargetTypeCode;
 import com.guardbench.testrun.application.port.out.ClaimResult;
 import com.guardbench.testrun.application.port.out.ExecutionClaimPort;
-import com.guardbench.testrun.application.port.out.GuardrailExecutionResult;
-import com.guardbench.testrun.application.port.out.GuardrailFailureCode;
-import com.guardbench.testrun.application.port.out.GuardrailMaterializationPort;
-import com.guardbench.testrun.application.port.out.GuardrailMaterializedVersion;
-import com.guardbench.testrun.application.port.out.GuardrailProviderException;
+import com.guardbench.testrun.application.port.out.TargetExecutionResult;
+import com.guardbench.testrun.application.port.out.TargetFailureCode;
+import com.guardbench.testrun.application.port.out.TargetPreparationPort;
+import com.guardbench.testrun.application.port.out.TargetProviderException;
 import com.guardbench.testrun.application.port.out.LoadExecutionContextPort;
 import com.guardbench.testrun.application.port.out.LoadSnapshotIdsByTestRunPort;
 import com.guardbench.testrun.application.port.out.OutboxEventRecord;
@@ -92,7 +90,7 @@ class WorkerPhaseTransactionIntegrationTest {
         ResolveTestRunService service = resolveService(
                 new FailingOutboxPort(),
                 saveNotEvaluatedQualityGatePort,
-                request -> new GuardrailMaterializedVersion(request.guardrailIdentifier(), "2"),
+                request -> { },
                 1
         );
 
@@ -114,7 +112,7 @@ class WorkerPhaseTransactionIntegrationTest {
                     throw new IllegalStateException("simulated quality gate failure");
                 },
                 request -> {
-                    throw new GuardrailProviderException(GuardrailFailureCode.TARGET_NOT_FOUND);
+                    throw new TargetProviderException(TargetFailureCode.TARGET_NOT_FOUND);
                 },
                 3
         );
@@ -136,13 +134,13 @@ class WorkerPhaseTransactionIntegrationTest {
                 new StubExecutionClaimPort(),
                 testExecutionRepository,
                 loadExecutionContextPort,
-                request -> GuardrailExecutionResult.succeeded("ALLOW"),
+                request -> TargetExecutionResult.succeeded("ALLOW"),
                 new FailingOutboxPort(),
                 transactionalPhasePort,
                 FIXED_CLOCK
         );
 
-        assertThatThrownBy(() -> service.execute(SNAPSHOT_ID, TargetTypeCode.BASELINE))
+        assertThatThrownBy(() -> service.execute(SNAPSHOT_ID))
                 .isInstanceOf(IllegalStateException.class);
 
         assertThat(executionCount())
@@ -156,13 +154,13 @@ class WorkerPhaseTransactionIntegrationTest {
     private ResolveTestRunService resolveService(
             OutboxPort outboxPort,
             SaveNotEvaluatedQualityGatePort qualityGatePort,
-            GuardrailMaterializationPort materializationPort,
+            TargetPreparationPort preparationPort,
             int attemptCount
     ) {
         return new ResolveTestRunService(
                 new StubResolutionClaimPort(attemptCount),
                 testRunRepository,
-                materializationPort,
+                preparationPort,
                 loadSnapshotIdsPort,
                 outboxPort,
                 testExecutionRepository,
@@ -230,12 +228,12 @@ class WorkerPhaseTransactionIntegrationTest {
 
     private static final class StubExecutionClaimPort implements ExecutionClaimPort {
         @Override
-        public ClaimResult tryAcquire(long snapshotId, String targetType) {
+        public ClaimResult tryAcquire(long snapshotId) {
             return new ClaimResult.Acquired(UUID.randomUUID(), 1);
         }
 
         @Override
-        public boolean isHeldBy(long snapshotId, String targetType, UUID claimToken) {
+        public boolean isHeldBy(long snapshotId, UUID claimToken) {
             return true;
         }
     }
