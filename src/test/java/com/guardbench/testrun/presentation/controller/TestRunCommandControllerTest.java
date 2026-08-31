@@ -166,6 +166,18 @@ class TestRunCommandControllerTest {
     }
 
     @Test
+    @DisplayName("운영 catalog에 없는 Evaluation Profile이면 409 EVALUATION_PROFILE_NOT_SUPPORTED를 반환한다")
+    void unsupportedEvaluationProfileReturnsConflict() throws Exception {
+        when(createTestRunService.create(any()))
+                .thenThrow(new ApplicationException(ApplicationErrorCode.EVALUATION_PROFILE_NOT_SUPPORTED));
+
+        mockMvc.perform(post(BASE).contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.httpStatus").value(409))
+                .andExpect(jsonPath("$.data.code").value("EVALUATION_PROFILE_NOT_SUPPORTED"));
+    }
+
+    @Test
     @DisplayName("같은 Idempotency-Key를 다른 요청에 재사용하면 409 IDEMPOTENCY_KEY_CONFLICT를 반환한다")
     void idempotencyKeyConflictReturnsConflict() throws Exception {
         when(createTestRunService.create(any()))

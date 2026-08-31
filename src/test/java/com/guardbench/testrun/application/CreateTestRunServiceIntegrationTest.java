@@ -27,12 +27,7 @@ import com.guardbench.testsupport.PostgresTestConfiguration;
  * <p>TestRun, Snapshot과 {@code TestRunRequested} Outbox 저장이 ADR 0005/0008에 따라 하나의
  * 트랜잭션으로 커밋되는지, Idempotency 판정이 실제 저장된 레코드를 기준으로 동작하는지 검증한다.
  */
-@SpringBootTest(properties = {
-        "guardbench.evaluator-catalog.entries[0].checks[0]=PROMPT_INJECTION",
-        "guardbench.evaluator-catalog.entries[0].strictness=STANDARD",
-        "guardbench.evaluator-catalog.entries[0].guardrail-identifier=test-guardrail",
-        "guardbench.evaluator-catalog.entries[0].guardrail-revision=1"
-})
+@SpringBootTest
 @Import(PostgresTestConfiguration.class)
 class CreateTestRunServiceIntegrationTest {
 
