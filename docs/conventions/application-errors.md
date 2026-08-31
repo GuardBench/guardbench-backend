@@ -210,10 +210,10 @@ TestRun 재전송은 Validation 후 Idempotency 기록을 먼저 확인한다.
 | `PROVIDER_RESPONSE_INVALID` | `FAILED` | Provider 응답을 안전하게 정규화할 수 없음 |
 | `PROVIDER_TIMEOUT` | `TIMED_OUT` | Provider 호출이 전체 timeout(15초, ADR 0005) 안에 끝나지 않음 |
 
-이 6개 code는 `com.guardbench.testrun.domain.TestExecutionErrorCode`(Domain enum)와 `com.guardbench.testrun.application.port.out.TargetFailureCode`(소비자 소유 Port enum)에 각각 정의되어 있으며, `PROVIDER_UNAVAILABLE`과 `PROVIDER_TIMEOUT`만 재시도 가능하다(ADR 0005의 대체되지 않은 retry 계약 참고).
+이 6개 code는 legacy/HTTP Application Target 실행을 위해 `com.guardbench.testrun.domain.TestExecutionErrorCode`(Domain enum)와 `com.guardbench.testrun.application.port.out.TargetFailureCode`(소비자 소유 Port enum)에 정의되어 있으며, `PROVIDER_UNAVAILABLE`과 `PROVIDER_TIMEOUT`만 재시도 가능하다(ADR 0005의 대체되지 않은 retry 계약 참고). Bedrock Guardrail Evaluator는 별도의 `EvaluatorFailureCode`를 사용해 대상 오류와 평가 오류를 구분한다.
 
 - 각 code는 고정된 안전한 message를 사용하며 Provider 원문, SDK 예외 메시지, stack trace, ARN, 자격 증명, 내부 endpoint를 노출하지 않는다.
-- 현재 Bedrock 예외 → `TargetFailureCode` 매핑은 [Bedrock Guardrail Adapter](../integrations/bedrock-guardrails-adapter.md)가 소유하고, `TargetFailureCode` → `TestExecutionErrorCode`·terminal 저장은 Worker Application Service가 소유한다.
+- HTTP Target 예외 → `TargetFailureCode` 매핑과 Bedrock Evaluator 예외 → `EvaluatorFailureCode` 매핑은 각각 해당 Adapter가 소유하고, Port 오류 → `TestExecutionErrorCode`·terminal 저장은 Worker Application Service가 소유한다.
 - 이 표에 없는 code를 추가하거나 기존 code의 terminal 상태·의미를 바꾸는 것은 공개 API 계약 변경이며 별도 ADR 또는 Issue 승인이 필요하다.
 
 목표 구조의 공개 shape은 `error.stage = APPLICATION_TARGET | EVALUATOR`로 실패 경계를 구분한다. 구체 code와 terminal 상태 매핑은 #115~#117이 확정하며, 이 current implementation의 6개 code 표를 미래 계약으로 확장 해석하지 않는다.
