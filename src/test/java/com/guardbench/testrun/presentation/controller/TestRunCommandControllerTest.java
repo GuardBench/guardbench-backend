@@ -38,7 +38,12 @@ class TestRunCommandControllerTest {
     private static final String VALID_BODY = """
             {
               "testSuiteId": 1,
-              "target": { "type": "HTTP_ENDPOINT", "identifier": "https://example.com/chat", "revision": "v1" },
+              "target": {
+                "type": "HTTP_ENDPOINT",
+                "identifier": "https://example.com/v1/chat/completions",
+                "revision": "v1",
+                "model": "test-model"
+              },
               "evaluationProfile": { "checks": ["PROMPT_INJECTION"], "strictness": "STANDARD" }
             }
             """;
@@ -64,6 +69,7 @@ class TestRunCommandControllerTest {
                 .andExpect(jsonPath("$.data.testSuiteId").value(1))
                 .andExpect(jsonPath("$.data.status").value("QUEUED"))
                 .andExpect(jsonPath("$.data.testCaseCount").value(253))
+                .andExpect(jsonPath("$.data.target.model").value("test-model"))
                 .andExpect(jsonPath("$.data.evaluationProfile.checks[0]").value("PROMPT_INJECTION"));
     }
 
@@ -82,6 +88,7 @@ class TestRunCommandControllerTest {
         verify(createTestRunService).create(captor.capture());
         org.junit.jupiter.api.Assertions.assertEquals(
                 "31c83d18-12c4-47b7-9ed4-23e621cb9999", captor.getValue().idempotencyKey());
+        org.junit.jupiter.api.Assertions.assertEquals("test-model", captor.getValue().targetModel());
     }
 
     @Test
@@ -89,7 +96,27 @@ class TestRunCommandControllerTest {
     void missingTestSuiteIdReturnsValidationError() throws Exception {
         String body = """
                 {
-                  "target": { "type": "HTTP_ENDPOINT", "identifier": "https://example.com/chat" },
+                  "target": {
+                    "type": "HTTP_ENDPOINT",
+                    "identifier": "https://example.com/v1/chat/completions",
+                    "model": "test-model"
+                  },
+                  "evaluationProfile": { "checks": ["PROMPT_INJECTION"], "strictness": "STANDARD" }
+                }
+                """;
+
+        mockMvc.perform(post(BASE).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    @DisplayName("target.model이 없으면 400 VALIDATION_ERROR를 반환한다")
+    void missingTargetModelReturnsValidationError() throws Exception {
+        String body = """
+                {
+                  "testSuiteId": 1,
+                  "target": { "type": "HTTP_ENDPOINT", "identifier": "https://example.com/v1/chat/completions" },
                   "evaluationProfile": { "checks": ["PROMPT_INJECTION"], "strictness": "STANDARD" }
                 }
                 """;
@@ -105,7 +132,11 @@ class TestRunCommandControllerTest {
         String body = """
                 {
                   "testSuiteId": 1,
-                  "target": { "type": "HTTP_ENDPOINT", "identifier": "https://example.com/chat" },
+                  "target": {
+                    "type": "HTTP_ENDPOINT",
+                    "identifier": "https://example.com/v1/chat/completions",
+                    "model": "test-model"
+                  },
                   "evaluationProfile": { "checks": ["PROMPT_INJECTION", "PROMPT_INJECTION"], "strictness": "STANDARD" }
                 }
                 """;
@@ -121,7 +152,8 @@ class TestRunCommandControllerTest {
         String body = """
                 {
                   "testSuiteId": 1,
-                  "target": { "type": "HTTP", "identifier": "target-123", "revision": "DRAFT" }
+                  "target": { "type": "HTTP", "identifier": "target-123", "revision": "DRAFT", "model": "test-model" },
+                  "evaluationProfile": { "checks": ["PROMPT_INJECTION"], "strictness": "STANDARD" }
                 }
                 """;
 
@@ -136,7 +168,7 @@ class TestRunCommandControllerTest {
         String body = """
                 {
                   "testSuiteId": 1,
-                  "target": { "type": "BEDROCK_GUARDRAIL", "identifier": "guardrail-123", "revision": "1" },
+                  "target": { "type": "BEDROCK_GUARDRAIL", "identifier": "guardrail-123", "revision": "1", "model": "test-model" },
                   "evaluationProfile": { "checks": ["PROMPT_INJECTION"], "strictness": "STANDARD" }
                 }
                 """;
@@ -206,12 +238,12 @@ class TestRunCommandControllerTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.data.code").value("IDEMPOTENCY_KEY_CONFLICT"));
     }
+
     private static TestRunCreateResult result(long id, int testCaseCount) {
         return new TestRunCreateResult(id, 1L, "QUEUED", testCaseCount,
                 new com.guardbench.testrun.application.port.out.TargetReferenceView(
-                        "target-ref-" + id, "HTTP_ENDPOINT", "https://example.com/chat", "v1"),
+                        "target-ref-" + id, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", "test-model"),
                 new com.guardbench.testrun.domain.EvaluationProfile(java.util.List.of("PROMPT_INJECTION"), "STANDARD"),
                 Instant.parse("2026-08-24T14:30:00Z"));
     }
-
 }
