@@ -10,12 +10,17 @@ public record TestRunCreateCommand(
         String targetType,
         String targetIdentifier,
         String targetRevision,
+        com.guardbench.testrun.domain.EvaluationProfile evaluationProfile,
         String idempotencyKey
 ) {
 
     public TestRunCreateCommand {
         Objects.requireNonNull(targetType, "targetType must not be null");
         Objects.requireNonNull(targetIdentifier, "targetIdentifier must not be null");
+    }
+
+    public TestRunCreateCommand(long testSuiteId, String targetType, String targetIdentifier, String targetRevision, String idempotencyKey) {
+        this(testSuiteId, targetType, targetIdentifier, targetRevision, null, idempotencyKey);
     }
 
     boolean hasIdempotencyKey() {
@@ -27,7 +32,8 @@ public record TestRunCreateCommand(
                 testSuiteId,
                 targetType,
                 targetIdentifier,
-                targetRevision
+                targetRevision,
+                evaluationProfile
         );
     }
 }

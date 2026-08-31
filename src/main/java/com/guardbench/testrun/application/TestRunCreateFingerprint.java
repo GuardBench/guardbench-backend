@@ -23,7 +23,9 @@ final class TestRunCreateFingerprint {
                 Long.toString(intent.testSuiteId()),
                 intent.targetType(),
                 intent.targetIdentifier(),
-                intent.targetRevision() == null ? "" : intent.targetRevision()
+                intent.targetRevision() == null ? "" : intent.targetRevision(),
+                intent.evaluationProfile() == null ? "" : String.join(",", intent.evaluationProfile().checks()),
+                intent.evaluationProfile() == null ? "" : intent.evaluationProfile().strictness()
         );
         return sha256Hex(normalized);
     }

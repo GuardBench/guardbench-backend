@@ -15,6 +15,9 @@ class TestRunEntity {
     int testCaseCount;
     int processedTestCaseCount;
     String targetReferenceId;
+    String evaluationChecks;
+    String evaluationStrictness;
+    String evaluatorReferenceId;
     String executionOutcome;
     Instant createdAt;
     Instant startedAt;
@@ -31,6 +34,9 @@ class TestRunEntity {
             int testCaseCount,
             int processedTestCaseCount,
             String targetReferenceId,
+            String evaluationChecks,
+            String evaluationStrictness,
+            String evaluatorReferenceId,
             String executionOutcome,
             Instant createdAt,
             Instant startedAt,
@@ -43,6 +49,9 @@ class TestRunEntity {
         this.testCaseCount = testCaseCount;
         this.processedTestCaseCount = processedTestCaseCount;
         this.targetReferenceId = targetReferenceId;
+        this.evaluationChecks = evaluationChecks;
+        this.evaluationStrictness = evaluationStrictness;
+        this.evaluatorReferenceId = evaluatorReferenceId;
         this.executionOutcome = executionOutcome;
         this.createdAt = createdAt;
         this.startedAt = startedAt;
@@ -57,6 +66,9 @@ class TestRunEntity {
             int testCaseCount,
             int processedTestCaseCount,
             String targetReferenceId,
+            String evaluationChecks,
+            String evaluationStrictness,
+            String evaluatorReferenceId,
             String executionOutcome,
             Instant createdAt,
             Instant startedAt,
@@ -70,6 +82,9 @@ class TestRunEntity {
                 testCaseCount,
                 processedTestCaseCount,
                 targetReferenceId,
+                evaluationChecks,
+                evaluationStrictness,
+                evaluatorReferenceId,
                 executionOutcome,
                 createdAt,
                 startedAt,

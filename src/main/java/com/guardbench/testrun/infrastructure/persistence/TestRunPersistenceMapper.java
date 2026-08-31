@@ -2,6 +2,8 @@ package com.guardbench.testrun.infrastructure.persistence;
 
 import com.guardbench.testrun.domain.Action;
 import com.guardbench.testrun.domain.ActualResult;
+import com.guardbench.testrun.domain.EvaluationProfile;
+import com.guardbench.testrun.domain.EvaluatorReference;
 import com.guardbench.testrun.domain.ExpectedResult;
 import com.guardbench.testrun.domain.Severity;
 import com.guardbench.testrun.domain.SourceTestCaseId;
@@ -32,6 +34,9 @@ final class TestRunPersistenceMapper {
                 source.testCaseCount(),
                 source.processedTestCaseCount(),
                 source.targetReference().value(),
+                source.evaluationProfile() == null ? null : String.join(",", source.evaluationProfile().checks()),
+                source.evaluationProfile() == null ? null : source.evaluationProfile().strictness(),
+                source.evaluatorReference() == null ? null : source.evaluatorReference().value(),
                 source.executionOutcome() == null ? null : source.executionOutcome().name(),
                 source.timeline().createdAt(),
                 source.timeline().startedAt(),
@@ -45,12 +50,24 @@ final class TestRunPersistenceMapper {
                 new TestRunId(source.id),
                 new SourceTestSuiteId(source.testSuiteId),
                 new TargetReference(source.targetReferenceId),
+                profileOf(source),
+                source.evaluatorReferenceId == null ? null : new EvaluatorReference(source.evaluatorReferenceId),
                 source.testCaseCount,
                 source.processedTestCaseCount,
                 TestRunStatus.valueOf(source.status),
                 source.executionOutcome == null ? null : TestRunExecutionOutcome.valueOf(source.executionOutcome),
                 new TestRunTimeline(source.createdAt, source.startedAt, source.completedAt, source.updatedAt)
         );
+    }
+
+    private static EvaluationProfile profileOf(TestRunEntity source) {
+        if (source.evaluationChecks == null && source.evaluationStrictness == null && source.evaluatorReferenceId == null) {
+            return null;
+        }
+        if (source.evaluationChecks == null || source.evaluationStrictness == null || source.evaluatorReferenceId == null) {
+            throw new IllegalStateException("incomplete TestRun evaluation snapshot");
+        }
+        return new EvaluationProfile(java.util.List.of(source.evaluationChecks.split(",")), source.evaluationStrictness);
     }
 
     static TestCaseSnapshotEntity toEntity(TestCaseSnapshot source) {

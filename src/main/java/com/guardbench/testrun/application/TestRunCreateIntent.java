@@ -10,6 +10,7 @@ public record TestRunCreateIntent(
         long testSuiteId,
         String targetType,
         String targetIdentifier,
-        String targetRevision
+        String targetRevision,
+        com.guardbench.testrun.domain.EvaluationProfile evaluationProfile
 ) {
 }

@@ -43,11 +43,8 @@ class TargetReferencePersistenceAdapter implements RegisterTargetReferencePort {
     }
 
     private void registerHttpEndpoint(TargetReference reference, TargetRegistration registration) {
-        if (registration.revision() != null) {
-            throw new IllegalArgumentException("HTTP Endpoint revision must be absent");
-        }
-        jdbcTemplate.update("INSERT INTO http_endpoint_target(reference_id, endpoint_url) VALUES (?, ?)",
-                reference.value(), registration.identifier());
+        jdbcTemplate.update("INSERT INTO http_endpoint_target(reference_id, endpoint_url, requested_revision) VALUES (?, ?, ?)",
+                reference.value(), registration.identifier(), registration.revision());
     }
 
     private static boolean isDraft(String revision) {
