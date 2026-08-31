@@ -39,10 +39,7 @@ class HttpEndpointWorkerConfiguration {
             ObjectMapper objectMapper,
             HttpEndpointProperties properties
     ) {
-        HttpEndpointExecutionAdapter genericAdapter =
-                new HttpEndpointExecutionAdapter(httpEndpointClient, targetStore, objectMapper, properties);
-        OpenAiCompatibleExecutionAdapter openAiAdapter =
-                new OpenAiCompatibleExecutionAdapter(httpEndpointClient, targetStore, objectMapper, properties);
-        return new HttpEndpointExecutionRouter(targetStore, genericAdapter, openAiAdapter);
+        return new OpenAiCompatibleExecutionAdapter(
+                httpEndpointClient, targetStore, objectMapper, properties);
     }
 }
