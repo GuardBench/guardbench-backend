@@ -12,6 +12,7 @@
 - Decision date: 2026-08-25
 - Related Issue: #49
 - Extends: ADR 0002, ADR 0005
+- Superseded in part by: [ADR 0011](0011-ai-application-target-and-guardrail-evaluator.md) — Target 준비·실행 의미. 이 ADR의 claim·Outbox는 current implementation 기록
 
 ## Context
 

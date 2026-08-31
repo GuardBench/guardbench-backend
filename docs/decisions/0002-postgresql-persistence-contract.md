@@ -13,6 +13,7 @@
 - Related Issue: #4
 - Superseded in part by: [ADR 0006](0006-independent-domain-contract-boundaries.md) — Context 밖 Java ID VO 재사용과 직접 Repository 호출 해석
 - Extended by: [ADR 0008](0008-async-testrun-persistence-contract.md) — Outbox, claim과 HTTP Idempotency 물리 계약
+- Superseded in part by: [ADR 0011](0011-ai-application-target-and-guardrail-evaluator.md) — Guardrail Target과 Quality Gate 역할. 이 ADR의 schema는 #114~#118 전 current implementation 기록
 
 ## Context
 

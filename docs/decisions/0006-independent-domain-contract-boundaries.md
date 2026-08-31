@@ -10,6 +10,7 @@
 - Decision date: 2026-08-25
 - Related Issue: #54
 - Supersedes in part: ADR 0001, ADR 0002, ADR 0003, ADR 0004, ADR 0005의 경계 간 Java 타입 재사용과 직접 패키지 의존 결정
+- Superseded in part by: [ADR 0011](0011-ai-application-target-and-guardrail-evaluator.md) — Guardrail Target Adapter를 Evaluator Adapter 역할로 전환. 소비자 소유 Port와 타입 격리는 유지
 
 ## Context
 

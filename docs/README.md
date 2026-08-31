@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: KOSA AWS 3팀
-> Last reviewed: 2026-08-30
+> Last reviewed: 2026-08-31
 > Canonical source: GitHub
 > Origin: [Notion Dashboard](https://app.notion.com/p/3c0eeed6b62d80fbb64eec69796cc56d)
 
@@ -15,7 +15,7 @@
 | 모든 작업 | `AGENTS.md`, 현재 Issue | [작업 워크플로](ai-development/workflow.md) |
 | 코드 리뷰 | 현재 Issue, PR diff, 관련 APPROVED 계약 | [에이전트 코드 리뷰](ai-development/review.md) |
 | API 구현 | [API 안내](api/README.md), [OpenAPI](api/openapi.yaml) | 오류·응답·DTO 컨벤션 |
-| 도메인 구현 | [핵심 모델](domain/core-model.md), [평가 계약](domain/evaluation-contract.md), [ADR 0006](decisions/0006-independent-domain-contract-boundaries.md) | 경계 변경 시 [ADR 안내](decisions/README.md), 패키지 구조 |
+| 도메인 구현 | [핵심 모델](domain/core-model.md), [평가 계약](domain/evaluation-contract.md), [ADR 0011](decisions/0011-ai-application-target-and-guardrail-evaluator.md), [ADR 0006](decisions/0006-independent-domain-contract-boundaries.md) | 경계 변경 시 [ADR 안내](decisions/README.md), 패키지 구조 |
 | 영속성·인프라 | 관련 승인 Issue와 [ADR 안내](decisions/README.md) | 시스템 개요, DRAFT 인프라는 참고만 사용, Provider Adapter는 [계약 맵](contracts/README.md)과 [Bedrock Guardrails Adapter 설계 근거](integrations/bedrock-guardrails-adapter.md) |
 | 문서·결정 | 관련 계약과 [ADR 안내](decisions/README.md) | [ADR 템플릿](decisions/template.md) |
 
@@ -50,6 +50,7 @@
 | 결정 | [ADR 0008: 비동기 TestRun 물리 멱등성·claim·Outbox 계약](decisions/0008-async-testrun-persistence-contract.md) | APPROVED | Backend | 2026-08-25 | 없음 |
 | 결정 | [ADR 0009: TestCase 논리 삭제의 동시 요청 처리](decisions/0009-testcase-soft-delete-concurrency.md) | APPROVED | Backend | 2026-08-25 | 없음 |
 | 결정 | [ADR 0010: TestRun 단일 Target 실행 모델](decisions/0010-single-target-test-run-model.md) | APPROVED | Backend | 2026-08-30 | 없음 |
+| 결정 | [ADR 0011: AI Application Target과 Guardrail Evaluator 역할 분리](decisions/0011-ai-application-target-and-guardrail-evaluator.md) | APPROVED | Backend | 2026-08-31 | 없음 |
 | AI 개발 | [작업 워크플로](ai-development/workflow.md) | APPROVED | Team | 2026-08-24 | 현재 대화에서 승격 |
 | AI 개발 | [Backend CI와 dev Merge Gate](ai-development/backend-ci-merge-gate.md) | DRAFT | Backend | 2026-08-26 | 없음 |
 | AI 개발 | [코드 리뷰](ai-development/review.md) | APPROVED | Team | 2026-08-24 | PR #20·#23 사례와 Issue #33 |

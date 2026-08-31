@@ -1,14 +1,20 @@
 # GuardBench Backend
 
-Amazon Bedrock Guardrails의 Baseline과 Candidate를 같은 테스트 자산으로 검증하고, 기대 동작 위반과 정책 회귀를 구분하는 AI Security Regression Test Platform입니다.
+AI Application의 자연어 응답을 Evaluator로 판정하고, 기대 동작 위반과 저장된 실행 결과의 Regression을 구분하는 AI Application Test Platform입니다. AWS Bedrock Guardrail은 첫 번째 Guardrail Evaluator 구현입니다.
 
 ## MVP 범위
 
 - TestSuite와 TestCase로 정책 테스트 자산 관리
-- 동일 Snapshot을 이용한 Baseline/Candidate 실행
-- Candidate assertion, comparability, change classification
-- 실행 신뢰도와 Quality Gate 분리
-- Amazon Bedrock Guardrails를 MVP SUT로 사용
+- TestRun 시점의 TestCaseSnapshot 고정
+- 하나의 TestRun에서 하나의 AI Application Target 실행
+- Application 자연어 응답을 Evaluator가 `ALLOW | BLOCK`으로 판정
+- ExpectedResult와 EvaluationResult의 Assertion
+- 현재 TestRun의 Assertion 기반 Quality Gate
+- 완료된 두 TestRun의 저장 결과 기반 Regression
+
+## 구현 상태
+
+목표 계약은 [ADR 0011](docs/decisions/0011-ai-application-target-and-guardrail-evaluator.md)이다. 현재 코드는 아직 Bedrock Guardrail과 HTTP Endpoint를 같은 Target abstraction으로 취급하고 단일 Target Quality Gate를 `NOT_EVALUATED`로 저장한다. #114~#119에서 Application Target, Evaluator, Quality Gate와 Regression 구현을 순차 전환한다.
 
 ## 로컬 개발
 

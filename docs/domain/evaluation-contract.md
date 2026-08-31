@@ -2,58 +2,68 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Last reviewed: 2026-08-30
+> Last reviewed: 2026-08-31
 > Canonical source: GitHub
-> Related: [ADR 0010](../decisions/0010-single-target-test-run-model.md)
+> Related: [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)
 
 ## 최소 계약
 
 - `ExpectedResult.action`: `ALLOW | BLOCK`
-- `ActualResult.action`: `ALLOW | BLOCK`
+- `EvaluationResult.action`: `ALLOW | BLOCK`
 - `AssertionStatus`: `PASS | FAIL`
-- `QualityGateStatus`: `NOT_EVALUATED` (단일 Target TestRun)
+- `QualityGateStatus`: `PASS | FAIL | NOT_EVALUATED`
 
-MVP evaluator는 action만 판정에 사용한다. Target ActualResult가 있으면 ExpectedResult와 비교해 AssertionResult를 생성한다.
+AI Application은 자연어 ApplicationResponse를 반환한다. `ALLOW`와 `BLOCK`은 Evaluator가 자연어 응답을 평가해 만드는 GuardBench 공통 verdict다. AWS Bedrock Guardrail은 첫 번째 Evaluator 구현이며 Application Target이 아니다.
 
-| Expected | Actual | Assertion |
+EvaluationResult가 있으면 ExpectedResult와 비교해 AssertionResult를 생성한다.
+
+| ExpectedResult | EvaluationResult | Assertion |
 | --- | --- | --- |
 | ALLOW | ALLOW | PASS |
 | ALLOW | BLOCK | FAIL |
 | BLOCK | BLOCK | PASS |
 | BLOCK | ALLOW | FAIL |
 
-Target 실행이 `FAILED`, `TIMED_OUT`, `NOT_STARTED`이면 ActualResult가 없으므로 AssertionResult를 생성하지 않고 API의 `assertionStatus`는 `null`이다.
+Application 실행 실패, timeout 또는 Evaluator 실패로 EvaluationResult가 없으면 AssertionResult를 생성하지 않는다. 실행과 평가 실패의 구체적인 저장·공개 오류 계약은 #115~#117에서 확정·구현한다.
 
-## TestExecution 결과
+## Quality Gate
 
-| 상태 | ActualResult | Error Detail |
-| --- | --- | --- |
-| `SUCCEEDED` | 반드시 존재 | `null` |
-| `FAILED` | 없음 | 안전하게 가공한 오류를 제공할 수 있음 |
-| `TIMED_OUT` | 없음 | 안전하게 가공한 timeout 오류를 제공할 수 있음 |
-| `NOT_STARTED` | 없음 | 일반적으로 `null` |
+Quality Gate는 하나의 현재 TestRun의 Assertion 결과를 집계한다. 다른 TestRun, 복수 Target 실행 결과와 Regression 결과를 입력으로 사용하지 않는다.
 
-Provider 원문, 내부 예외 메시지와 stack trace는 공개 결과에 노출하지 않는다.
+- 집계 가능한 현재 Run 결과가 있으면 정책에 따라 `PASS` 또는 `FAIL`이다.
+- 집계 가능한 결과가 없으면 `NOT_EVALUATED`다.
+- 구체적인 metric, 임계값, nullable 규칙과 API 전환은 #118이 소유한다.
+- Quality Gate와 TestRun `FINISHED`의 원자 저장 및 이미 완료된 결과를 덮어쓰지 않는 원칙은 ADR 0004의 대체되지 않은 부분을 유지한다.
 
-## Comparison과 Quality Gate
+## Regression
 
-단일 Target TestRun은 Baseline/Candidate 쌍을 만들지 않고 `ChangeResult`나 regression을 새로 생성하지 않는다. 따라서 현재 흐름에서 비교 가능한 ChangeResult가 0개이며, TestRun 종료 시 Quality Gate는 항상 다음 형태다.
+Regression은 Quality Gate와 별도 유스케이스다.
 
-```json
-{
-  "status": "NOT_EVALUATED",
-  "metrics": null
-}
+- 입력은 이미 완료된 TestRun A와 TestRun B다.
+- Application Target과 Evaluator를 다시 호출하지 않고 각 Run에 저장된 결과만 비교한다.
+- 비교 가능성은 최소한 동일한 테스트 정의와 동일한 Evaluator 설정을 요구한다.
+- 구체적인 comparability key, 추가 조건, 변화 분류와 API는 #119에서 결정·구현한다.
+
+```text
+Completed TestRun A + Completed TestRun B
+                    ↓
+            Comparability Check
+                    ↓
+          Stored Result Comparison
+                    ↓
+             Regression Result
 ```
-
-Assertion PASS/FAIL은 계속 저장·조회하지만 Quality Gate PASS/FAIL로 변환하지 않는다. 새 Quality Gate 정책, 비교 run, regression 집계는 별도 승인 계약의 범위다.
 
 ## 판정 제외 항목
 
-- `severity`와 `category`는 조회·필터에 사용하며 판정을 변경하지 않는다.
-- Provider의 assessments, outputs, 원문 content는 판정·DB·API·일반 로그에 전달하지 않는다.
-- Provider별 확장 결과, 자연어 출력, 가중치 정책은 범위 외다.
+- `severity`와 `category`는 조회·필터 또는 후속 Quality Gate 정책 입력 후보이며, #118의 승인 없이 판정 공식을 임의로 정하지 않는다.
+- Provider 원문 오류, 내부 예외 메시지와 stack trace는 공개 결과에 노출하지 않는다.
+- Provider별 설정 추상화와 Evaluation Profile은 Research 단계이며 현재 구현 계약이 아니다.
 
 ```text
-HTTP 오류 ≠ Execution ERROR ≠ Assertion FAIL ≠ Quality Gate NOT_EVALUATED
+HTTP 오류 ≠ Application 실행 오류 ≠ Evaluator 오류 ≠ Assertion FAIL ≠ Quality Gate 판정 ≠ Regression 결과
 ```
+
+## 현재 구현
+
+현재 코드는 Bedrock Guardrail action을 Target `ActualResult`로 저장해 ExpectedResult와 Assertion하고, 단일 Target Quality Gate를 항상 `NOT_EVALUATED`로 저장한다. OpenAPI의 `actualAction`과 기존 Quality Gate metrics는 이 current implementation을 표현한다. 목표 EvaluationResult·Quality Gate·Regression 공개 계약은 #114~#119 구현 전까지 제공되지 않는다.
