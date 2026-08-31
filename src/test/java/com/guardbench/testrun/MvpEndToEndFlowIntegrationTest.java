@@ -52,6 +52,7 @@ import com.guardbench.testsupport.PostgresTestConfiguration;
 class MvpEndToEndFlowIntegrationTest {
 
     private static final long TEST_SUITE_ID = 5000L;
+    private static final String DISABLED_TEST_MODEL = "disabled-e2e-model";
 
     @Autowired
     private CreateTestRunService createTestRunService;
@@ -89,7 +90,7 @@ class MvpEndToEndFlowIntegrationTest {
         fixture.insertTestCase(5002L, TEST_SUITE_ID, now);
 
         TestRunCreateResult created = createTestRunService.create(new TestRunCreateCommand(
-                TEST_SUITE_ID, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", null));
+                TEST_SUITE_ID, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", DISABLED_TEST_MODEL, null, null));
 
         assertThat(created.status()).isEqualTo("QUEUED");
         assertThat(created.testCaseCount()).isEqualTo(2);
@@ -119,7 +120,8 @@ class MvpEndToEndFlowIntegrationTest {
         fixture.insertTestCase(5011L, TEST_SUITE_ID, now);
 
         TestRunCreateCommand command = new TestRunCreateCommand(
-                TEST_SUITE_ID, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", "e2e-idem-key-1");
+                TEST_SUITE_ID, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", DISABLED_TEST_MODEL, null,
+                "e2e-idem-key-1");
 
         TestRunCreateResult first = createTestRunService.create(command);
         TestRunCreateResult second = createTestRunService.create(command);
@@ -141,9 +143,11 @@ class MvpEndToEndFlowIntegrationTest {
         fixture.insertTestCase(5022L, otherSuiteId, now);
 
         TestRunCreateCommand first = new TestRunCreateCommand(
-                TEST_SUITE_ID, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", "e2e-idem-key-2");
+                TEST_SUITE_ID, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", DISABLED_TEST_MODEL, null,
+                "e2e-idem-key-2");
         TestRunCreateCommand conflicting = new TestRunCreateCommand(
-                otherSuiteId, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", "e2e-idem-key-2");
+                otherSuiteId, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", DISABLED_TEST_MODEL, null,
+                "e2e-idem-key-2");
 
         createTestRunService.create(first);
 
@@ -165,7 +169,7 @@ class MvpEndToEndFlowIntegrationTest {
         fixture.insertTestCase(5032L, TEST_SUITE_ID, now);
 
         TestRunCreateResult created = createTestRunService.create(new TestRunCreateCommand(
-                TEST_SUITE_ID, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", null));
+                TEST_SUITE_ID, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", DISABLED_TEST_MODEL, null, null));
         List<Long> snapshotIds = snapshotIdsFor(created.id());
         long failingSnapshotId = snapshotIds.get(0);
         long healthySnapshotId = snapshotIds.get(1);
@@ -217,7 +221,7 @@ class MvpEndToEndFlowIntegrationTest {
         fixture.insertTestCase(5041L, TEST_SUITE_ID, now);
 
         TestRunCreateResult created = createTestRunService.create(new TestRunCreateCommand(
-                TEST_SUITE_ID, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", null));
+                TEST_SUITE_ID, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", DISABLED_TEST_MODEL, null, null));
 
         workerChain.prepare(request -> {
             throw new TargetProviderException(TargetFailureCode.TARGET_NOT_FOUND);
@@ -256,7 +260,7 @@ class MvpEndToEndFlowIntegrationTest {
         fixture.insertTestCase(testCaseId, TEST_SUITE_ID, now);
 
         TestRunCreateResult created = createTestRunService.create(new TestRunCreateCommand(
-                TEST_SUITE_ID, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", null));
+                TEST_SUITE_ID, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", DISABLED_TEST_MODEL, null, null));
         List<Long> snapshotIds = snapshotIdsFor(created.id());
         assertThat(snapshotIds).hasSize(1);
         long snapshotId = snapshotIds.getFirst();
@@ -303,7 +307,7 @@ class MvpEndToEndFlowIntegrationTest {
         jdbcTemplate.update("UPDATE test_case SET expected_action = 'BLOCK' WHERE id = ?", testCaseId);
 
         TestRunCreateResult created = createTestRunService.create(new TestRunCreateCommand(
-                TEST_SUITE_ID, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", null));
+                TEST_SUITE_ID, "BEDROCK_GUARDRAIL", "guardrail-1", "DRAFT", DISABLED_TEST_MODEL, null, null));
         List<Long> snapshotIds = snapshotIdsFor(created.id());
         // Snapshot은 접수 시점에 TestCase의 expected_action을 복제하므로 함께 갱신한다.
         jdbcTemplate.update("UPDATE test_case_snapshot SET expected_action = 'BLOCK' WHERE test_run_id = ?",
