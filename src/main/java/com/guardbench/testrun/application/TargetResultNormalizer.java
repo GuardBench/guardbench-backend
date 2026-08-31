@@ -28,7 +28,7 @@ public final class TargetResultNormalizer {
             return failed(providerResult.failureCode());
         }
 
-        return switch (providerResult.actionCode()) {
+        return switch (providerResult.response()) {
             case ALLOW_ACTION -> TargetExecutionNormalization.succeeded(
                     new ActualResult(Action.ALLOW)
             );

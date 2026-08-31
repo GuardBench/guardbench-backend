@@ -3,8 +3,7 @@ package com.guardbench.testrun.application.port.out;
 /**
  * Execution Worker가 Provider 호출에 필요한 불변 컨텍스트 값이다.
  *
- * @param guardrailIdentifier TestRun의 guardrail ID
- * @param guardrailVersion    target type에 따른 확정 numeric version
+ * @param targetReference     TestRun이 고정한 불투명 Target reference
  * @param input               TestCaseSnapshot의 input 텍스트
  * @param testRunId           TestRun ID (완료 이벤트 발행에 필요)
  */

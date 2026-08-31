@@ -79,6 +79,6 @@ Completed TestRun A + Completed TestRun B
 
 ## 현재 구현과 목표 계약의 차이
 
-현재 구현은 ADR 0010의 단일 Target lifecycle과 `TargetReference`를 사용한다. `BEDROCK_GUARDRAIL`은 Target으로 직접 실행되어 `ActualResult`를 만들고, `HTTP_ENDPOINT`의 실제 자연어 응답 실행과 inline Evaluation Profile 해석은 구현되지 않았다. 현재 Quality Gate는 `NOT_EVALUATED`만 저장하며 Regression 모델과 API는 없다.
+현재 구현은 ADR 0010의 단일 Target lifecycle과 `TargetReference`를 사용한다. `HTTP_ENDPOINT` Application Target이 자연어 응답을 수집하는 adapter까지 구현되었지만, legacy worker의 결과 저장은 아직 `ActualResult`를 사용한다. Evaluator 전환·Quality Gate·Regression은 후속 Issue 범위다.
 
 #114~#119가 Java·DB와 목표 OpenAPI의 차이를 순차 해소한다. 해당 구현 전까지 목표 OpenAPI를 배포 완료의 증거로 해석하지 않는다.

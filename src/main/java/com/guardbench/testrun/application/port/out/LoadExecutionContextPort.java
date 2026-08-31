@@ -5,8 +5,8 @@ import java.util.Optional;
 /**
  * Execution Worker가 Provider 호출에 필요한 불변 컨텍스트를 조회하는 consumer-owned Port다.
  *
- * <p>TestCaseSnapshot의 input과 TestRun의 guardrail identifier/version을 하나의 조회로
- * 제공하여 Worker가 별도 Repository를 직접 사용하지 않게 한다.
+ * <p>TestCaseSnapshot의 input과 TestRun의 불투명 target reference를 하나의 조회로 제공하여
+ * Worker가 별도 Repository를 직접 사용하지 않게 한다.
  */
 public interface LoadExecutionContextPort {
 

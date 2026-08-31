@@ -82,7 +82,33 @@ TestCaseSnapshot → AI Application Target → Natural Language Response
 - 접수 시 TestSuite의 현재 TestCase를 불변 Snapshot으로 복사한다. 빈 Suite는 `409 TEST_SUITE_EMPTY`다.
 - 접수 트랜잭션의 목표 의미는 `QUEUED` TestRun, 요청한 Evaluation Profile, 실행 조건, Snapshot, 선택적인 idempotency 정보와 `TestRunRequested` OutboxEvent를 원자적으로 고정하는 것이다. 구체 물리 저장 모델은 #114가 확정한다. 외부 호출은 commit 뒤 Worker가 수행하며 이후 오류는 접수 HTTP 응답을 바꾸지 않는다.
 
-현재 구현은 아직 `BEDROCK_GUARDRAIL` Target을 요청으로 받고 inline Evaluation Profile을 해석하지 않는다. #114·#115가 목표 요청 계약에 맞게 Java·DB를 전환한다.
+### HTTP Application Target MVP 실행 계약 — #115
+
+`HTTP_ENDPOINT` Target은 Worker가 Snapshot input마다 대상 URL로 `POST` 요청을 보내고 자연어 응답을 수집하는 실제 SUT다. 외부 Application은 다음의 명시적 JSON 계약을 구현해야 한다.
+
+```http
+POST {target.identifier}
+Content-Type: application/json
+Accept: application/json
+
+{"input":"<TestCaseSnapshot.input>"}
+```
+
+성공 응답은 HTTP `2xx`, `Content-Type: application/json`인 단일 필드 객체여야 한다.
+
+```json
+{"response":"<natural language application response>"}
+```
+
+`response`는 비어 있지 않은 문자열이어야 하며, 임의 JSONPath·사용자 정의 extractor·범용 인증 scheme·redirect는 MVP에서 지원하지 않는다. 응답 본문은 1 MiB를 넘을 수 없다.
+
+실행 오류는 `TargetFailureCode`로 안전하게 수렴한다: `404 → TARGET_NOT_FOUND`, `401/403 → TARGET_ACCESS_DENIED`, 그 밖의 `4xx → TARGET_CONFIGURATION_INVALID`, `5xx → PROVIDER_UNAVAILABLE`, timeout → `PROVIDER_TIMEOUT`, `2xx`가 아닌 redirect·Content-Type/JSON/shape 위반 → `PROVIDER_RESPONSE_INVALID`.
+
+Target 실행 Adapter는 호출 내부 retry를 수행하지 않는다. 기존 Worker의 execution claim 재전달·최대 3회 시도 경계를 사용해 at-least-once 특성은 유지하되 한 메시지 수신당 Application 호출은 한 번으로 제한한다. 오류 메시지와 로그에는 응답 본문, 입력, URL, 인증 정보와 Provider 원문을 포함하지 않는다.
+
+Target URL은 HTTP/HTTPS absolute URL, host 필수, userinfo·fragment 금지다. Worker 기본 egress 정책은 loopback/private/link-local/multicast 주소를 차단하며, 내부 SUT가 필요한 배포만 `guardbench.http-endpoint.allow-private-addresses=true`를 명시적으로 설정한다.
+
+현재 Java worker의 결과 저장·평가 경계는 아직 legacy `ActualResult`를 사용한다. HTTP Application Target adapter와 inline Evaluation Profile 접수는 구현되었고, Evaluator 전환과 결과 저장/API shape 변경은 #116~#118이 담당한다.
 
 ### TestRun 조회와 평가 결과 — agreed contract
 

@@ -46,7 +46,7 @@
 
 ## 목표 구조와의 차이
 
-새 TestRun은 HTTP Target과 profile/evaluator snapshot을 저장하지만, 아직 Bedrock Adapter는 legacy Target 실행 경로를 유지하고 Snapshot input을 직접 평가해 `ActualResult`를 만든다. HTTP 호출·자연어 response 수집과 Evaluator 실행은 구현되지 않았고 Quality Gate는 `NOT_EVALUATED`다. Regression 저장/API도 없다.
+새 TestRun은 HTTP Target과 profile/evaluator snapshot을 저장하며, Worker는 HTTP Application Target adapter를 사용해 자연어 response를 수집할 수 있다. 다만 결과 persistence는 아직 legacy `ActualResult` 경계를 사용하고 Evaluator 실행·Quality Gate는 후속 Issue 범위다. Regression 저장/API도 없다.
 
 #114~#119가 Application Target, Evaluator, Quality Gate와 Regression을 구현한다. 그 전까지 아래 산출물은 current implementation 검증에만 사용한다.
 
