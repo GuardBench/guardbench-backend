@@ -1,8 +1,11 @@
 package com.guardbench;
 
 import org.springframework.boot.SpringApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import com.guardbench.testrun.infrastructure.evaluator.EvaluatorCatalogProperties;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
+@EnableConfigurationProperties(EvaluatorCatalogProperties.class)
 @SpringBootApplication
 public class GuardbenchBackendApplication {
 

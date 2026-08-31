@@ -26,7 +26,7 @@ class CreateTestRunServiceTest {
         adapters.givenTestSuite(1L, List.of(SOURCE, SOURCE));
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand command = new TestRunCreateCommand(
-                1L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", null);
+                1L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), null);
 
         TestRunCreateResult result = service.create(command);
 
@@ -35,6 +35,7 @@ class CreateTestRunServiceTest {
         assertEquals(2, result.testCaseCount());
         assertEquals(CreateTestRunFakeAdapters.FIXED_NOW, result.createdAt());
         assertEquals(2, adapters.savedSnapshots().size());
+        assertEquals(1, adapters.savedEvaluatorReferenceCount());
         assertEquals(1, adapters.savedOutboxEvents().size());
         OutboxEventRecord event = adapters.savedOutboxEvents().getFirst();
         assertEquals("TestRunRequested", event.eventType());
@@ -48,7 +49,7 @@ class CreateTestRunServiceTest {
         CreateTestRunFakeAdapters adapters = new CreateTestRunFakeAdapters();
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand command = new TestRunCreateCommand(
-                404L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", null);
+                404L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), null);
 
         ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(command));
 
@@ -62,7 +63,7 @@ class CreateTestRunServiceTest {
         adapters.givenTestSuite(2L, List.of());
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand command = new TestRunCreateCommand(
-                2L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", null);
+                2L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), null);
 
         ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(command));
 
@@ -76,7 +77,7 @@ class CreateTestRunServiceTest {
         adapters.givenTestSuite(1L, List.of(SOURCE));
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand command = new TestRunCreateCommand(
-                1L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", "idem-key-1");
+                1L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), "idem-key-1");
 
         TestRunCreateResult first = service.create(command);
         TestRunCreateResult second = service.create(command);
@@ -93,9 +94,9 @@ class CreateTestRunServiceTest {
         adapters.givenTestSuite(2L, List.of(SOURCE));
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand first = new TestRunCreateCommand(
-                1L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", "idem-key-2");
+                1L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), "idem-key-2");
         TestRunCreateCommand different = new TestRunCreateCommand(
-                2L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", "idem-key-2");
+                2L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), "idem-key-2");
 
         service.create(first);
         ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(different));
@@ -110,13 +111,28 @@ class CreateTestRunServiceTest {
         adapters.givenTestSuite(1L, List.of(SOURCE));
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand command = new TestRunCreateCommand(
-                1L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", null);
+                1L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), null);
 
         TestRunCreateResult first = service.create(command);
         TestRunCreateResult second = service.create(command);
 
         assertTrue(first.id() != second.id());
         assertEquals(2, adapters.savedOutboxEvents().size());
+    }
+
+    @Test
+    @DisplayName("지원하지 않는 EvaluationProfile이면 EvaluatorReference와 TestRun을 저장하지 않고 거부한다")
+    void rejectsUnsupportedEvaluationProfile() {
+        CreateTestRunFakeAdapters adapters = new CreateTestRunFakeAdapters();
+        adapters.givenTestSuite(1L, List.of(SOURCE));
+        adapters.evaluatorCatalogDoesNotSupportProfile();
+
+        ApplicationException exception = assertThrows(ApplicationException.class, () -> newService(adapters).create(
+                new TestRunCreateCommand(1L, "HTTP_ENDPOINT", "https://example.com/chat", null, profile(), null)));
+
+        assertEquals(ApplicationErrorCode.EVALUATION_PROFILE_NOT_SUPPORTED, exception.errorCode());
+        assertEquals(0, adapters.savedEvaluatorReferenceCount());
+        assertEquals(0, adapters.savedOutboxEvents().size());
     }
 
     private static CreateTestRunService newService(CreateTestRunFakeAdapters adapters) {
@@ -130,7 +146,13 @@ class CreateTestRunServiceTest {
                 adapters,
                 adapters,
                 adapters,
+                adapters,
+                adapters,
                 adapters.clock
         );
+    }
+
+    private static com.guardbench.testrun.domain.EvaluationProfile profile() {
+        return new com.guardbench.testrun.domain.EvaluationProfile(List.of("PROMPT_INJECTION"), "STANDARD");
     }
 }

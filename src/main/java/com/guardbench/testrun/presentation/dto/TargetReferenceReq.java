@@ -9,7 +9,7 @@ import com.guardbench.testrun.presentation.validation.ValidTargetReference;
 @ValidTargetReference
 public record TargetReferenceReq(
         @NotBlank(message = "target.type은 필수입니다.")
-        @Pattern(regexp = "^(BEDROCK_GUARDRAIL|HTTP_ENDPOINT)$", message = "지원하지 않는 target.type입니다.") String type,
+        @Pattern(regexp = "^HTTP_ENDPOINT$", message = "target.type은 HTTP_ENDPOINT만 지원합니다.") String type,
         @NotBlank(message = "target.identifier는 필수입니다.") String identifier,
         String revision
 ) {

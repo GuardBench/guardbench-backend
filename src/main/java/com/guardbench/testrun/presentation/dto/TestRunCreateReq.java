@@ -13,7 +13,8 @@ import com.guardbench.testrun.application.TestRunCreateCommand;
 public record TestRunCreateReq(
         @NotNull(message = "testSuiteId는 필수입니다.")
         @Min(value = 1, message = "testSuiteId는 1 이상이어야 합니다.") Long testSuiteId,
-        @NotNull(message = "target은 필수입니다.") @Valid TargetReferenceReq target
+        @NotNull(message = "target은 필수입니다.") @Valid TargetReferenceReq target,
+        @NotNull(message = "evaluationProfile은 필수입니다.") @Valid EvaluationProfileReq evaluationProfile
 ) {
 
     public TestRunCreateCommand toCommand(String idempotencyKey) {
@@ -22,6 +23,7 @@ public record TestRunCreateReq(
                 target.type(),
                 target.identifier(),
                 target.revision(),
+                evaluationProfile.toDomain(),
                 idempotencyKey
         );
     }
