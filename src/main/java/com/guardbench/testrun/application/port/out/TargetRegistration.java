@@ -10,7 +10,6 @@ public record TargetRegistration(String typeCode, String identifier, String revi
     public TargetRegistration {
         requireNonBlank(typeCode, "target type code");
         requireNonBlank(identifier, "target identifier");
-        requireNonBlank(revision, "target revision");
     }
 
     private static void requireNonBlank(String value, String field) {

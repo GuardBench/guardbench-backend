@@ -16,7 +16,6 @@ public record TestRunCreateCommand(
     public TestRunCreateCommand {
         Objects.requireNonNull(targetType, "targetType must not be null");
         Objects.requireNonNull(targetIdentifier, "targetIdentifier must not be null");
-        Objects.requireNonNull(targetRevision, "targetRevision must not be null");
     }
 
     boolean hasIdempotencyKey() {
