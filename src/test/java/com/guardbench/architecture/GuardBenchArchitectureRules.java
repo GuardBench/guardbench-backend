@@ -20,6 +20,7 @@ final class GuardBenchArchitectureRules {
             "testdefinition",
             "testrun",
             "evaluation",
+            "evaluator",
             "target",
             "common"
     );
@@ -71,6 +72,7 @@ final class GuardBenchArchitectureRules {
             .should().dependOnClassesThat().resideInAnyPackage(
                     "com.guardbench.testrun..",
                     "com.guardbench.evaluation..",
+                    "com.guardbench.evaluator..",
                     "com.guardbench.target.."
             )
             .as("testdefinition must not depend on downstream domains")
@@ -113,12 +115,19 @@ final class GuardBenchArchitectureRules {
             .as("guardrail must not depend on evaluation")
             .allowEmptyShould(true);
 
+    static final ArchRule EVALUATOR_DEPENDENCIES = noClasses()
+            .that().resideInAPackage("com.guardbench.evaluator..")
+            .should().dependOnClassesThat().resideInAPackage("com.guardbench.evaluation..")
+            .as("evaluator must not depend on evaluation")
+            .allowEmptyShould(true);
+
     static final ArchRule COMMON_DEPENDENCIES = noClasses()
             .that().resideInAPackage("com.guardbench.common..")
             .should().dependOnClassesThat().resideInAnyPackage(
                     "com.guardbench.testdefinition..",
                     "com.guardbench.testrun..",
                     "com.guardbench.evaluation..",
+                    "com.guardbench.evaluator..",
                     "com.guardbench.target.."
             )
             .as("common must not become a domain dependency hub")

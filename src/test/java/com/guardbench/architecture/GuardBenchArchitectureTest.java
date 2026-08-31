@@ -7,6 +7,7 @@ import static com.guardbench.architecture.GuardBenchArchitectureRules.DOMAIN_TYP
 import static com.guardbench.architecture.GuardBenchArchitectureRules.EVALUATION_DEPENDENCIES;
 import static com.guardbench.architecture.GuardBenchArchitectureRules.EVALUATION_TESTRUN_BOUNDARY;
 import static com.guardbench.architecture.GuardBenchArchitectureRules.GUARDRAIL_DEPENDENCIES;
+import static com.guardbench.architecture.GuardBenchArchitectureRules.EVALUATOR_DEPENDENCIES;
 import static com.guardbench.architecture.GuardBenchArchitectureRules.PACKAGE_BY_DOMAIN;
 import static com.guardbench.architecture.GuardBenchArchitectureRules.TESTDEFINITION_DEPENDENCIES;
 import static com.guardbench.architecture.GuardBenchArchitectureRules.TESTRUN_DEPENDENCIES;
@@ -76,6 +77,12 @@ class GuardBenchArchitectureTest {
     @DisplayName("guardrail은 evaluation 패키지에 의존하지 않는다")
     void guardrailDoesNotDependOnEvaluation() {
         GUARDRAIL_DEPENDENCIES.check(productionClasses);
+    }
+
+    @Test
+    @DisplayName("evaluator는 evaluation 패키지에 의존하지 않는다")
+    void evaluatorDoesNotDependOnEvaluation() {
+        EVALUATOR_DEPENDENCIES.check(productionClasses);
     }
 
     @Test
