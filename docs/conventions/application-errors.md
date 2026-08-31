@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Last reviewed: 2026-08-30
+> Last reviewed: 2026-08-31
 > Canonical source: GitHub
 > Origin: [Notion 애플리케이션 오류 코드](https://app.notion.com/p/3c1eeed6b62d81d3a7c9f014bb788aa8)
 
@@ -180,9 +180,10 @@ TestRun 재전송은 Validation 후 Idempotency 기록을 먼저 확인한다.
 
 ## TestExecution 실행 오류 Code
 
-> Primary contract: [ADR 0010: 단일 Target 실행 모델](../decisions/0010-single-target-test-run-model.md)
+> Current implementation contract: [ADR 0010: 단일 Target 실행 모델](../decisions/0010-single-target-test-run-model.md)
+> Target architecture: [ADR 0011: AI Application Target과 Guardrail Evaluator](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)
 
-이 섹션은 ADR 0010이 유지한 공개 가능한 TestExecution 오류 code를 canonical하게 나열한다. retry·timeout의 운영 근거는 ADR 0005의 대체되지 않은 부분을 참고하며, 이 표는 API·Adapter 구현이 참조할 확정된 code 목록이다.
+이 섹션은 current implementation의 공개 가능한 TestExecution 오류 code를 나열한다. retry·timeout의 운영 근거는 ADR 0005의 대체되지 않은 부분을 참고하며, 이 표는 API·Adapter 구현이 참조할 확정된 code 목록이다.
 
 `TestExecution.error`는 HTTP Application Error와 다른 계층이며 위의 공통 오류 응답 구조를 따르지 않는다. 개별 TestExecution 결과 조회(`GET /api/v1/test-runs/{testRunId}/results`)의 `execution.error`에서 `ExecutionErrorDetailRes { code, message }`로만 노출한다.
 
@@ -198,5 +199,7 @@ TestRun 재전송은 Validation 후 Idempotency 기록을 먼저 확인한다.
 이 6개 code는 `com.guardbench.testrun.domain.TestExecutionErrorCode`(Domain enum)와 `com.guardbench.testrun.application.port.out.TargetFailureCode`(소비자 소유 Port enum)에 각각 정의되어 있으며, `PROVIDER_UNAVAILABLE`과 `PROVIDER_TIMEOUT`만 재시도 가능하다(ADR 0005의 대체되지 않은 retry 계약 참고).
 
 - 각 code는 고정된 안전한 message를 사용하며 Provider 원문, SDK 예외 메시지, stack trace, ARN, 자격 증명, 내부 endpoint를 노출하지 않는다.
-- 실제 Bedrock 예외 → `TargetFailureCode` 매핑은 [Bedrock Guardrails Target Adapter](../integrations/bedrock-guardrails-adapter.md)가 소유하고, `TargetFailureCode` → `TestExecutionErrorCode`·terminal 저장은 Worker Application Service가 소유한다.
+- 현재 Bedrock 예외 → `TargetFailureCode` 매핑은 [Bedrock Guardrail Adapter](../integrations/bedrock-guardrails-adapter.md)가 소유하고, `TargetFailureCode` → `TestExecutionErrorCode`·terminal 저장은 Worker Application Service가 소유한다.
 - 이 표에 없는 code를 추가하거나 기존 code의 terminal 상태·의미를 바꾸는 것은 공개 API 계약 변경이며 별도 ADR 또는 Issue 승인이 필요하다.
+
+목표 구조에서는 Application 실행 오류와 Evaluator 오류를 구분해야 한다. 구체 code와 공개 shape은 #115~#117에서 OpenAPI와 함께 변경하며, 이 current implementation 표를 미래 계약으로 확장 해석하지 않는다.

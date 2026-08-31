@@ -2,11 +2,24 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Last reviewed: 2026-08-30
+> Last reviewed: 2026-08-31
 > Canonical source: GitHub
 > Origin: [Notion API 명세서](https://app.notion.com/p/3c0eeed6b62d805dac0be8db487b1359)
 
-API의 단일 명세는 [openapi.yaml](openapi.yaml)이다. Endpoint, 필드, Enum, Validation, 응답 예시는 OpenAPI에서 확인한다. 이 문서는 OpenAPI를 읽고 구현할 때 필요한 공통 해석만 설명한다. Notion과 충돌하면 OpenAPI를 우선하고 차이를 보고한다.
+API의 단일 명세는 [openapi.yaml](openapi.yaml)이다. Endpoint, 필드, Enum, Validation과 응답 예시는 OpenAPI에서 확인한다. 이 문서는 OpenAPI를 읽고 구현할 때 필요한 공통 해석을 설명한다. Notion과 충돌하면 OpenAPI를 우선하고 차이를 보고한다.
+
+## 계약 층위
+
+OpenAPI는 **current implementation의 공개 API 계약**이다. 현재 schema의 `BEDROCK_GUARDRAIL` Target, `actualAction`, 기존 Quality Gate metrics와 Regression endpoint 부재를 목표 구조가 이미 구현된 것으로 해석하지 않는다.
+
+목표 제품·아키텍처 계약은 [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)이다.
+
+```text
+TestCaseSnapshot → AI Application Target → Natural Language Response
+                 → Evaluator → EvaluationResult → Assertion → Quality Gate
+```
+
+목표 API·저장 계약은 #114~#119 구현 Issue에서 OpenAPI와 코드가 함께 변경될 때 제공한다. #113에서는 구현보다 앞서 미래 request/response schema를 추측하지 않는다.
 
 ## 빠른 탐색
 
@@ -18,7 +31,7 @@ API의 단일 명세는 [openapi.yaml](openapi.yaml)이다. Endpoint, 필드, En
 | 공통 오류 | `components.responses`와 `ErrorResponse` |
 | Enum 값 | 각 schema의 `enum` |
 
-MVP는 TestSuite·TestCase 관리, TestRun 비동기 실행, TestRun 목록·상세·결과 조회를 제공한다. 인증·인가는 적용하지 않으며 `security: []`를 사용한다.
+현재 API는 TestSuite·TestCase 관리, TestRun 비동기 실행, TestRun 목록·상세·결과 조회를 제공한다. 인증·인가는 적용하지 않으며 `security: []`를 사용한다.
 
 ## 공통 규칙
 
@@ -60,27 +73,32 @@ MVP는 TestSuite·TestCase 관리, TestRun 비동기 실행, TestRun 목록·상
 - TestCase는 독립 Aggregate다. 목록은 별도 API로 조회하며 TestSuite 응답에는 전체 배열 대신 `testCaseCount`가 있다.
 - TestCase 수정은 과거 TestRun의 Snapshot을 바꾸지 않는다. 삭제는 논리 삭제이며 과거 실행 결과는 유지한다.
 
-### TestRun 접수
+### TestRun 접수 — current implementation
 
 - `POST /api/v1/test-runs`는 비동기 작업을 접수하고 `202 Accepted`를 반환한다.
 - `Idempotency-Key`는 선택 사항이다. 키와 정규화된 요청 fingerprint가 같으면 기존 접수 결과를, 다르면 `409 IDEMPOTENCY_KEY_CONFLICT`를 반환한다. 생략하면 요청마다 새 TestRun을 만든다.
-- 요청은 단일 `target`만 받는다. `BEDROCK_GUARDRAIL`은 provider identifier와 `DRAFT` 또는 numbered revision을 사용하며, DRAFT는 Worker가 `PREPARING` 단계에서 numbered revision으로 고정한다.
+- 요청은 단일 `target`만 받는다. 현재 `BEDROCK_GUARDRAIL`은 provider identifier와 `DRAFT` 또는 numbered revision을 사용하며, DRAFT는 Worker가 `PREPARING` 단계에서 numbered revision으로 고정한다. `HTTP_ENDPOINT`는 URL identifier와 생략된 revision을 사용하지만 실제 Application 자연어 응답 실행은 아직 없다.
 - 접수 시 TestSuite의 현재 TestCase를 불변 Snapshot으로 복사한다. 빈 Suite는 `409 TEST_SUITE_EMPTY`다.
 - 접수 트랜잭션은 `QUEUED` TestRun, Target reference, Snapshot, 선택적인 idempotency 정보와 `TestRunRequested` OutboxEvent를 저장한다. Target 준비와 외부 호출은 commit 뒤 Worker가 수행하며, 이후 오류는 접수 HTTP 응답을 바꾸지 않는다.
 
-### TestRun 조회
+목표 계약의 Application Target + EvaluatorReference 접수 구조는 #114·#115에서 OpenAPI와 함께 변경한다.
+
+### TestRun 조회 — current implementation
 
 - 목록과 상세는 실행 중에도 조회할 수 있다. 아직 평가되지 않은 값은 `null`이고 이를 `NOT_EVALUATED`로 바꾸지 않는다.
-- 상세의 `qualityGate`는 실행 중 `null`이다. `NOT_EVALUATED`는 실행이 끝났지만 평가할 수 없는 경우의 도메인 결과다.
+- 상세의 `qualityGate`는 실행 중 `null`이다. `NOT_EVALUATED`는 실행이 끝났지만 현재 구현이 Quality Gate를 판정하지 않은 결과다.
 - 개별 결과 목록은 `FINISHED`에서만 조회한다. 그 전에는 `409 TEST_RUN_NOT_FINISHED`다.
 - Snapshot 입력과 기대값, 실행 결과, 평가 결과는 실행 당시 값이며 현재 TestCase 수정과 무관하다.
-- 개별 결과는 Snapshot당 단일 `execution`과 nullable `assertionStatus`를 제공한다. 단일 Target flow는 Change/Regression을 생성하지 않고, 종료된 Quality Gate는 `NOT_EVALUATED`다.
+- 개별 결과는 Snapshot당 단일 `execution`, `actualAction`과 nullable `assertionStatus`를 제공한다.
+- 현재 API는 Regression endpoint를 제공하지 않는다.
+
+목표 계약에서는 `actualAction`의 의미를 Evaluator가 만든 EvaluationResult로 전환하고, Quality Gate는 현재 Run의 Assertion을 집계하며, Regression은 완료된 두 Run의 저장 결과를 비교한다. #116~#119가 공개 API 변경을 소유한다.
 
 ## 구현 경계
 
 - Controller는 Envelope, HTTP 상태, Header와 DTO 매핑을 담당한다. Domain 객체나 JPA Entity를 직접 반환하지 않는다.
 - API Enum과 Domain Enum은 문자열 값이 같아도 경계에서 명시적으로 변환한다.
-- TestRun 조회 API는 `testrun/presentation`이 소유한다. Evaluation 값이 필요하면 승인된 소비자 소유 Projection Port를 사용한다.
+- TestRun 조회 API는 `testrun/presentation`이 소유한다. 다른 Context 값이 필요하면 승인된 소비자 소유 Projection Port를 사용한다.
 - OpenAPI 변경은 공개 계약 변경이다. 구현 편의를 위해 먼저 바꾸지 말고 Issue의 승인 경계를 따른다.
 
 ## MVP 이후

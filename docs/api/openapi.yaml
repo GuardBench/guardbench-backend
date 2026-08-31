@@ -5,10 +5,11 @@ info:
   description: |
     Status: APPROVED
     Owner: Backend
-    Last reviewed: 2026-08-24
+    Last reviewed: 2026-08-31
     Canonical source: GitHub
     Origin: https://app.notion.com/p/3c0eeed6b62d805dac0be8db487b1359
     HTTP 상태와 GuardBench의 실행·판정 상태는 서로 독립적이다.
+    이 schema는 current implementation을 명세한다. 목표 AI Application Target + Evaluator 계약은 ADR 0011과 #114~#119를 따른다.
 servers:
   - url: http://localhost:8080
 security: []
@@ -18,7 +19,7 @@ tags:
   - name: TestCase
     description: 현재 편집 가능한 정책 테스트 정의 관리
   - name: TestRun
-    description: 단일 Target의 비동기 실행 및 결과 조회
+    description: current implementation의 단일 Target 비동기 실행 및 결과 조회
 paths:
   /api/v1/test-suites:
     post:
