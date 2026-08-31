@@ -64,6 +64,12 @@ entity "bedrock_guardrail_target" as bedrock_target {
     resolved_revision : TEXT
 }
 
+entity "http_endpoint_target" as http_endpoint_target {
+  * reference_id : TEXT <<PK, FK>>
+  --
+  * endpoint_url : TEXT
+}
+
 entity "test_case_snapshot" as snapshot {
   * id : BIGINT <<PK, sequence>>
   --
@@ -162,6 +168,7 @@ test_suite ||--o{ test_case : contains
 test_suite ||--o{ test_run : selected by
 target_reference ||--|| test_run : referenced by
 target_reference ||--o| bedrock_target : provider detail
+target_reference ||--o| http_endpoint_target : provider detail
 test_run ||--|{ snapshot : fixes
 test_case ||--o{ snapshot : source of
 snapshot ||--o| execution : single target
@@ -172,6 +179,16 @@ snapshot ||--o| assertion : expected vs actual
 snapshot ||--o| change_result : legacy, no new writes
 test_run ||--o| quality_gate : final evaluation
 outbox ..> test_run : payload reference only
+
+note right of target_reference
+  target_type: BEDROCK_GUARDRAIL | HTTP_ENDPOINT
+  Provider detail is stored in the matching table.
+end note
+
+note right of http_endpoint_target
+  V4 adds HTTP_ENDPOINT persistence.
+  V5 requires an http/https URL with host-like text.
+end note
 
 note right of test_case
   Active row: deleted_at IS NULL
@@ -199,6 +216,7 @@ legend left
   carries the immutable event identifiers.
   Claim relations are technical leases, not Domain IDs
   or Aggregate Repositories.
+  Diagram reflects Flyway V1 through V5.
 endlegend
 
 @enduml
