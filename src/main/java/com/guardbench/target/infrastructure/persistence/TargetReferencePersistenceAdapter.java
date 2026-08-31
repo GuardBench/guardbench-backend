@@ -12,9 +12,8 @@ import com.guardbench.testrun.domain.TargetReference;
 /** TargetReference와 provider-specific 설정을 Target 소유 테이블에 저장한다. */
 @Repository
 class TargetReferencePersistenceAdapter implements RegisterTargetReferencePort {
-
     private static final String BEDROCK_GUARDRAIL = "BEDROCK_GUARDRAIL";
-
+    private static final String HTTP_ENDPOINT = "HTTP_ENDPOINT";
     private final JdbcTemplate jdbcTemplate;
 
     TargetReferencePersistenceAdapter(JdbcTemplate jdbcTemplate) {
@@ -25,28 +24,35 @@ class TargetReferencePersistenceAdapter implements RegisterTargetReferencePort {
     public void register(TargetReference reference, TargetRegistration registration) {
         Objects.requireNonNull(reference, "target reference must not be null");
         Objects.requireNonNull(registration, "target registration must not be null");
-        if (!BEDROCK_GUARDRAIL.equals(registration.typeCode())) {
-            throw new IllegalArgumentException("unsupported target type: " + registration.typeCode());
-        }
-
-        String resolvedRevision = isDraft(registration.revision()) ? null : registration.revision();
-        jdbcTemplate.update(
-                "INSERT INTO target_reference(reference_id, target_type) VALUES (?, ?)",
+        jdbcTemplate.update("INSERT INTO target_reference(reference_id, target_type) VALUES (?, ?)",
                 reference.value(), registration.typeCode());
-        jdbcTemplate.update(
-                """
+        switch (registration.typeCode()) {
+            case BEDROCK_GUARDRAIL -> registerBedrockGuardrail(reference, registration);
+            case HTTP_ENDPOINT -> registerHttpEndpoint(reference, registration);
+            default -> throw new IllegalArgumentException("unsupported target type: " + registration.typeCode());
+        }
+    }
+
+    private void registerBedrockGuardrail(TargetReference reference, TargetRegistration registration) {
+        String resolvedRevision = isDraft(registration.revision()) ? null : registration.revision();
+        jdbcTemplate.update("""
                 INSERT INTO bedrock_guardrail_target(
                     reference_id, guardrail_identifier, requested_revision, resolved_revision
                 ) VALUES (?, ?, ?, ?)
-                """,
-                reference.value(), registration.identifier(), registration.revision(), resolvedRevision);
+                """, reference.value(), registration.identifier(), registration.revision(), resolvedRevision);
+    }
+
+    private void registerHttpEndpoint(TargetReference reference, TargetRegistration registration) {
+        if (registration.revision() != null) {
+            throw new IllegalArgumentException("HTTP Endpoint revision must be absent");
+        }
+        jdbcTemplate.update("INSERT INTO http_endpoint_target(reference_id, endpoint_url) VALUES (?, ?)",
+                reference.value(), registration.identifier());
     }
 
     private static boolean isDraft(String revision) {
-        if ("DRAFT".equals(revision)) {
-            return true;
-        }
-        if (!revision.matches("[1-9][0-9]{0,7}")) {
+        if ("DRAFT".equals(revision)) return true;
+        if (revision == null || !revision.matches("[1-9][0-9]{0,7}")) {
             throw new IllegalArgumentException("Bedrock Guardrail revision must be DRAFT or a numbered version");
         }
         return false;

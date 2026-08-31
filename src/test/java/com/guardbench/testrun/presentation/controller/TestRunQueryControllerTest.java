@@ -55,7 +55,7 @@ import org.springframework.test.web.servlet.MockMvc;
 class TestRunQueryControllerTest {
 
     private static final String BASE = "/api/v1/test-runs";
-    private static final TargetReferenceView TARGET = new TargetReferenceView("target-ref");
+    private static final TargetReferenceView TARGET = new TargetReferenceView("target-ref", "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT");
 
     @Autowired
     private MockMvc mockMvc;

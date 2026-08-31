@@ -946,16 +946,20 @@ components:
         page: { $ref: '#/components/schemas/PageMetaRes' }
     TargetReferenceReq:
       type: object
-      description: TestRun이 실행할 단일 Target
-      required: [type, identifier, revision]
+      description: |
+        TestRun이 실행할 단일 Target이다. BEDROCK_GUARDRAIL은 identifier와 DRAFT 또는 numbered revision을 필수로 받고, HTTP_ENDPOINT는 http 또는 https URL identifier를 필수로 받으며 revision을 허용하지 않는다.
+      required: [type, identifier]
       additionalProperties: false
       properties:
-        type: { type: string, enum: [BEDROCK_GUARDRAIL] }
+        type:
+          type: string
+          enum: [BEDROCK_GUARDRAIL, HTTP_ENDPOINT]
+          description: BEDROCK_GUARDRAIL은 Amazon Bedrock Guardrail, HTTP_ENDPOINT는 HTTP URL Target이다.
         identifier: { type: string, minLength: 1, pattern: '.*\S.*' }
         revision:
           type: string
           pattern: '^(DRAFT|[1-9][0-9]{0,7})$'
-          description: DRAFT 또는 불변 numbered revision
+          description: BEDROCK_GUARDRAIL에서만 DRAFT 또는 불변 numbered revision이다. HTTP_ENDPOINT에서는 생략해야 한다.
     TestRunCreateReq:
       type: object
       description: |
@@ -977,7 +981,7 @@ components:
       description: |
         새 접수는 QUEUED를 반환한다. 같은 Idempotency-Key와 같은 요청의 재전송은 기존 TestRun의 현재 status를 반환할 수 있다.
         실행 전에는 의미가 없는 executionOutcome과 qualityGateStatus는 포함하지 않는다.
-      required: [id, testSuiteId, status, testCaseCount, createdAt]
+      required: [id, testSuiteId, status, testCaseCount, target, createdAt]
       additionalProperties: false
       properties:
         id: { type: integer, format: int64, minimum: 1 }
@@ -987,6 +991,7 @@ components:
           type: integer
           minimum: 1
           description: 접수 트랜잭션에서 고정된 활성 TestCaseSnapshot 개수
+        target: { $ref: "#/components/schemas/TargetReferenceRes" }
         createdAt: { type: string, format: date-time, description: UTC 기준 ISO 8601 접수 시각 }
     TestRunExecutionOutcome:
       type: string
@@ -1060,10 +1065,16 @@ components:
         percent: { type: number, format: double, minimum: 0, maximum: 100 }
     TargetReferenceRes:
       type: object
-      required: [referenceId]
+      required: [referenceId, type, identifier]
       additionalProperties: false
       properties:
         referenceId: { type: string, minLength: 1 }
+        type: { type: string, enum: [BEDROCK_GUARDRAIL, HTTP_ENDPOINT] }
+        identifier: { type: string, minLength: 1 }
+        revision:
+          type: string
+          nullable: true
+          description: BEDROCK_GUARDRAIL의 요청 revision이며 HTTP_ENDPOINT에서는 null이다.
     QualityGateMetricsRes:
       type: object
       required:

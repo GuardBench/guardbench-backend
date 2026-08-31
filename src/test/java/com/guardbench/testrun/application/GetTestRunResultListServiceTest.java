@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test;
 
 class GetTestRunResultListServiceTest {
 
-    private static final TargetReferenceView TARGET = new TargetReferenceView("target-ref");
+    private static final TargetReferenceView TARGET = new TargetReferenceView("target-ref", "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT");
 
     @Test
     @DisplayName("FINISHED TestRun의 결과를 조회하면 Port의 결과 페이지를 그대로 반환한다")

@@ -54,3 +54,9 @@ QualityGateResult(NOT_EVALUATED)
         ↓
 FINISHED
 ```
+
+## HTTP Endpoint Target 입력 계약
+
+`TargetReference`의 입력 표현은 `type`, `identifier`, `revision`을 유지한다. `BEDROCK_GUARDRAIL`에서는 identifier가 Guardrail ID이고 revision은 `DRAFT` 또는 numbered version이다. `HTTP_ENDPOINT`에서는 identifier가 `http` 또는 `https` endpoint URL이며 revision은 생략한다.
+
+HTTP Endpoint의 실제 호출 규격, 응답 mapping과 자연어 응답의 `ALLOW/BLOCK` 평가는 후속 결정 사항이다. 이 계약은 단일 Target TestRun 모델과 기존 Bedrock Guardrail 실행·Action evaluator를 변경하지 않는다.

@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 
 class GetTestRunDetailServiceTest {
 
-    private static final TargetReferenceView TARGET = new TargetReferenceView("target-ref");
+    private static final TargetReferenceView TARGET = new TargetReferenceView("target-ref", "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT");
 
     @Test
     @DisplayName("존재하는 TestRun을 조회하면 Port의 상세 결과를 그대로 반환한다")

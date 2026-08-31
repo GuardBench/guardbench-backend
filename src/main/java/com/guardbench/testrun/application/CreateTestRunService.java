@@ -88,14 +88,14 @@ public class CreateTestRunService {
         if (command.hasIdempotencyKey()) {
             var existing = idempotencyPort.findActiveByKey(command.idempotencyKey());
             if (existing.isPresent()) {
-                return reuseOrConflict(existing.get(), fingerprint);
+                return reuseOrConflict(existing.get(), fingerprint, command);
             }
         }
 
         return createNew(command, fingerprint);
     }
 
-    private TestRunCreateResult reuseOrConflict(IdempotencyRecord existing, String fingerprint) {
+    private TestRunCreateResult reuseOrConflict(IdempotencyRecord existing, String fingerprint, TestRunCreateCommand command) {
         if (!existing.requestFingerprint().equals(fingerprint)) {
             throw new ApplicationException(ApplicationErrorCode.IDEMPOTENCY_KEY_CONFLICT);
         }
@@ -103,7 +103,7 @@ public class CreateTestRunService {
                 .orElseThrow(() -> new ApplicationException(ApplicationErrorCode.INTERNAL_SERVER_ERROR));
         log.info("TestRun creation reused existing request. testRunId={} testCaseCount={} status={}",
                 testRun.id().value(), testRun.testCaseCount(), testRun.status());
-        return toResult(testRun);
+        return toResult(testRun, command);
     }
 
     private TestRunCreateResult createNew(TestRunCreateCommand command, String fingerprint) {
@@ -158,7 +158,7 @@ public class CreateTestRunService {
 
         log.info("TestRun accepted. testRunId={} testCaseCount={} eventId={} eventType={}",
                 testRunId.value(), sources.size(), requestedEvent.eventId(), requestedEvent.eventType());
-        return toResult(testRun);
+        return toResult(testRun, command);
     }
 
     private OutboxEventRecord testRunRequestedEvent(TestRunId testRunId, Instant occurredAt) {
@@ -170,12 +170,13 @@ public class CreateTestRunService {
         return OutboxEventRecord.pending(eventId, "TestRunRequested", payload, deduplicationKey, occurredAt);
     }
 
-    private TestRunCreateResult toResult(TestRun testRun) {
+    private TestRunCreateResult toResult(TestRun testRun, TestRunCreateCommand command) {
         return new TestRunCreateResult(
                 testRun.id().value(),
                 testRun.sourceTestSuiteId().value(),
                 testRun.status().name(),
                 testRun.testCaseCount(),
+                new com.guardbench.testrun.application.port.out.TargetReferenceView(testRun.targetReference().value(), command.targetType(), command.targetIdentifier(), command.targetRevision()),
                 testRun.timeline().createdAt()
         );
     }

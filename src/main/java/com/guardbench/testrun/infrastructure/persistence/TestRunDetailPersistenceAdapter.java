@@ -37,12 +37,17 @@ class TestRunDetailPersistenceAdapter implements LoadTestRunDetailPort {
 
     private static final String SELECT_SQL = """
             SELECT r.id, r.test_suite_id, r.status, r.test_case_count,
-                   r.processed_test_case_count, r.target_reference_id, r.execution_outcome,
+                   r.processed_test_case_count, r.target_reference_id, tr.target_type,
+                   COALESCE(bg.guardrail_identifier, he.endpoint_url) AS target_identifier,
+                   bg.requested_revision AS target_revision, r.execution_outcome,
                    r.created_at, r.started_at, r.completed_at, r.updated_at,
                    qgr.gate_status, qgr.candidate_assertion_pass_rate,
                    qgr.security_regression_count, qgr.security_regression_rate,
                    qgr.usability_regression_rate, qgr.test_execution_success_rate
             FROM test_run r
+            JOIN target_reference tr ON tr.reference_id = r.target_reference_id
+            LEFT JOIN bedrock_guardrail_target bg ON bg.reference_id = tr.reference_id
+            LEFT JOIN http_endpoint_target he ON he.reference_id = tr.reference_id
             LEFT JOIN quality_gate_result qgr ON qgr.test_run_id = r.id
             WHERE r.id = ?
             """;
@@ -69,7 +74,11 @@ class TestRunDetailPersistenceAdapter implements LoadTestRunDetailPort {
                 new TestRunProgress(
                         resultSet.getInt("processed_test_case_count"),
                         percent(resultSet.getInt("processed_test_case_count"), resultSet.getInt("test_case_count"))),
-                new TargetReferenceView(resultSet.getString("target_reference_id")),
+                new TargetReferenceView(
+                        resultSet.getString("target_reference_id"),
+                        resultSet.getString("target_type"),
+                        resultSet.getString("target_identifier"),
+                        resultSet.getString("target_revision")),
                 executionOutcome == null ? null : TestRunExecutionOutcome.valueOf(executionOutcome),
                 mapQualityGate(resultSet),
                 toInstant(resultSet, "created_at"),
