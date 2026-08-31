@@ -35,7 +35,7 @@ Application response는 Evaluator 입력으로만 사용하며 public API에 노
 
 ## 현재 구현
 
-현재 `com.guardbench.target.infrastructure.bedrock` Adapter는 `BEDROCK_GUARDRAIL` Target의 준비와 실행을 담당한다.
+기존 `com.guardbench.target.infrastructure.bedrock` Adapter 구현은 `BEDROCK_GUARDRAIL` Target의 준비와 실행 형태를 보존하지만, HTTP Application Target 전환으로 현재 Worker Port에는 등록하지 않는다. Bedrock 호출은 #116에서 Evaluator Adapter로 이동한다.
 
 | 현재 단계 | 현재 소비자 소유 Port | Bedrock API |
 | --- | --- | --- |

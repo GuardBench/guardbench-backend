@@ -28,7 +28,7 @@
 | Core schema | `src/main/resources/db/migration/V1__create_guardbench_schema.sql` | TestRun, Snapshot, Execution, Assertion, Change, Quality Gate 테이블·PK/FK/CHECK·index |
 | Async technical schema | `src/main/resources/db/migration/V2__create_async_testrun_technical_tables.sql` | HTTP idempotency, Outbox, resolution/execution claim 물리 계약 |
 | Single Target schema | `src/main/resources/db/migration/V3__single_target_execution_model.sql` | Target reference/provider table, 단일 execution·claim PK, pending v2 Outbox 이관 |
-| HTTP Endpoint Target schema | `src/main/resources/db/migration/V4__http_endpoint_target.sql` | `HTTP_ENDPOINT` Target type과 `http_endpoint_target` provider table 추가 |
+| HTTP Endpoint Target schema | `src/main/resources/db/migration/V4__http_endpoint_target.sql`, `V7__openai_compatible_http_target.sql` | `HTTP_ENDPOINT` Target type와 `http_endpoint_target` provider table, optional OpenAI-compatible `model` 추가 |
 | HTTP Endpoint URL constraint | `src/main/resources/db/migration/V5__strengthen_http_endpoint_url_constraint.sql` | `endpoint_url`의 HTTP/HTTPS scheme과 host 형태 DB 제약 강화 |
 | Evaluator reference and Profile snapshot | `src/main/resources/db/migration/V6__evaluator_reference_and_profile.sql` | Evaluator provider/revision 고정, TestRun profile snapshot 및 legacy nullable pair, HTTP Target revision |
 | ERD | [PlantUML ERD](../diagrams/guardbench-mvp-physical-erd.puml) | V1~V6 적용 후 관계와 cardinality |
@@ -46,7 +46,7 @@
 
 ## 목표 구조와의 차이
 
-새 TestRun은 HTTP Target과 profile/evaluator snapshot을 저장하지만, 아직 Bedrock Adapter는 legacy Target 실행 경로를 유지하고 Snapshot input을 직접 평가해 `ActualResult`를 만든다. HTTP 호출·자연어 response 수집과 Evaluator 실행은 구현되지 않았고 Quality Gate는 `NOT_EVALUATED`다. Regression 저장/API도 없다.
+새 TestRun은 HTTP Target과 profile/evaluator snapshot을 저장하며, Worker는 HTTP Application Target adapter를 사용해 자연어 response를 수집할 수 있다. 다만 결과 persistence는 아직 legacy `ActualResult` 경계를 사용하고 Evaluator 실행·Quality Gate는 후속 Issue 범위다. Regression 저장/API도 없다.
 
 #114~#119가 Application Target, Evaluator, Quality Gate와 Regression을 구현한다. 그 전까지 아래 산출물은 current implementation 검증에만 사용한다.
 
