@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Last reviewed: 2026-08-31
+> Last reviewed: 2026-09-01
 > Canonical source: GitHub
 > Related: [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)
 
@@ -23,7 +23,7 @@
 | `QualityGateResult` | 한 TestRun의 Assertion 결과 집계 판정 |
 | `RegressionResult` | 비교 가능한 완료 TestRun 두 개의 저장 결과 비교 |
 
-`EvaluationProfile`은 MVP에서 독립 Aggregate나 CRUD 리소스가 아니다. 요청 profile과 실제 `EvaluatorReference`를 고정하는 물리 구조는 #114에서, Regression 결과 모델은 #119에서 구체화한다. 이 표는 미래 DB 테이블이나 Java 타입 위치를 선제 확정하지 않는다.
+`EvaluationProfile`은 MVP에서 독립 Aggregate나 CRUD 리소스가 아니다. 요청 profile과 실제 `EvaluatorReference`를 고정하는 구조와 catalog resolution은 #114에서 구현되었다. Regression 결과 모델은 #119에서 구체화한다.
 
 ## 핵심 불변식
 
@@ -31,7 +31,9 @@
 - TestCase 삭제는 논리 삭제이며 기존 Snapshot과 실행·판정 결과에 전파하지 않는다.
 - 하나의 TestRun은 하나의 Application Target만 실행한다.
 - MVP Application Target type은 `HTTP_ENDPOINT`다.
-- TestRun 요청은 inline EvaluationProfile을 포함하고, 사용자는 Evaluator/provider 설정을 직접 제출하지 않는다.
+- MVP의 `HTTP_ENDPOINT`는 OpenAI-compatible chat completions 계약만 지원한다.
+- Target의 `identifier`는 full HTTP/HTTPS endpoint URL이고 `model`은 필수 실행 정보다.
+- TestRun 요청은 inline EvaluationProfile을 포함하고 사용자는 Evaluator/provider 설정을 직접 제출하지 않는다.
 - 하나의 TestRun은 실제 사용한 Evaluator 설정과 버전을 사후에 불변하게 식별할 수 있어야 한다.
 - Application Target은 자연어 응답을 반환하며 `ALLOW`와 `BLOCK`을 직접 반환하는 판정 주체가 아니다.
 - ApplicationResponse는 내부 Evaluator 입력이며 public 결과 DTO에 노출하지 않는다.
@@ -47,7 +49,7 @@
 
 ```text
 TestSuite + TestCase
-        ↓ TestRun 요청(HTTP Application Target + inline EvaluationProfile)
+        ↓ TestRun 요청(OpenAI-compatible HTTP Target + inline EvaluationProfile)
 QUEUED: requested policy + references + TestCaseSnapshot + OutboxEvent
         ↓
 RUNNING: Snapshot당 Application 실행
@@ -79,6 +81,8 @@ Completed TestRun A + Completed TestRun B
 
 ## 현재 구현과 목표 계약의 차이
 
-현재 구현은 ADR 0010의 단일 Target lifecycle과 `TargetReference`를 사용한다. `HTTP_ENDPOINT` Application Target이 자연어 응답을 수집하는 adapter까지 구현되었지만, legacy worker의 결과 저장은 아직 `ActualResult`를 사용한다. Evaluator 전환·Quality Gate·Regression은 후속 Issue 범위다.
+#114를 통해 EvaluationProfile catalog resolution과 immutable EvaluatorReference 고정 구조가 구현되었다. #115와 #125를 통해 HTTP Application Target 실행과 OpenAI-compatible 응답 정규화가 구현되었고, #128에서 generic HTTP 경로를 제거해 OpenAI-compatible 전용 계약으로 단순화한다.
 
-#114~#119가 Java·DB와 목표 OpenAPI의 차이를 순차 해소한다. 해당 구현 전까지 목표 OpenAPI를 배포 완료의 증거로 해석하지 않는다.
+현재 legacy worker의 결과 저장은 아직 `ActualResult`를 사용한다. #116은 Bedrock Guardrail을 Evaluator Adapter로 전환하고, #117은 Worker orchestration을 Application 실행 → Evaluator → Assertion 흐름으로 변경한다. #118과 #119가 각각 Quality Gate와 Regression을 완성한다.
+
+목표 OpenAPI를 배포 완료의 증거로 해석하지 않고, 아직 남은 #116~#119 구현 상태를 코드와 함께 확인한다.
