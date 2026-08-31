@@ -12,6 +12,7 @@
 - Decision date: 2026-08-24
 - Related Issue: #27
 - Superseded in part by: [ADR 0006](0006-independent-domain-contract-boundaries.md) — Evaluation의 TestRun Java ID VO 재사용과 직접 Domain/Application 의존
+- Superseded in part by: [ADR 0011](0011-ai-application-target-and-guardrail-evaluator.md) — Target `ActualResult`와 Quality Gate 역할
 
 ## Context
 

@@ -10,6 +10,7 @@
 - Decision date: 2026-08-30
 - Related Issue: #106
 - Supersedes: ADR 0002·0003·0005·0007·0008의 Baseline/Candidate, Candidate-only DRAFT, 복합 execution/claim key, v1 role 메시지 부분
+- Superseded in part by: [ADR 0011](0011-ai-application-target-and-guardrail-evaluator.md) — AI Application Target, Guardrail Evaluator, Quality Gate와 Regression 역할
 
 ## Context
 

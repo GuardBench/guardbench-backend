@@ -11,6 +11,7 @@
 - Decision date: 2026-08-24
 - Related Issue: #3
 - Superseded in part by: [ADR 0006](0006-independent-domain-contract-boundaries.md) — Context 밖 Java Domain 타입·ID VO 재사용과 패키지 의존 방향
+- Superseded in part by: [ADR 0011](0011-ai-application-target-and-guardrail-evaluator.md) — AI Application Target, Evaluator와 EvaluationResult 역할
 
 ## Context
 

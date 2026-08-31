@@ -4,9 +4,14 @@
 > Owner: Backend
 > Scope: GitHub Issues #14, #106, #110
 > Last reviewed: 2026-08-31
+> Target architecture: [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)
 > Related broad documentation issue: [#49](https://github.com/GuardBench/guardbench-backend/issues/49)
 
 이 문서는 PostgreSQL 물리 Persistence 산출물의 탐색 인덱스다. 새 동작, DB 제약 또는 Context 경계를 결정하지 않으며, 구현 판단은 아래 APPROVED ADR을 따른다.
+
+## 계약 층위
+
+이 문서와 물리 ERD는 **current implementation**을 기록한다. 현재 schema의 `BEDROCK_GUARDRAIL` Target, `ActualResult`와 Quality Gate metric은 목표 Application Target + Evaluator 구조가 아니다. #113에서는 미래 물리 모델을 추측해 Migration·PlantUML·PNG를 변경하지 않는다. #114~#118이 실제 구현과 함께 물리 계약을 갱신한다.
 
 ## 승인 계약
 
@@ -37,6 +42,12 @@
 - Aggregate 생성·수정·lifecycle 시각은 Application이 주입받은 `Clock`으로 결정하고 Domain과 Persistence Adapter가 `Instant`를 보존한다.
 - Evaluation의 `SnapshotEvaluation.createdAt`과 `QualityGateResult.createdAt`은 해당 규칙을 따른다.
 - idempotency 만료와 resolution/execution claim lease·비교는 여러 Worker 간 동시성 경계이므로 ADR 0008대로 PostgreSQL `clock_timestamp()`을 사용한다.
+
+## 목표 구조와의 차이
+
+현재 `target_reference`는 Bedrock Guardrail과 HTTP Endpoint를 같은 Target provider로 저장하며 EvaluatorReference가 없다. Bedrock Adapter는 Snapshot input을 직접 평가해 Target ActualResult를 만들고 Quality Gate는 `NOT_EVALUATED`다. Regression 저장/API도 없다.
+
+#114~#119가 Application Target, Evaluator, Quality Gate와 Regression을 구현한다. 그 전까지 아래 산출물은 current implementation 검증에만 사용한다.
 
 ## 범위 제외
 
