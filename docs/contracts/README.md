@@ -21,7 +21,7 @@
 | `postgresql-core-schema` | [ADR 0010: 단일 Target 모델](../decisions/0010-single-target-test-run-model.md) | [ADR 0002](../decisions/0002-postgresql-persistence-contract.md), [PlantUML ERD](../diagrams/guardbench-mvp-physical-erd.puml) | V3 Target reference·provider table, 단일 execution/claim PK, 기존 FK·시각 규칙 | #14, #106 |
 | `result-write-boundary` | [ADR 0003: 결과 Aggregate와 write-side Port](../decisions/0003-result-aggregate-and-write-port-boundaries.md) | [ADR 0006](../decisions/0006-independent-domain-contract-boundaries.md) | TestExecution·SnapshotEvaluation·QualityGateResult의 Aggregate·Repository 소유권 | #14 |
 | `testrun-finalization` | [ADR 0004: 최종화 원자성](../decisions/0004-testrun-finalization-atomicity.md) | [ADR 0003](../decisions/0003-result-aggregate-and-write-port-boundaries.md), [ADR 0006](../decisions/0006-independent-domain-contract-boundaries.md) | QualityGateResult 저장과 TestRun `FINISHED` 전환의 원자성·재호출 의미 | #14, #18, #19 |
-| `target-http-input` | [ADR 0010: 단일 Target 모델](../decisions/0010-single-target-test-run-model.md) | [OpenAPI](../api/openapi.yaml), [API 안내](../api/README.md) | 단일 target type·identifier·revision, Bedrock DRAFT/numbered revision | #106 |
+| `current-target-input` | [ADR 0010: 단일 Target 모델](../decisions/0010-single-target-test-run-model.md) | [TestRun Persistence current implementation](../architecture/testrun-persistence.md), [Bedrock Adapter current implementation](../integrations/bedrock-guardrails-adapter.md) | 현재 코드의 단일 target type·identifier·revision과 Bedrock DRAFT/numbered revision | #106 |
 | `testrun-idempotency` | [ADR 0008: HTTP Idempotency](../decisions/0008-async-testrun-persistence-contract.md#http-idempotency) | [ADR 0010](../decisions/0010-single-target-test-run-model.md), [ADR 0002](../decisions/0002-postgresql-persistence-contract.md) | global key, normalized single-target intent SHA-256, 3시간 TTL, DB 논리 만료와 재사용 | #14, #16, #106 |
 | `async-message-contract` | [ADR 0010: v2 role-free 메시지](../decisions/0010-single-target-test-run-model.md) | [ADR 0005](../decisions/0005-async-test-run-execution-contract.md), [ADR 0008: Outbox](../decisions/0008-async-testrun-persistence-contract.md#outbox) | v2 JSON, targetType 제거, Queue routing, `{eventType}:{snapshotId}` deduplication | #106 |
 | `outbox-persistence` | [ADR 0008: Outbox](../decisions/0008-async-testrun-persistence-contract.md#outbox) | [ADR 0005: Outbox와 Publisher](../decisions/0005-async-test-run-execution-contract.md#outbox와-publisher), [ADR 0002](../decisions/0002-postgresql-persistence-contract.md) | `outbox_event` DDL, payload 저장, deduplication key, `PENDING/PUBLISHED`, `SKIP LOCKED` | #14, #16, #18 |
@@ -63,7 +63,7 @@ ADR 0005의 재시도·timeout·lease 초기값이 실제 어떤 configuration k
 
 | 검색 표현 | 계약 키 |
 | --- | --- |
-| Target 요청, `DRAFT`, numbered revision | `target-http-input` |
+| 현재 Target 요청, `DRAFT`, numbered revision | `current-target-input` |
 | Idempotency-Key, fingerprint, TTL, key 재사용 | `testrun-idempotency` |
 | event JSON, schemaVersion, SQS, eventType | `async-message-contract` |
 | Outbox DDL, deduplication, Publisher, `SKIP LOCKED` | `outbox-persistence` |

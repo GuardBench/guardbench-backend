@@ -37,7 +37,8 @@ Validation을 제외한 오류는 다음 구조를 사용한다.
 | `TEST_RUN_NOT_FOUND` | 404 | 유효한 양의 ID에 해당하는 TestRun이 없음 |
 | `TEST_SUITE_EMPTY` | 409 | TestRun 생성 시 활성 TestCase가 없음 |
 | `IDEMPOTENCY_KEY_CONFLICT` | 409 | 같은 Idempotency-Key를 다른 TestRun 요청에 재사용 |
-| `TEST_RUN_NOT_FINISHED` | 409 | 종료 전인 TestRun의 개별 결과 목록 조회 |
+| `TEST_RUN_NOT_FINISHED` | 409 | 종료가 필요한 결과·지표·비교 API에 FINISHED가 아닌 TestRun 사용 |
+| `TEST_RUNS_NOT_COMPARABLE` | 409 | 테스트 정의 또는 실제 Evaluator 설정이 다른 두 TestRun 비교 |
 | `INTERNAL_SERVER_ERROR` | 500 | 예상하지 못한 동기 서버 처리 실패 |
 
 기본 `message`는 다음을 권장한다. 문구를 개선할 수는 있지만 Code의 의미는 변경하지 않는다.
@@ -51,6 +52,7 @@ Validation을 제외한 오류는 다음 구조를 사용한다.
 | `TEST_SUITE_EMPTY` | 실행 가능한 TestCase가 없습니다. |
 | `IDEMPOTENCY_KEY_CONFLICT` | Idempotency-Key가 다른 요청에 이미 사용되었습니다. |
 | `TEST_RUN_NOT_FINISHED` | TestRun이 아직 종료되지 않았습니다. |
+| `TEST_RUNS_NOT_COMPARABLE` | 두 TestRun은 비교할 수 없습니다. |
 | `INTERNAL_SERVER_ERROR` | 서버 내부 오류가 발생했습니다. |
 
 ## Validation Error
@@ -131,7 +133,11 @@ TestSuite는 존재하지만 활성 TestCase가 0개여서 TestRun을 생성할 
 
 ### TEST_RUN_NOT_FINISHED
 
-`QUEUED`, `PREPARING`, `RUNNING` 상태에서 개별 결과 목록을 요청하면 사용한다. 같은 상태에서도 Polling용 TestRun 상태·요약 조회는 `200 OK`다.
+`QUEUED`, `PREPARING`, `RUNNING` 상태에서 개별 결과, Evaluator metrics, comparable runs 또는 comparison을 요청하면 사용한다. 같은 상태에서도 Polling용 TestRun 상태·요약 조회는 `200 OK`다.
+
+### TEST_RUNS_NOT_COMPARABLE
+
+두 Run이 모두 FINISHED지만 테스트 정의 또는 실제 고정 Evaluator 설정이 다를 때 직접 comparison 요청에 사용한다. 같은 `testSuiteId`만으로 비교 가능하다고 판단하지 않는다. comparable runs 목록에서는 이 Run을 제외한다.
 
 ## INTERNAL_SERVER_ERROR
 
@@ -147,7 +153,7 @@ DB 연결·저장 실패, TestRun·Snapshot·OutboxEvent 접수 트랜잭션 실
 }
 ```
 
-TestRun이 이미 `202 Accepted`로 접수된 뒤 발생한 Target DRAFT materialization 실패, Provider 호출 실패와 timeout은 기존 HTTP 요청의 `500`으로 바꾸지 않고 비동기 TestRun 실행 결과에 기록한다.
+TestRun이 이미 `202 Accepted`로 접수된 뒤 발생한 Application 실행, Evaluator 준비·호출 실패와 timeout은 기존 HTTP 요청의 `500`으로 바꾸지 않고 비동기 TestRun 실행 결과에 기록한다.
 
 ## 오류 판단 우선순위
 
@@ -169,7 +175,7 @@ TestRun 재전송은 Validation 후 Idempotency 기록을 먼저 확인한다.
 다음은 HTTP Application Error가 아니다.
 
 - Assertion FAIL
-- Security 또는 Usability Regression
+- Regression의 improved, regressed 또는 unchanged 결과
 - Quality Gate FAIL
 - 비동기 TestExecution 실패와 timeout
 - 빈 목록 또는 페이지 범위 초과

@@ -6,7 +6,8 @@ AI Application의 자연어 응답을 Evaluator로 판정하고, 기대 동작 �
 
 - TestSuite와 TestCase로 정책 테스트 자산 관리
 - TestRun 시점의 TestCaseSnapshot 고정
-- 하나의 TestRun에서 하나의 AI Application Target 실행
+- 하나의 TestRun에서 하나의 `HTTP_ENDPOINT` AI Application Target 실행
+- inline Evaluation Profile을 실제 Evaluator 설정으로 서버가 해석
 - Application 자연어 응답을 Evaluator가 `ALLOW | BLOCK`으로 판정
 - ExpectedResult와 EvaluationResult의 Assertion
 - 현재 TestRun의 Assertion 기반 Quality Gate
@@ -14,7 +15,7 @@ AI Application의 자연어 응답을 Evaluator로 판정하고, 기대 동작 �
 
 ## 구현 상태
 
-목표 계약은 [ADR 0011](docs/decisions/0011-ai-application-target-and-guardrail-evaluator.md)이다. 현재 코드는 아직 Bedrock Guardrail과 HTTP Endpoint를 같은 Target abstraction으로 취급하고 단일 Target Quality Gate를 `NOT_EVALUATED`로 저장한다. #114~#119에서 Application Target, Evaluator, Quality Gate와 Regression 구현을 순차 전환한다.
+목표 계약은 [ADR 0011](docs/decisions/0011-ai-application-target-and-guardrail-evaluator.md)과 [OpenAPI](docs/api/openapi.yaml)다. 현재 코드는 아직 Bedrock Guardrail과 HTTP Endpoint를 같은 Target abstraction으로 취급하고 inline Evaluation Profile을 해석하지 않으며 단일 Target Quality Gate를 `NOT_EVALUATED`로 저장한다. #114~#119에서 Application Target, Evaluator, Quality Gate와 Regression 구현을 순차 전환한다.
 
 ## 로컬 개발
 

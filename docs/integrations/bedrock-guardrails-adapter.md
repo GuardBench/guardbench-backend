@@ -18,7 +18,7 @@ Bedrock Guardrail Evaluator Adapter
 EvaluationResult(ALLOW | BLOCK)
 ```
 
-Evaluator Adapter만 AWS SDK 타입, Guardrail identifier/version과 provider 응답을 알고, Core에는 소비자가 소유한 scalar/value 계약만 전달한다. TestRun은 실제 사용한 Evaluator 설정과 버전을 불변하게 재식별할 수 있어야 한다.
+사용자는 inline Evaluation Profile만 제출한다. GuardBench가 이를 AWS Bedrock Guardrail Evaluator 설정으로 해석하며, Evaluator Adapter만 AWS SDK 타입, Guardrail identifier/version과 provider 응답을 안다. Core에는 소비자가 소유한 scalar/value 계약만 전달하고 TestRun은 실제 사용한 Evaluator 설정과 버전을 불변하게 재식별할 수 있어야 한다.
 
 `ApplyGuardrail` action의 공통 verdict mapping은 유지한다.
 
@@ -27,7 +27,7 @@ Evaluator Adapter만 AWS SDK 타입, Guardrail identifier/version과 provider �
 | `GUARDRAIL_INTERVENED` | `BLOCK` |
 | `NONE` | `ALLOW` |
 
-null 또는 알 수 없는 action은 정상 EvaluationResult가 아니다. 오류 taxonomy, 자연어 응답 전달 방식, EvaluatorReference와 Guardrail version 고정의 구체 구현은 #114·#116·#117이 소유한다. 이 문서는 Evaluation Profile이나 provider별 공통 설정 모델을 확정하지 않는다.
+null 또는 알 수 없는 action은 정상 EvaluationResult가 아니다. 오류 taxonomy, 자연어 응답 전달 방식, Evaluation Profile 해석 결과와 Guardrail version 고정의 구체 구현은 #114·#116·#117이 소유한다. Evaluation Profile CRUD, provider ensemble과 provider별 고급 설정 모델은 확정하지 않는다.
 
 ## 보안 경계
 
@@ -57,4 +57,4 @@ AWS 근거는 [CreateGuardrailVersion API](https://docs.aws.amazon.com/bedrock/l
 
 ## 범위
 
-#113은 문서 계약만 정리한다. Java, Migration, AWS 호출 코드, OpenAPI schema와 물리 ERD는 변경하지 않는다.
+#113은 문서와 목표 OpenAPI 계약만 정리한다. Java, Migration, AWS 호출 코드와 물리 ERD는 변경하지 않는다.

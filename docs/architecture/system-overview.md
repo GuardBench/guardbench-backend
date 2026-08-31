@@ -22,11 +22,13 @@ HTTP/SQS Adapter → Application Use Case → Domain/Core
 - Controller는 Application Service만 호출한다.
 - Repository 계약은 Domain에, 구현은 Infrastructure에 둔다.
 - TestRun은 하나의 AI Application Target을 실행하고 실제 사용한 Evaluator 설정과 버전을 불변하게 식별한다.
+- MVP 공개 Application Target type은 `HTTP_ENDPOINT`이며 TestRun 생성 요청은 inline Evaluation Profile을 포함한다.
+- GuardBench가 Evaluation Profile을 실제 Evaluator/provider 설정으로 해석하며 사용자는 provider를 직접 지정하지 않는다.
 - Application Target Adapter는 Snapshot input을 외부 Application에 전달하고 자연어 ApplicationResponse를 반환한다.
 - Evaluator Adapter는 ApplicationResponse를 `EvaluationResult(ALLOW | BLOCK)`로 변환한다.
 - AWS Bedrock Guardrail은 첫 번째 Evaluator Adapter 구현이다.
 - TestSuite, TestCase, ExpectedResult, Assertion, Quality Gate와 Regression의 의미는 AWS SDK와 독립적이다.
-- 미래 확장을 이유로 Evaluation Profile이나 provider별 범용 설정 계층을 선제 도입하지 않는다.
+- Evaluation Profile CRUD, provider ensemble이나 provider별 범용 고급 설정 계층을 선제 도입하지 않는다.
 
 ```text
 TestCaseSnapshot
@@ -46,7 +48,7 @@ Regression은 위 실행 흐름에 포함되지 않는다. 완료된 두 TestRun
 
 ## 현재 구현
 
-현재 `target` 경계는 `BEDROCK_GUARDRAIL`과 `HTTP_ENDPOINT`를 모두 Target provider로 저장하고, Bedrock Adapter가 Snapshot input을 `ApplyGuardrail`에 직접 전달해 `ActualResult`를 만든다. 이는 목표 경계가 구현된 상태가 아니다.
+현재 `target` 경계는 `BEDROCK_GUARDRAIL`과 `HTTP_ENDPOINT`를 모두 Target provider로 저장하고, Bedrock Adapter가 Snapshot input을 `ApplyGuardrail`에 직접 전달해 `ActualResult`를 만든다. inline Evaluation Profile 해석도 없다. 이는 목표 경계가 구현된 상태가 아니다.
 
 #114~#117에서 Application Target과 Evaluator 실행 경계를 전환하고, #118~#119에서 Quality Gate와 Regression을 구현한다. 전환 전 물리 구조는 [TestRun Persistence 구현 인덱스](testrun-persistence.md)에서 current implementation으로만 확인한다.
 

@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Team
-> Last reviewed: 2026-08-26
+> Last reviewed: 2026-08-31
 > Canonical source: GitHub
 > Origin: PR #20·#23 리뷰 사례, Issue #33 및 PR #77 회귀 개선 사례
 
@@ -63,7 +63,7 @@ PR 설명이나 주석만 믿지 않는다. 결함으로 단정하려면 재현 
 Changes requested — Blocking 2건
 
 - [P1] Idempotency-Key 필수 여부가 OpenAPI와 다릅니다.
-- [P1] Candidate materialization 시점이 PREPARING에서 접수 시점으로 바뀝니다.
+- [P1] TestRun 요청에 사용자가 Evaluator provider를 직접 지정하는 필드가 추가됐습니다.
 
 미검증: PostgreSQL 통합 테스트는 실행하지 못했습니다.
 ```

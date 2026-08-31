@@ -15,7 +15,8 @@ GuardBench는 사람이 정의한 기대 동작으로 AI Application의 자연�
 
 - TestSuite와 TestCase를 재사용 가능한 정책 테스트 자산으로 축적한다.
 - TestRun 시점의 TestCase를 TestCaseSnapshot으로 고정해 재현성을 확보한다.
-- 하나의 TestRun에서 하나의 Application Target을 실행한다.
+- 하나의 TestRun에서 하나의 `HTTP_ENDPOINT` Application Target을 실행한다.
+- 사용자의 평가 목적을 inline Evaluation Profile로 받아 GuardBench가 실제 Evaluator 설정으로 해석한다.
 - 실행에 사용한 Evaluator 설정과 버전을 Run에 불변하게 식별한다.
 - Evaluator가 만든 EvaluationResult가 ExpectedResult를 만족하는지 Assertion한다.
 - 현재 Run의 Assertion 결과로 Quality Gate를 판정한다.
@@ -25,8 +26,8 @@ GuardBench는 사람이 정의한 기대 동작으로 AI Application의 자연�
 ## 핵심 사용자 흐름
 
 1. 사용자가 TestSuite와 현재 TestCase 정의를 관리한다.
-2. 하나의 AI Application Target과 Evaluator를 지정해 TestRun을 요청한다.
-3. 서버는 TestCaseSnapshot과 실제 Evaluator 설정 식별자를 고정한다.
+2. 하나의 HTTP AI Application Target과 inline Evaluation Profile로 TestRun을 요청한다.
+3. 서버는 profile을 실제 Evaluator 설정으로 해석하고 TestCaseSnapshot과 사용한 설정 식별자를 고정한다.
 4. 각 Snapshot input을 Application Target에 전달하고 자연어 응답을 받는다.
 5. Evaluator가 자연어 응답을 `EvaluationResult(ALLOW | BLOCK)`로 정규화한다.
 6. ExpectedResult와 EvaluationResult를 비교해 Assertion을 만든다.
@@ -66,7 +67,7 @@ Completed TestRun A + Completed TestRun B
 
 ## 현재 구현과 후속 전환
 
-현재 코드는 `BEDROCK_GUARDRAIL`과 `HTTP_ENDPOINT`를 같은 Target abstraction으로 다루고, Bedrock Guardrail action을 Target `ActualResult`로 정규화한다. Quality Gate는 단일 Target 실행에서 `NOT_EVALUATED`이며 Regression API는 없다. 이는 목표 계약의 구현 완료 상태가 아니다.
+현재 코드는 `BEDROCK_GUARDRAIL`과 `HTTP_ENDPOINT`를 같은 Target abstraction으로 다루고, Bedrock Guardrail action을 Target `ActualResult`로 정규화한다. inline Evaluation Profile 해석은 없고, Quality Gate는 단일 Target 실행에서 `NOT_EVALUATED`이며 Regression API는 없다. 이는 목표 계약의 구현 완료 상태가 아니다.
 
 - #114: EvaluatorReference 고정과 Guardrail Target 의존 제거
 - #115: HTTP Endpoint AI Application 실행과 자연어 응답 수집
@@ -80,4 +81,5 @@ Completed TestRun A + Completed TestRun B
 - 정책 또는 Guardrail 설정 자동 생성
 - 고객 애플리케이션 CI/CD 또는 PR Gate 제품 통합
 - `TestCaseRevision` 또는 `TestSuiteRevision` 도입
-- Research 단계인 Evaluation Profile 또는 provider별 설정 추상화의 구현 계약 확정
+- Evaluation Profile을 저장·재사용하는 독립 CRUD 리소스
+- provider ensemble 또는 provider별 고급 설정의 공개 계약 확정

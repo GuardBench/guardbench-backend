@@ -30,15 +30,15 @@
 
 | 영역 | 문서 | 상태 | 담당 | 최종 검토일 | Notion 원본 |
 | --- | --- | --- | --- | --- | --- |
-| 제품 | [MVP 범위](product/mvp-scope.md) | APPROVED | KOSA AWS 3팀 | 2026-08-23 | [최신 PRD](https://app.notion.com/p/3c0eeed6b62d80759d77f0ab0d5bcbd3) |
-| 도메인 | [핵심 모델](domain/core-model.md) | APPROVED | Backend | 2026-08-30 | [도메인 모델 정의](https://app.notion.com/p/3c0eeed6b62d81b48c03ed6034440936) |
-| 도메인 | [평가 계약](domain/evaluation-contract.md) | APPROVED | Backend | 2026-08-30 | [MVP 평가 계약](https://app.notion.com/p/3c3eeed6b62d8120a57eebaa13b6ed27) |
-| API | [API 안내](api/README.md) · [OpenAPI](api/openapi.yaml) | APPROVED | Backend | 2026-08-30 | [API 명세서](https://app.notion.com/p/3c0eeed6b62d805dac0be8db487b1359) |
-| 아키텍처 | [시스템 개요](architecture/system-overview.md) | APPROVED | Backend | 2026-08-23 | [도메인 모델 정의](https://app.notion.com/p/3c0eeed6b62d81b48c03ed6034440936) |
+| 제품 | [MVP 범위](product/mvp-scope.md) | APPROVED | KOSA AWS 3팀 | 2026-08-31 | [최신 PRD](https://app.notion.com/p/3c0eeed6b62d80759d77f0ab0d5bcbd3) |
+| 도메인 | [핵심 모델](domain/core-model.md) | APPROVED | Backend | 2026-08-31 | [도메인 모델 정의](https://app.notion.com/p/3c0eeed6b62d81b48c03ed6034440936) |
+| 도메인 | [평가 계약](domain/evaluation-contract.md) | APPROVED | Backend | 2026-08-31 | [MVP 평가 계약](https://app.notion.com/p/3c3eeed6b62d8120a57eebaa13b6ed27) |
+| API | [API 안내](api/README.md) · [OpenAPI](api/openapi.yaml) | APPROVED | Backend | 2026-08-31 | [API 명세서](https://app.notion.com/p/3c0eeed6b62d805dac0be8db487b1359) |
+| 아키텍처 | [시스템 개요](architecture/system-overview.md) | APPROVED | Backend | 2026-08-31 | [도메인 모델 정의](https://app.notion.com/p/3c0eeed6b62d81b48c03ed6034440936) |
 | 아키텍처 | [인프라](architecture/infrastructure.md) | APPROVED | Infra | 2026-08-27 | [인프라 구성 설계](https://app.notion.com/p/3c0eeed6b62d81269f60e1c69fbf9fcc) |
-| 아키텍처 | [TestRun Persistence 구현 인덱스](architecture/testrun-persistence.md) | APPROVED | Backend | 2026-08-27 | 없음 |
-| 계약 라우팅 | [비동기 TestRun 계약 맵](contracts/README.md) | APPROVED | Backend | 2026-08-27 | 없음 |
-| 통합 | [Bedrock Guardrails Adapter 설계 근거](integrations/bedrock-guardrails-adapter.md) | APPROVED | Backend | 2026-08-25 | 없음 |
+| 아키텍처 | [TestRun Persistence 구현 인덱스](architecture/testrun-persistence.md) | APPROVED | Backend | 2026-08-31 | 없음 |
+| 계약 라우팅 | [비동기 TestRun 계약 맵](contracts/README.md) | APPROVED | Backend | 2026-08-31 | 없음 |
+| 통합 | [Bedrock Guardrails Adapter 설계 근거](integrations/bedrock-guardrails-adapter.md) | APPROVED | Backend | 2026-08-31 | 없음 |
 | 결정 | [ADR 안내](decisions/README.md) | APPROVED | Team | 2026-08-27 | 없음 |
 | 결정 | [ADR 0001: 도메인 타입 소유권과 Aggregate 경계](decisions/0001-domain-type-ownership-and-aggregate-boundaries.md) | APPROVED | Backend | 2026-08-24 | 없음 |
 | 결정 | [ADR 0002: PostgreSQL 영속성 계약과 물리 ERD](decisions/0002-postgresql-persistence-contract.md) | APPROVED | Backend | 2026-08-24 | 없음 |
@@ -53,7 +53,7 @@
 | 결정 | [ADR 0011: AI Application Target과 Guardrail Evaluator 역할 분리](decisions/0011-ai-application-target-and-guardrail-evaluator.md) | APPROVED | Backend | 2026-08-31 | 없음 |
 | AI 개발 | [작업 워크플로](ai-development/workflow.md) | APPROVED | Team | 2026-08-24 | 현재 대화에서 승격 |
 | AI 개발 | [Backend CI와 dev Merge Gate](ai-development/backend-ci-merge-gate.md) | DRAFT | Backend | 2026-08-26 | 없음 |
-| AI 개발 | [코드 리뷰](ai-development/review.md) | APPROVED | Team | 2026-08-24 | PR #20·#23 사례와 Issue #33 |
+| AI 개발 | [코드 리뷰](ai-development/review.md) | APPROVED | Team | 2026-08-31 | PR #20·#23 사례와 Issue #33 |
 
 ## 개발 컨벤션
 

@@ -15,6 +15,7 @@
 | `TestCaseSnapshot` | TestRun 접수 시 TestCase 이름과 실행 정의를 불변 복제한 실행 기준 |
 | `TestRun` | 하나의 AI Application Target, 실제 Evaluator 식별자와 Snapshot 집합의 수명주기 관리 |
 | `TargetReference` | TestRun이 실행할 AI Application을 재식별하는 local reference |
+| `EvaluationProfile` | 사용자가 요청한 평가 목적을 checks와 strictness로 표현하는 inline 입력 값 |
 | `EvaluatorReference` | Run이 실제 사용한 Evaluator 설정과 버전을 불변하게 재식별하는 local reference |
 | `ApplicationResponse` | Application Target이 반환한 자연어 응답 |
 | `EvaluationResult` | Evaluator가 ApplicationResponse를 `ALLOW | BLOCK`으로 정규화한 결과 |
@@ -22,13 +23,15 @@
 | `QualityGateResult` | 한 TestRun의 Assertion 결과 집계 판정 |
 | `RegressionResult` | 비교 가능한 완료 TestRun 두 개의 저장 결과 비교 |
 
-`EvaluatorReference`와 provider별 물리 설정 구조는 #114에서, Regression 결과 모델은 #119에서 구체화한다. 이 표는 미래 DB 테이블이나 Java 타입 위치를 선제 확정하지 않는다.
+`EvaluationProfile`은 MVP에서 독립 Aggregate나 CRUD 리소스가 아니다. 요청 profile과 실제 `EvaluatorReference`를 고정하는 물리 구조는 #114에서, Regression 결과 모델은 #119에서 구체화한다. 이 표는 미래 DB 테이블이나 Java 타입 위치를 선제 확정하지 않는다.
 
 ## 핵심 불변식
 
 - TestCase는 현재 정의만 보유하고 과거 실행 기준은 TestCaseSnapshot이 보존한다.
 - TestCase 삭제는 논리 삭제이며 기존 Snapshot과 실행·판정 결과에 전파하지 않는다.
 - 하나의 TestRun은 하나의 Application Target만 실행한다.
+- MVP Application Target type은 `HTTP_ENDPOINT`다.
+- TestRun 요청은 inline EvaluationProfile을 포함하고, 사용자는 Evaluator/provider 설정을 직접 제출하지 않는다.
 - 하나의 TestRun은 실제 사용한 Evaluator 설정과 버전을 사후에 불변하게 식별할 수 있어야 한다.
 - Application Target은 자연어 응답을 반환하며 `ALLOW`와 `BLOCK`을 직접 반환하는 판정 주체가 아니다.
 - Evaluator만 ApplicationResponse를 GuardBench 공통 EvaluationResult로 정규화한다.
@@ -43,8 +46,8 @@
 
 ```text
 TestSuite + TestCase
-        ↓ TestRun 요청(Application Target + Evaluator)
-QUEUED: references + TestCaseSnapshot + OutboxEvent
+        ↓ TestRun 요청(HTTP Application Target + inline EvaluationProfile)
+QUEUED: requested policy + references + TestCaseSnapshot + OutboxEvent
         ↓
 RUNNING: Snapshot당 Application 실행
         ↓
@@ -75,6 +78,6 @@ Completed TestRun A + Completed TestRun B
 
 ## 현재 구현과 목표 계약의 차이
 
-현재 구현은 ADR 0010의 단일 Target lifecycle과 `TargetReference`를 사용한다. `BEDROCK_GUARDRAIL`은 Target으로 직접 실행되어 `ActualResult`를 만들고, `HTTP_ENDPOINT`의 실제 자연어 응답 실행은 구현되지 않았다. 현재 Quality Gate는 `NOT_EVALUATED`만 저장하며 Regression 모델과 API는 없다.
+현재 구현은 ADR 0010의 단일 Target lifecycle과 `TargetReference`를 사용한다. `BEDROCK_GUARDRAIL`은 Target으로 직접 실행되어 `ActualResult`를 만들고, `HTTP_ENDPOINT`의 실제 자연어 응답 실행과 inline Evaluation Profile 해석은 구현되지 않았다. 현재 Quality Gate는 `NOT_EVALUATED`만 저장하며 Regression 모델과 API는 없다.
 
-#114~#119가 이 차이를 순차 해소한다. 해당 구현 전까지 현재 Java·DB·OpenAPI 타입을 목표 구조가 이미 구현된 증거로 해석하지 않는다.
+#114~#119가 Java·DB와 목표 OpenAPI의 차이를 순차 해소한다. 해당 구현 전까지 목표 OpenAPI를 배포 완료의 증거로 해석하지 않는다.

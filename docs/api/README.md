@@ -10,16 +10,14 @@ API의 단일 명세는 [openapi.yaml](openapi.yaml)이다. Endpoint, 필드, En
 
 ## 계약 층위
 
-OpenAPI는 **current implementation의 공개 API 계약**이다. 현재 schema의 `BEDROCK_GUARDRAIL` Target, `actualAction`, 기존 Quality Gate metrics와 Regression endpoint 부재를 목표 구조가 이미 구현된 것으로 해석하지 않는다.
-
-목표 제품·아키텍처 계약은 [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)이다.
+OpenAPI는 [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)을 HTTP로 구체화한 **합의된 목표 API 계약**이다. 아직 Java·DB에 모두 구현된 계약은 아니며 #114~#119가 구현 차이를 순차 해소한다.
 
 ```text
 TestCaseSnapshot → AI Application Target → Natural Language Response
                  → Evaluator → EvaluationResult → Assertion → Quality Gate
 ```
 
-목표 API·저장 계약은 #114~#119 구현 Issue에서 OpenAPI와 코드가 함께 변경될 때 제공한다. #113에서는 구현보다 앞서 미래 request/response schema를 추측하지 않는다.
+이번 #113은 공개 request/response와 endpoint 의미를 확정하지만 미래 물리 저장 구조를 추측하지 않는다. 현재 배포 동작이 필요하면 [TestRun Persistence](../architecture/testrun-persistence.md)의 current implementation 경계와 코드를 함께 확인한다.
 
 ## 빠른 탐색
 
@@ -31,7 +29,7 @@ TestCaseSnapshot → AI Application Target → Natural Language Response
 | 공통 오류 | `components.responses`와 `ErrorResponse` |
 | Enum 값 | 각 schema의 `enum` |
 
-현재 API는 TestSuite·TestCase 관리, TestRun 비동기 실행, TestRun 목록·상세·결과 조회를 제공한다. 인증·인가는 적용하지 않으며 `security: []`를 사용한다.
+목표 API는 TestSuite·TestCase 관리, TestRun 비동기 실행, TestRun 목록·상세·결과 조회, Evaluator metrics와 저장 결과 기반 Regression 조회를 제공한다. 인증·인가는 적용하지 않으며 `security: []`를 사용한다.
 
 ## 공통 규칙
 
@@ -73,33 +71,52 @@ TestCaseSnapshot → AI Application Target → Natural Language Response
 - TestCase는 독립 Aggregate다. 목록은 별도 API로 조회하며 TestSuite 응답에는 전체 배열 대신 `testCaseCount`가 있다.
 - TestCase 수정은 과거 TestRun의 Snapshot을 바꾸지 않는다. 삭제는 논리 삭제이며 과거 실행 결과는 유지한다.
 
-### TestRun 접수 — current implementation
+### TestRun 접수 — agreed contract
 
 - `POST /api/v1/test-runs`는 비동기 작업을 접수하고 `202 Accepted`를 반환한다.
 - `Idempotency-Key`는 선택 사항이다. 키와 정규화된 요청 fingerprint가 같으면 기존 접수 결과를, 다르면 `409 IDEMPOTENCY_KEY_CONFLICT`를 반환한다. 생략하면 요청마다 새 TestRun을 만든다.
-- 요청은 단일 `target`만 받는다. 현재 `BEDROCK_GUARDRAIL`은 provider identifier와 `DRAFT` 또는 numbered revision을 사용하며, DRAFT는 Worker가 `PREPARING` 단계에서 numbered revision으로 고정한다. `HTTP_ENDPOINT`는 URL identifier와 생략된 revision을 사용하지만 실제 Application 자연어 응답 실행은 아직 없다.
+- 요청 핵심은 `testSuiteId`, 단일 `HTTP_ENDPOINT` Application `target`, inline `evaluationProfile`이다.
+- `evaluationProfile.checks`는 `PROMPT_INJECTION | PII_LEAKAGE | HARMFUL_CONTENT`, `strictness`는 `RELAXED | STANDARD | STRICT`다. 이는 UI 설문·선택으로 정한 평가 목적이며 독립 저장 리소스나 `evaluationProfileId`가 아니다.
+- 사용자는 `evaluator.type`, provider, `AWS_BEDROCK`, Guardrail identifier/version을 요청에 제출하지 않는다. GuardBench가 profile을 실제 Evaluator 설정으로 해석하고 실행에 사용한 설정을 내부적으로 고정한다.
 - 접수 시 TestSuite의 현재 TestCase를 불변 Snapshot으로 복사한다. 빈 Suite는 `409 TEST_SUITE_EMPTY`다.
-- 접수 트랜잭션은 `QUEUED` TestRun, Target reference, Snapshot, 선택적인 idempotency 정보와 `TestRunRequested` OutboxEvent를 저장한다. Target 준비와 외부 호출은 commit 뒤 Worker가 수행하며, 이후 오류는 접수 HTTP 응답을 바꾸지 않는다.
+- 접수 트랜잭션의 목표 의미는 `QUEUED` TestRun, 요청한 Evaluation Profile, 실행 조건, Snapshot, 선택적인 idempotency 정보와 `TestRunRequested` OutboxEvent를 원자적으로 고정하는 것이다. 구체 물리 저장 모델은 #114가 확정한다. 외부 호출은 commit 뒤 Worker가 수행하며 이후 오류는 접수 HTTP 응답을 바꾸지 않는다.
 
-목표 계약의 Application Target + EvaluatorReference 접수 구조는 #114·#115에서 OpenAPI와 함께 변경한다.
+현재 구현은 아직 `BEDROCK_GUARDRAIL` Target을 요청으로 받고 inline Evaluation Profile을 해석하지 않는다. #114·#115가 목표 요청 계약에 맞게 Java·DB를 전환한다.
 
-### TestRun 조회 — current implementation
+### TestRun 조회와 평가 결과 — agreed contract
 
 - 목록과 상세는 실행 중에도 조회할 수 있다. 아직 평가되지 않은 값은 `null`이고 이를 `NOT_EVALUATED`로 바꾸지 않는다.
-- 상세의 `qualityGate`는 실행 중 `null`이다. `NOT_EVALUATED`는 실행이 끝났지만 현재 구현이 Quality Gate를 판정하지 않은 결과다.
+- 상세는 요청한 Application `target`과 `evaluationProfile`을 다시 확인할 수 있어야 한다. Evaluator/provider 설정은 사용자 요청 필드가 아니며, 공개 응답 metadata는 #114·#116의 실제 고정 모델이 확정될 때 별도로 검토한다.
+- 상세의 `qualityGate`는 실행 중 `null`이다. 종료 후 Quality Gate는 같은 TestRun의 Assertion 결과만 집계한다.
 - 개별 결과 목록은 `FINISHED`에서만 조회한다. 그 전에는 `409 TEST_RUN_NOT_FINISHED`다.
-- Snapshot 입력과 기대값, 실행 결과, 평가 결과는 실행 당시 값이며 현재 TestCase 수정과 무관하다.
-- 개별 결과는 Snapshot당 단일 `execution`, `actualAction`과 nullable `assertionStatus`를 제공한다.
-- 현재 API는 Regression endpoint를 제공하지 않는다.
+- 개별 결과는 Snapshot input, Application의 자연어 `targetResponse`, `evaluatorVerdict`, `expectedAction`, `assertionStatus`를 구분한다. 값은 실행 당시 저장 결과이며 현재 TestCase 수정과 무관하다.
+- `evaluationOutcome` 필터는 `TRUE_POSITIVE | TRUE_NEGATIVE | FALSE_POSITIVE | FALSE_NEGATIVE` 상세 조회에 사용한다.
+- Evaluator metrics의 분류는 다음과 같다.
 
-목표 계약에서는 `actualAction`의 의미를 Evaluator가 만든 EvaluationResult로 전환하고, Quality Gate는 현재 Run의 Assertion을 집계하며, Regression은 완료된 두 Run의 저장 결과를 비교한다. #116~#119가 공개 API 변경을 소유한다.
+| ExpectedResult | Evaluator verdict | Evaluation outcome |
+| --- | --- | --- |
+| BLOCK | BLOCK | TRUE_POSITIVE |
+| BLOCK | ALLOW | FALSE_NEGATIVE |
+| ALLOW | BLOCK | FALSE_POSITIVE |
+| ALLOW | ALLOW | TRUE_NEGATIVE |
+
+현재 구현은 Application response와 Evaluator verdict를 분리하지 않고 `actualAction`으로 공개하며 Quality Gate를 계산하지 않는다. #115~#118이 이 차이를 구현한다.
+
+### Regression — agreed contract
+
+- `GET /api/v1/test-runs/{testRunId}/comparable-runs`는 동일한 테스트 정의와 동일한 실제 Evaluator 설정을 사용한 완료 Run만 반환한다. Application Target/revision은 비교 축이므로 달라도 된다.
+- `GET /api/v1/test-runs/{currentRunId}/comparisons/{comparisonRunId}`는 comparison Run에서 current Run으로의 저장 verdict·Assertion 변화만 계산한다.
+- Regression 경로는 Application 또는 Evaluator를 다시 호출하지 않는다.
+- 비교 불가능한 두 Run의 직접 비교 요청은 `409 TEST_RUNS_NOT_COMPARABLE`이다.
+
+현재 Java에는 이 endpoint가 없으며 #119가 구현한다.
 
 ## 구현 경계
 
 - Controller는 Envelope, HTTP 상태, Header와 DTO 매핑을 담당한다. Domain 객체나 JPA Entity를 직접 반환하지 않는다.
 - API Enum과 Domain Enum은 문자열 값이 같아도 경계에서 명시적으로 변환한다.
 - TestRun 조회 API는 `testrun/presentation`이 소유한다. 다른 Context 값이 필요하면 승인된 소비자 소유 Projection Port를 사용한다.
-- OpenAPI 변경은 공개 계약 변경이다. 구현 편의를 위해 먼저 바꾸지 말고 Issue의 승인 경계를 따른다.
+- OpenAPI 변경은 공개 계약 변경이다. #113에서 승인한 목표 계약을 구현할 때 Java·DB·테스트를 임의로 축소하거나 provider 선택 입력을 추가하지 않는다.
 
 ## MVP 이후
 

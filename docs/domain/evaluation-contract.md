@@ -15,6 +15,8 @@
 
 AI Application은 자연어 ApplicationResponse를 반환한다. `ALLOW`와 `BLOCK`은 Evaluator가 자연어 응답을 평가해 만드는 GuardBench 공통 verdict다. AWS Bedrock Guardrail은 첫 번째 Evaluator 구현이며 Application Target이 아니다.
 
+TestRun 생성 요청의 inline `evaluationProfile`은 사용자가 선택한 평가 목적을 `checks`와 `strictness`로 표현한다. 사용자는 Evaluator type, provider 또는 Bedrock Guardrail identifier/version을 제출하지 않으며 GuardBench가 profile을 실제 Evaluator 설정으로 해석한다. 요청한 profile은 TestRun 조회에서 다시 확인할 수 있어야 한다.
+
 EvaluationResult가 있으면 ExpectedResult와 비교해 AssertionResult를 생성한다.
 
 | ExpectedResult | EvaluationResult | Assertion |
@@ -58,7 +60,7 @@ Completed TestRun A + Completed TestRun B
 
 - `severity`와 `category`는 조회·필터 또는 후속 Quality Gate 정책 입력 후보이며, #118의 승인 없이 판정 공식을 임의로 정하지 않는다.
 - Provider 원문 오류, 내부 예외 메시지와 stack trace는 공개 결과에 노출하지 않는다.
-- Provider별 설정 추상화와 Evaluation Profile은 Research 단계이며 현재 구현 계약이 아니다.
+- Evaluation Profile CRUD, provider별 고급 설정과 provider ensemble은 현재 구현 계약이 아니다.
 
 ```text
 HTTP 오류 ≠ Application 실행 오류 ≠ Evaluator 오류 ≠ Assertion FAIL ≠ Quality Gate 판정 ≠ Regression 결과
@@ -66,4 +68,4 @@ HTTP 오류 ≠ Application 실행 오류 ≠ Evaluator 오류 ≠ Assertion FAI
 
 ## 현재 구현
 
-현재 코드는 Bedrock Guardrail action을 Target `ActualResult`로 저장해 ExpectedResult와 Assertion하고, 단일 Target Quality Gate를 항상 `NOT_EVALUATED`로 저장한다. OpenAPI의 `actualAction`과 기존 Quality Gate metrics는 이 current implementation을 표현한다. 목표 EvaluationResult·Quality Gate·Regression 공개 계약은 #114~#119 구현 전까지 제공되지 않는다.
+현재 코드는 Bedrock Guardrail action을 Target `ActualResult`로 저장해 ExpectedResult와 Assertion하고, 단일 Target Quality Gate를 항상 `NOT_EVALUATED`로 저장한다. [OpenAPI](../api/openapi.yaml)는 합의된 목표 EvaluationResult·Quality Gate·Regression 계약을 먼저 정의하며, Java·DB와의 차이는 #114~#119에서 해소한다.
