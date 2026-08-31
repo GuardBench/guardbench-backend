@@ -99,6 +99,7 @@ class TestRunDetailPersistenceAdapterIntegrationTest {
         String targetReference = "target-ref-" + id;
         jdbcTemplate.update("INSERT INTO target_reference(reference_id, target_type) VALUES (?, 'BEDROCK_GUARDRAIL')",
                 targetReference);
+        jdbcTemplate.update("INSERT INTO bedrock_guardrail_target(reference_id, guardrail_identifier, requested_revision, resolved_revision) VALUES (?, 'guardrail', 'DRAFT', NULL)", targetReference);
         jdbcTemplate.update("""
                 INSERT INTO test_run (
                     id, test_suite_id, status, test_case_count, processed_test_case_count,
