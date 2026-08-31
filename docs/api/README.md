@@ -78,6 +78,7 @@ TestCaseSnapshot → AI Application Target → Natural Language Response
 - 요청 핵심은 `testSuiteId`, 단일 `HTTP_ENDPOINT` Application `target`, inline `evaluationProfile`이다. OpenAPI DTO는 `TestRunCreateReq → TargetReferenceReq + EvaluationProfileReq` 구조다.
 - `evaluationProfile.checks`는 `PROMPT_INJECTION | PII_LEAKAGE | HARMFUL_CONTENT`, `strictness`는 `RELAXED | STANDARD | STRICT`다. 이는 UI 설문·선택으로 정한 평가 목적이며 독립 저장 리소스나 `evaluationProfileId`가 아니다.
 - 사용자는 `evaluator.type`, provider, `AWS_BEDROCK`, Guardrail identifier/version을 요청에 제출하지 않는다. GuardBench가 profile을 실제 Evaluator 설정으로 해석하고 실행에 사용한 설정을 내부적으로 고정한다.
+- 운영 catalog에 canonical profile이 없으면 `409 EVALUATION_PROFILE_NOT_SUPPORTED`를 반환한다. PII-only profile은 strictness를 collapse해 하나의 canonical entry를 사용한다.
 - 접수 시 TestSuite의 현재 TestCase를 불변 Snapshot으로 복사한다. 빈 Suite는 `409 TEST_SUITE_EMPTY`다.
 - 접수 트랜잭션의 목표 의미는 `QUEUED` TestRun, 요청한 Evaluation Profile, 실행 조건, Snapshot, 선택적인 idempotency 정보와 `TestRunRequested` OutboxEvent를 원자적으로 고정하는 것이다. 구체 물리 저장 모델은 #114가 확정한다. 외부 호출은 commit 뒤 Worker가 수행하며 이후 오류는 접수 HTTP 응답을 바꾸지 않는다.
 

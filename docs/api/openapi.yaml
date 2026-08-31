@@ -923,7 +923,7 @@ components:
                 message: 두 TestRun은 비교할 수 없습니다.
                 data: { code: TEST_RUNS_NOT_COMPARABLE }
     TestRunCreateConflict:
-      description: TestRun을 접수할 수 없는 현재 상태 또는 Idempotency-Key 충돌
+      description: TestRun을 접수할 수 없는 현재 상태, 지원하지 않는 Evaluation Profile 또는 Idempotency-Key 충돌
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorApiResponse' }
@@ -940,6 +940,12 @@ components:
                 httpStatus: 409
                 message: Idempotency-Key가 다른 요청에 이미 사용되었습니다.
                 data: { code: IDEMPOTENCY_KEY_CONFLICT }
+            evaluationProfileNotSupported:
+              summary: 운영 Evaluator catalog에 canonical profile이 없음
+              value:
+                httpStatus: 409
+                message: 지원하는 Evaluator 설정을 찾을 수 없습니다.
+                data: { code: EVALUATION_PROFILE_NOT_SUPPORTED }
     InternalServerError:
       description: 요청 접수 트랜잭션을 완료하지 못한 예상하지 못한 서버 오류
       content:

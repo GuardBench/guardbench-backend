@@ -36,6 +36,7 @@ Validation을 제외한 오류는 다음 구조를 사용한다.
 | `TEST_CASE_NOT_FOUND` | 404 | TestCase가 없거나 논리 삭제됨 |
 | `TEST_RUN_NOT_FOUND` | 404 | 유효한 양의 ID에 해당하는 TestRun이 없음 |
 | `TEST_SUITE_EMPTY` | 409 | TestRun 생성 시 활성 TestCase가 없음 |
+| `EVALUATION_PROFILE_NOT_SUPPORTED` | 409 | 운영 Evaluator catalog에 요청한 canonical Evaluation Profile이 없음 |
 | `IDEMPOTENCY_KEY_CONFLICT` | 409 | 같은 Idempotency-Key를 다른 TestRun 요청에 재사용 |
 | `TEST_RUN_NOT_FINISHED` | 409 | 종료가 필요한 결과·지표·비교 API에 FINISHED가 아닌 TestRun 사용 |
 | `TEST_RUNS_NOT_COMPARABLE` | 409 | 테스트 정의 또는 실제 Evaluator 설정이 다른 두 TestRun 비교 |
@@ -50,6 +51,7 @@ Validation을 제외한 오류는 다음 구조를 사용한다.
 | `TEST_CASE_NOT_FOUND` | TestCase를 찾을 수 없습니다. |
 | `TEST_RUN_NOT_FOUND` | TestRun을 찾을 수 없습니다. |
 | `TEST_SUITE_EMPTY` | 실행 가능한 TestCase가 없습니다. |
+| `EVALUATION_PROFILE_NOT_SUPPORTED` | 지원하는 Evaluator 설정을 찾을 수 없습니다. |
 | `IDEMPOTENCY_KEY_CONFLICT` | Idempotency-Key가 다른 요청에 이미 사용되었습니다. |
 | `TEST_RUN_NOT_FINISHED` | TestRun이 아직 종료되지 않았습니다. |
 | `TEST_RUNS_NOT_COMPARABLE` | 두 TestRun은 비교할 수 없습니다. |
@@ -122,6 +124,12 @@ TestRun 상세 또는 개별 결과 조회의 양의 ID가 존재하지 않을 �
 ### TEST_SUITE_EMPTY
 
 TestSuite는 존재하지만 활성 TestCase가 0개여서 TestRun을 생성할 수 없을 때 사용한다. 논리 삭제된 TestCase는 활성 개수에 포함하지 않는다.
+
+### EVALUATION_PROFILE_NOT_SUPPORTED
+
+TestRun 생성 요청의 `checks`와 `strictness`를 canonicalize했을 때 운영자가 사전 provisioning한
+Evaluator catalog entry가 없으면 사용한다. PII-only profile은 strictness를 collapse한 canonical key로
+조회한다. 요청에 provider 또는 Guardrail identifier/version을 직접 추가해 해결할 수 있는 오류가 아니다.
 
 ### IDEMPOTENCY_KEY_CONFLICT
 
