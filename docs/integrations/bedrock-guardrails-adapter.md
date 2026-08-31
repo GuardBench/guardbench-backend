@@ -33,28 +33,34 @@ null 또는 알 수 없는 action은 정상 EvaluationResult가 아니다. 오�
 
 Application response는 Evaluator 입력으로만 사용하며 public API에 노출하지 않는다. Provider 원문 오류, assessment, output text, 사용자 input, Application response, ARN, 자격 증명과 stack trace는 승인된 저장·관측 계약 없이 DB·일반 로그에 노출하지 않는다. 외부 호출은 DB 트랜잭션 밖에서 수행하고, retry·timeout·stale 결과 차단은 Worker 계약과 함께 구현한다.
 
-## 현재 구현
+## 구현
 
-기존 `com.guardbench.target.infrastructure.bedrock` Adapter 구현은 `BEDROCK_GUARDRAIL` Target의 준비와 실행 형태를 보존하지만, HTTP Application Target 전환으로 현재 Worker Port에는 등록하지 않는다. Bedrock 호출은 #116에서 Evaluator Adapter로 이동한다.
+`com.guardbench.evaluator.infrastructure.bedrock.BedrockGuardrailEvaluatorAdapter`는
+`EvaluatorExecutionPort`를 구현한다. Adapter는 TestRun이 #114에서 고정한
+`EvaluatorReference`로 `bedrock_guardrail_evaluator`를 조회하고, Application의 자연어 응답만
+AWS SDK 요청으로 변환한다.
 
-| 현재 단계 | 현재 소비자 소유 Port | Bedrock API |
+| 단계 | 소비자 소유 Port/저장 | Bedrock API |
 | --- | --- | --- |
-| Target 등록 | `RegisterTargetReferencePort` | 외부 호출 없음 |
-| DRAFT 준비 | `TargetPreparationPort` | `CreateGuardrailVersion` |
-| Snapshot input 실행 | `TargetExecutionPort` | `ApplyGuardrail` |
+| Evaluator reference 등록 | `RegisterEvaluatorReferencePort` / `evaluator_reference` | 외부 호출 없음 |
+| Application response 평가 | `EvaluatorExecutionPort` | `ApplyGuardrail` |
 
-현재 등록·준비 계약은 다음과 같다.
+`ApplyGuardrail`은 `source=OUTPUT`, 단일 text content와 `INTERVENTIONS` output scope로 호출한다.
+`NONE`은 `ALLOW`, `GUARDRAIL_INTERVENED`는 structured assessment를 검사해 `BLOCKED`가 있으면
+`BLOCK`, `ANONYMIZED`만 있으면 `ALLOW`로 정규화한다. null·알 수 없는 action이나 assessment는
+`PROVIDER_RESPONSE_INVALID`다. raw assessment, output text와 provider 오류 원문은 Port 밖으로
+전달하지 않는다.
 
-- `BEDROCK_GUARDRAIL` identifier와 `DRAFT` 또는 1~8자리 numbered revision을 받는다.
-- numbered revision은 등록 시 resolved revision으로 고정한다.
-- DRAFT는 `PREPARING`에서 `CreateGuardrailVersion`으로 materialize한다.
-- `guardbench-test-run-{testRunId}` 형태의 결정적 `clientRequestToken`을 사용하고, 이미 resolved revision이 있으면 준비를 반복하지 않는다.
-- AWS 호출은 DB 트랜잭션 밖에서 수행한다.
+#114의 evaluator catalog는 numbered revision을 접수 시 `EvaluatorReference`에 고정하므로
+새 Evaluator 흐름은 DRAFT materialization을 지원하지 않는다. 기존 Target 전용
+`CreateGuardrailVersion` 경계와 `bedrock_guardrail_target` 저장소는 Evaluator 실행 경로에서
+사용하지 않는다. 따라서 Evaluator 호출은 `BedrockRuntimeClient`만 필요하며 AWS 호출은 DB
+트랜잭션 밖에서 수행된다.
 
-AWS 근거는 [CreateGuardrailVersion API](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_CreateGuardrailVersion.html), [ApplyGuardrail API](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ApplyGuardrail.html), [독립 ApplyGuardrail 사용 가이드](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-use-independent-api.html)다.
+Bedrock SDK timeout/retry는 `guardbench.bedrock.*` 설정을 사용하며 전체 15초 한도를 execution
+claim lease(45초)보다 짧게 유지한다. 오류는 `EVALUATOR_NOT_FOUND`,
+`EVALUATOR_ACCESS_DENIED`, `EVALUATOR_CONFIGURATION_INVALID`, `PROVIDER_UNAVAILABLE`,
+`PROVIDER_RESPONSE_INVALID`, `PROVIDER_TIMEOUT`으로 안전하게 수렴한다.
 
-현재 코드는 Guardrail identifier와 requested/resolved revision을 Target 저장소에 두고, Snapshot input을 `source=INPUT`으로 직접 평가해 Target `ActualResult`를 만든다. 현재 null/알 수 없는 action과 SDK 예외는 `TARGET_NOT_FOUND`, `TARGET_ACCESS_DENIED`, `TARGET_CONFIGURATION_INVALID`, `PROVIDER_TIMEOUT`, `PROVIDER_UNAVAILABLE`, `PROVIDER_RESPONSE_INVALID`의 안전한 오류로 정규화한다. SDK timeout/retry는 `guardbench.bedrock.*` 설정을 사용하고 Application claim은 stale 응답의 저장을 차단한다. 이 구조는 current implementation 기록이며 목표 Evaluator 계약이 아니다. #114에서 Guardrail Target 의존을 제거하고 #116에서 Evaluator Adapter로 전환한다.
-
-## 범위
-
-#113은 문서와 목표 OpenAPI 계약만 정리한다. Java, Migration, AWS 호출 코드와 물리 ERD는 변경하지 않는다.
+AWS 근거는 [ApplyGuardrail API](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ApplyGuardrail.html)와
+[독립 ApplyGuardrail 사용 가이드](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-use-independent-api.html)다.
