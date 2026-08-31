@@ -1,5 +1,6 @@
 package com.guardbench.testrun.infrastructure.evaluator;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Component;
@@ -29,9 +30,19 @@ class EvaluatorCatalogPersistenceAdapter implements ResolveEvaluatorCatalogPort 
 
     private static boolean sameProfile(EvaluatorCatalogProperties.Entry entry, EvaluationProfile profile) {
         try {
-            return new EvaluationProfile(entry.checks(), entry.strictness()).equals(profile);
+            EvaluationProfile catalogProfile = new EvaluationProfile(entry.checks(), entry.strictness());
+            return canonicalChecks(catalogProfile.checks()).equals(canonicalChecks(profile.checks()))
+                    && (isPiiOnly(profile) || catalogProfile.strictness().equals(profile.strictness()));
         } catch (IllegalArgumentException exception) {
             return false;
         }
+    }
+
+    private static boolean isPiiOnly(EvaluationProfile profile) {
+        return profile.checks().equals(List.of("PII_LEAKAGE"));
+    }
+
+    private static List<String> canonicalChecks(List<String> checks) {
+        return checks.stream().sorted().toList();
     }
 }
