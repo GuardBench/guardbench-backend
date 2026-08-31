@@ -34,6 +34,7 @@
 - TestRun 요청은 inline EvaluationProfile을 포함하고, 사용자는 Evaluator/provider 설정을 직접 제출하지 않는다.
 - 하나의 TestRun은 실제 사용한 Evaluator 설정과 버전을 사후에 불변하게 식별할 수 있어야 한다.
 - Application Target은 자연어 응답을 반환하며 `ALLOW`와 `BLOCK`을 직접 반환하는 판정 주체가 아니다.
+- ApplicationResponse는 내부 Evaluator 입력이며 public 결과 DTO에 노출하지 않는다.
 - Evaluator만 ApplicationResponse를 GuardBench 공통 EvaluationResult로 정규화한다.
 - EvaluationResult가 있으면 ExpectedResult와 비교해 AssertionResult를 생성한다. Application 실행 또는 평가 실패로 EvaluationResult가 없으면 AssertionResult를 생성하지 않는다.
 - Quality Gate는 같은 TestRun의 Assertion 결과만 집계한다.

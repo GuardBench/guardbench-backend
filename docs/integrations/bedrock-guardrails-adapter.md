@@ -31,7 +31,7 @@ null 또는 알 수 없는 action은 정상 EvaluationResult가 아니다. 오�
 
 ## 보안 경계
 
-Provider 원문 오류, assessment, output text, 사용자 input, Application response, ARN, 자격 증명과 stack trace는 승인된 저장·관측 계약 없이 DB·API·일반 로그에 노출하지 않는다. 외부 호출은 DB 트랜잭션 밖에서 수행하고, retry·timeout·stale 결과 차단은 Worker 계약과 함께 구현한다.
+Application response는 Evaluator 입력으로만 사용하며 public API에 노출하지 않는다. Provider 원문 오류, assessment, output text, 사용자 input, Application response, ARN, 자격 증명과 stack trace는 승인된 저장·관측 계약 없이 DB·일반 로그에 노출하지 않는다. 외부 호출은 DB 트랜잭션 밖에서 수행하고, retry·timeout·stale 결과 차단은 Worker 계약과 함께 구현한다.
 
 ## 현재 구현
 

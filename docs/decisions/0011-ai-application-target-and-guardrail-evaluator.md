@@ -24,10 +24,11 @@ GuardBench가 검증하려는 System Under Test는 AI Application이다. Guardra
 1. GuardBench의 SUT와 Target은 **AI Application**이다. 하나의 TestRun은 하나의 Application Target만 실행하며 MVP 공개 Target type은 `HTTP_ENDPOINT`다.
 2. TestRun 접수 시 활성 TestCase 정의를 `TestCaseSnapshot`으로 불변 복제한다. 이후 TestCase 수정·삭제는 해당 Run의 실행과 판정 의미를 바꾸지 않는다.
 3. Application Target은 Snapshot input을 받아 자연어 `ApplicationResponse`를 반환한다. `ALLOW`와 `BLOCK`은 Application 응답 값이 아니다.
-4. Evaluator는 ApplicationResponse를 평가해 GuardBench 공통 `EvaluationResult(ALLOW | BLOCK)`를 만든다. AWS Bedrock Guardrail은 첫 번째 Guardrail Evaluator 구현이다.
-5. TestRun 생성 요청은 사용자의 평가 목적을 구조화한 inline `evaluationProfile`을 받는다. MVP profile은 `checks`와 `strictness`로 구성하며 독립 CRUD 리소스나 `evaluationProfileId`가 아니다.
-6. 사용자는 Evaluator type, provider, Bedrock Guardrail identifier/version을 직접 제출하지 않는다. GuardBench가 `evaluationProfile`을 실제 Evaluator 설정으로 해석하고, TestRun은 사용한 설정과 버전을 사후에 불변하게 식별할 수 있어야 한다. `EvaluatorReference`의 물리 표현과 해석 결과 저장은 [#114](https://github.com/GuardBench/guardbench-backend/issues/114)에서 구현한다.
-7. 기존 `ExpectedResult(ALLOW | BLOCK)`과 Assertion 의미를 재사용한다. Assertion은 ExpectedResult와 EvaluationResult가 같으면 `PASS`, 다르면 `FAIL`이다. Application 실행 또는 평가가 완료되지 않아 EvaluationResult가 없으면 Assertion을 만들지 않는다.
+4. ApplicationResponse는 내부 Evaluator 입력이며 frontend-facing 결과 DTO에 노출하지 않는다.
+5. Evaluator는 ApplicationResponse를 평가해 GuardBench 공통 `EvaluationResult(ALLOW | BLOCK)`를 만든다. AWS Bedrock Guardrail은 첫 번째 Guardrail Evaluator 구현이다.
+6. TestRun 생성 요청은 사용자의 평가 목적을 구조화한 inline `evaluationProfile`을 받는다. MVP profile은 `checks`와 `strictness`로 구성하며 독립 CRUD 리소스나 `evaluationProfileId`가 아니다.
+7. 사용자는 Evaluator type, provider, Bedrock Guardrail identifier/version을 직접 제출하지 않는다. GuardBench가 `evaluationProfile`을 실제 Evaluator 설정으로 해석하고, TestRun은 사용한 설정과 버전을 사후에 불변하게 식별할 수 있어야 한다. `EvaluatorReference`의 물리 표현과 해석 결과 저장은 [#114](https://github.com/GuardBench/guardbench-backend/issues/114)에서 구현한다.
+8. 기존 `ExpectedResult(ALLOW | BLOCK)`과 Assertion 의미를 재사용한다. Assertion은 ExpectedResult와 EvaluationResult가 같으면 `PASS`, 다르면 `FAIL`이다. Application 실행 또는 평가가 완료되지 않아 EvaluationResult가 없으면 Assertion을 만들지 않는다.
 
 ```text
 TestCaseSnapshot
@@ -104,4 +105,5 @@ inline Evaluation Profile의 공개 입력 계약은 #113에서 확정한다. Pr
 4. 이전 ADR의 충돌 부분이 이 ADR로 부분 supersede되었음이 문서 지도와 각 ADR 경고에서 추적되는지 확인한다.
 5. current implementation과 target architecture가 구분되고 #114~#119가 각 구현 차이를 소유하는지 확인한다.
 6. OpenAPI가 inline Evaluation Profile만 요청으로 받고 Evaluator/provider 설정을 요청 필드로 노출하지 않는지 확인한다.
-7. Java, Migration과 PlantUML/PNG ERD가 변경되지 않았는지 확인하고 OpenAPI syntax와 `$ref` 무결성을 검증한다.
+7. OpenAPI public 결과에 ApplicationResponse 계열 필드가 없는지 확인한다.
+8. Java, Migration과 PlantUML/PNG ERD가 변경되지 않았는지 확인하고 OpenAPI syntax와 `$ref` 무결성을 검증한다.

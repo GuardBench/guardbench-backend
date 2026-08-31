@@ -75,7 +75,7 @@ TestCaseSnapshot → AI Application Target → Natural Language Response
 
 - `POST /api/v1/test-runs`는 비동기 작업을 접수하고 `202 Accepted`를 반환한다.
 - `Idempotency-Key`는 선택 사항이다. 키와 정규화된 요청 fingerprint가 같으면 기존 접수 결과를, 다르면 `409 IDEMPOTENCY_KEY_CONFLICT`를 반환한다. 생략하면 요청마다 새 TestRun을 만든다.
-- 요청 핵심은 `testSuiteId`, 단일 `HTTP_ENDPOINT` Application `target`, inline `evaluationProfile`이다.
+- 요청 핵심은 `testSuiteId`, 단일 `HTTP_ENDPOINT` Application `target`, inline `evaluationProfile`이다. OpenAPI DTO는 `TestRunCreateReq → TargetReferenceReq + EvaluationProfileReq` 구조다.
 - `evaluationProfile.checks`는 `PROMPT_INJECTION | PII_LEAKAGE | HARMFUL_CONTENT`, `strictness`는 `RELAXED | STANDARD | STRICT`다. 이는 UI 설문·선택으로 정한 평가 목적이며 독립 저장 리소스나 `evaluationProfileId`가 아니다.
 - 사용자는 `evaluator.type`, provider, `AWS_BEDROCK`, Guardrail identifier/version을 요청에 제출하지 않는다. GuardBench가 profile을 실제 Evaluator 설정으로 해석하고 실행에 사용한 설정을 내부적으로 고정한다.
 - 접수 시 TestSuite의 현재 TestCase를 불변 Snapshot으로 복사한다. 빈 Suite는 `409 TEST_SUITE_EMPTY`다.
@@ -89,7 +89,9 @@ TestCaseSnapshot → AI Application Target → Natural Language Response
 - 상세는 요청한 Application `target`과 `evaluationProfile`을 다시 확인할 수 있어야 한다. Evaluator/provider 설정은 사용자 요청 필드가 아니며, 공개 응답 metadata는 #114·#116의 실제 고정 모델이 확정될 때 별도로 검토한다.
 - 상세의 `qualityGate`는 실행 중 `null`이다. 종료 후 Quality Gate는 같은 TestRun의 Assertion 결과만 집계한다.
 - 개별 결과 목록은 `FINISHED`에서만 조회한다. 그 전에는 `409 TEST_RUN_NOT_FINISHED`다.
-- 개별 결과는 Snapshot input, Application의 자연어 `targetResponse`, `evaluatorVerdict`, `expectedAction`, `assertionStatus`를 구분한다. 값은 실행 당시 저장 결과이며 현재 TestCase 수정과 무관하다.
+- 개별 결과의 `TestRunResultItemRes`는 Snapshot input, `executionStatus`, `evaluatorVerdict`, `expectedAction`, `assertionStatus`와 안전한 `error`를 제공한다. 값은 실행 당시 저장 결과이며 현재 TestCase 수정과 무관하다.
+- Application의 자연어 응답은 내부 Evaluator 입력이지만 public DTO에는 `applicationResponse`, `targetResponse`, `naturalLanguageResponse` 어떤 이름으로도 노출하지 않는다.
+- `error.stage`는 `APPLICATION_TARGET | EVALUATOR`로 실패 단계를 구분한다. code의 구체 taxonomy는 #115~#117이 소유하며 provider 원문, stack trace, credential과 ARN은 노출하지 않는다.
 - `evaluationOutcome` 필터는 `TRUE_POSITIVE | TRUE_NEGATIVE | FALSE_POSITIVE | FALSE_NEGATIVE` 상세 조회에 사용한다.
 - Evaluator metrics의 분류는 다음과 같다.
 
@@ -102,14 +104,26 @@ TestCaseSnapshot → AI Application Target → Natural Language Response
 
 현재 구현은 Application response와 Evaluator verdict를 분리하지 않고 `actualAction`으로 공개하며 Quality Gate를 계산하지 않는다. #115~#118이 이 차이를 구현한다.
 
+`QualityGateRes`의 public 최소 shape은 `status`와 nullable `metrics`다. `status`는 `PASS | FAIL | NOT_EVALUATED`이며 metrics 필드와 threshold 정책은 #118이 최종 소유한다. Regression 또는 과거 Run 동시 비교 기반 metric을 Quality Gate에 넣지 않는다.
+
 ### Regression — agreed contract
 
 - `GET /api/v1/test-runs/{testRunId}/comparable-runs`는 동일한 테스트 정의와 동일한 실제 Evaluator 설정을 사용한 완료 Run만 반환한다. Application Target/revision은 비교 축이므로 달라도 된다.
 - `GET /api/v1/test-runs/{currentRunId}/comparisons/{comparisonRunId}`는 comparison Run에서 current Run으로의 저장 verdict·Assertion 변화만 계산한다.
 - Regression 경로는 Application 또는 Evaluator를 다시 호출하지 않는다.
 - 비교 불가능한 두 Run의 직접 비교 요청은 `409 TEST_RUNS_NOT_COMPARABLE`이다.
+- #113은 endpoint와 Run 식별자까지 고정하며 구체 comparability key와 Regression 상세 response DTO는 #119가 최종 소유한다.
 
 현재 Java에는 이 endpoint가 없으며 #119가 구현한다.
+
+## Frontend 계약 라우팅
+
+| Frontend Issue | 참조할 backend 공개 계약 | 구현 시 전제 |
+| --- | --- | --- |
+| #27 TestRun 생성 | `POST /api/v1/test-runs`, `TestRunCreateReq`, `TargetReferenceReq`, `EvaluationProfileReq`, `EvaluationCheck`, `EvaluationStrictness` | HTTP Application Target과 inline profile만 제출하며 provider/Guardrail 입력은 없다. |
+| #28 실행 상세·결과 | `GET /api/v1/test-runs/{testRunId}`, `TestRunDetailRes`, `GET .../results`, `TestRunResultItemRes`, `QualityGateRes` | 요청 profile, Evaluator verdict, ExpectedResult, Assertion, 실행 상태와 안전한 오류를 표시한다. ApplicationResponse는 표시하지 않는다. |
+| #29 FN/FP 분석 | 결과의 `evaluationOutcome`과 `GET .../evaluator-metrics`의 `EvaluatorMetricsRes` | backend 분류를 source of truth로 사용하고 TestRun 상세의 Evaluation Profile을 분석 맥락으로 표시한다. |
+| #30 Regression | `GET .../comparable-runs`, `GET .../comparisons/{comparisonRunId}` | backend가 반환한 comparable Run만 사용한다. provider 선택 UI나 재실행 흐름을 만들지 않으며 상세 DTO는 #119를 기다린다. |
 
 ## 구현 경계
 

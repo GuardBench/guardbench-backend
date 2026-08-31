@@ -33,6 +33,8 @@ GuardBench는 사람이 정의한 기대 동작으로 AI Application의 자연�
 6. ExpectedResult와 EvaluationResult를 비교해 Assertion을 만든다.
 7. 현재 TestRun의 Assertion 결과를 집계해 Quality Gate를 판정한다.
 
+Application의 자연어 응답은 내부 Evaluator 입력으로만 사용하고 사용자-facing 결과에는 노출하지 않는다. 사용자는 TestCase input, Evaluator verdict, ExpectedResult, Assertion과 실행 오류를 확인한다.
+
 ```text
 TestCaseSnapshot
       ↓
