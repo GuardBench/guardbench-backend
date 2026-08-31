@@ -10,6 +10,7 @@ public record TestRunCreateCommand(
         String targetType,
         String targetIdentifier,
         String targetRevision,
+        String targetModel,
         com.guardbench.testrun.domain.EvaluationProfile evaluationProfile,
         String idempotencyKey
 ) {
@@ -20,7 +21,12 @@ public record TestRunCreateCommand(
     }
 
     public TestRunCreateCommand(long testSuiteId, String targetType, String targetIdentifier, String targetRevision, String idempotencyKey) {
-        this(testSuiteId, targetType, targetIdentifier, targetRevision, null, idempotencyKey);
+        this(testSuiteId, targetType, targetIdentifier, targetRevision, null, null, idempotencyKey);
+    }
+
+    public TestRunCreateCommand(long testSuiteId, String targetType, String targetIdentifier, String targetRevision,
+                                com.guardbench.testrun.domain.EvaluationProfile evaluationProfile, String idempotencyKey) {
+        this(testSuiteId, targetType, targetIdentifier, targetRevision, null, evaluationProfile, idempotencyKey);
     }
 
     boolean hasIdempotencyKey() {
@@ -33,6 +39,7 @@ public record TestRunCreateCommand(
                 targetType,
                 targetIdentifier,
                 targetRevision,
+                targetModel,
                 evaluationProfile
         );
     }

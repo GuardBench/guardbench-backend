@@ -11,7 +11,7 @@ public record TestRunCreateRes(long id, long testSuiteId, String status, int tes
     public static TestRunCreateRes from(TestRunCreateResult result) {
         return new TestRunCreateRes(result.id(), result.testSuiteId(), result.status(), result.testCaseCount(),
                 new TargetReferenceRes(result.target().referenceId(), result.target().type(),
-                        result.target().identifier(), result.target().revision()), toResponse(result.evaluationProfile()), result.createdAt());
+                        result.target().identifier(), result.target().revision(), result.target().model()), toResponse(result.evaluationProfile()), result.createdAt());
     }
 
     static EvaluationProfileRes toResponse(EvaluationProfile profile) {

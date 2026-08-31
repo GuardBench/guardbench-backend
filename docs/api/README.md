@@ -110,6 +110,17 @@ Target URL은 HTTP/HTTPS absolute URL, host 필수, userinfo·fragment 금지다
 
 현재 Java worker의 결과 저장·평가 경계는 아직 legacy `ActualResult`를 사용한다. HTTP Application Target adapter와 inline Evaluation Profile 접수는 구현되었고, Evaluator 전환과 결과 저장/API shape 변경은 #116~#118이 담당한다.
 
+`target.model`을 함께 제출하면 동일한 HTTP endpoint를 OpenAI-compatible chat completions Adapter로 선택한다. 이때 endpoint URL은 사용자가 지정한 full `/v1/chat/completions` URL이고 model은 다음 request에 전달된다.
+
+```json
+{
+  "model": "gpt-4o-mini",
+  "messages": [{"role": "user", "content": "<TestCaseSnapshot.input>"}]
+}
+```
+
+`model`을 생략하면 위의 generic `{input}` 계약을 사용한다. OpenAI-compatible 성공 응답은 추가 metadata를 허용하며 `choices[0].message.content`가 비어 있지 않은 문자열이어야 한다. streaming/SSE, tool/function calling과 multimodal content는 지원하지 않는다.
+
 ### TestRun 조회와 평가 결과 — agreed contract
 
 - 목록과 상세는 실행 중에도 조회할 수 있다. 아직 평가되지 않은 값은 `null`이고 이를 `NOT_EVALUATED`로 바꾸지 않는다.

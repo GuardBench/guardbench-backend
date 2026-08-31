@@ -18,14 +18,18 @@ class HttpEndpointTargetStore {
 
     Optional<HttpEndpointTarget> findByReference(String referenceId) {
         List<HttpEndpointTarget> rows = jdbcTemplate.query(
-                "SELECT reference_id, endpoint_url FROM http_endpoint_target WHERE reference_id = ?",
+                "SELECT reference_id, endpoint_url, model FROM http_endpoint_target WHERE reference_id = ?",
                 (resultSet, rowNumber) -> new HttpEndpointTarget(
                         resultSet.getString("reference_id"),
-                        resultSet.getString("endpoint_url")),
+                        resultSet.getString("endpoint_url"),
+                        resultSet.getString("model")),
                 referenceId);
         return rows.stream().findFirst();
     }
 
-    record HttpEndpointTarget(String referenceId, String endpointUrl) {
+    record HttpEndpointTarget(String referenceId, String endpointUrl, String model) {
+        HttpEndpointTarget(String referenceId, String endpointUrl) {
+            this(referenceId, endpointUrl, null);
+        }
     }
 }

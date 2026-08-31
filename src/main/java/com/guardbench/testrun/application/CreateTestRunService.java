@@ -144,7 +144,8 @@ public class CreateTestRunService {
                 new TargetRegistration(
                         command.targetType(),
                         command.targetIdentifier(),
-                        command.targetRevision()));
+                        command.targetRevision(),
+                        command.targetModel()));
         registerEvaluatorReferencePort.register(evaluatorReference, evaluatorRegistration);
 
         TestRun testRun = TestRun.queue(
@@ -198,7 +199,7 @@ public class CreateTestRunService {
                 testRun.sourceTestSuiteId().value(),
                 testRun.status().name(),
                 testRun.testCaseCount(),
-                new com.guardbench.testrun.application.port.out.TargetReferenceView(testRun.targetReference().value(), command.targetType(), command.targetIdentifier(), command.targetRevision()),
+                new com.guardbench.testrun.application.port.out.TargetReferenceView(testRun.targetReference().value(), command.targetType(), command.targetIdentifier(), command.targetRevision(), command.targetModel()),
                 testRun.evaluationProfile(),
                 testRun.timeline().createdAt()
         );

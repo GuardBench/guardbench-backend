@@ -1,6 +1,7 @@
 package com.guardbench.target.infrastructure.http;
 
 import java.net.http.HttpClient;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -13,17 +14,14 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
-/** Snapshot input을 HTTP Application에 전달하고 자연어 응답을 provider-independent 결과로 반환한다. */
-public final class HttpEndpointExecutionAdapter implements TargetExecutionPort {
-
-    private static final String JSON_CONTENT_TYPE = "application/json";
-    private static final String RESPONSE_FIELD = "response";
+/** OpenAI-compatible chat completion request/response를 자연어 Target 결과로 변환한다. */
+final class OpenAiCompatibleExecutionAdapter implements TargetExecutionPort {
 
     private final HttpEndpointTargetStore targetStore;
     private final ObjectMapper objectMapper;
     private final HttpEndpointHttpClient httpEndpointHttpClient;
 
-    public HttpEndpointExecutionAdapter(
+    OpenAiCompatibleExecutionAdapter(
             HttpClient httpClient,
             HttpEndpointTargetStore targetStore,
             ObjectMapper objectMapper,
@@ -41,16 +39,19 @@ public final class HttpEndpointExecutionAdapter implements TargetExecutionPort {
         HttpEndpointTargetStore.HttpEndpointTarget target = targetStore
                 .findByReference(request.targetReference().value())
                 .orElse(null);
-        if (target == null) {
-            return TargetExecutionResult.failed(TargetFailureCode.TARGET_NOT_FOUND);
-        }
+        if (target == null) return TargetExecutionResult.failed(TargetFailureCode.TARGET_NOT_FOUND);
         return execute(request, target);
     }
 
     TargetExecutionResult execute(TargetExecutionRequest request, HttpEndpointTargetStore.HttpEndpointTarget target) {
+        if (target.model() == null || target.model().isBlank()) {
+            return TargetExecutionResult.failed(TargetFailureCode.TARGET_CONFIGURATION_INVALID);
+        }
         final String requestBody;
         try {
-            requestBody = objectMapper.writeValueAsString(Map.of("input", request.input()));
+            requestBody = objectMapper.writeValueAsString(Map.of(
+                    "model", target.model(),
+                    "messages", List.of(Map.of("role", "user", "content", request.input()))));
         } catch (JacksonException exception) {
             return TargetExecutionResult.failed(TargetFailureCode.TARGET_CONFIGURATION_INVALID);
         }
@@ -60,14 +61,17 @@ public final class HttpEndpointExecutionAdapter implements TargetExecutionPort {
     private TargetExecutionResult normalizeResponse(byte[] body) {
         try {
             JsonNode root = objectMapper.readTree(body);
-            if (root == null || !root.isObject() || root.size() != 1) {
+            JsonNode choices = root == null || !root.isObject() ? null : root.get("choices");
+            if (choices == null || !choices.isArray() || choices.isEmpty()) {
                 return TargetExecutionResult.failed(TargetFailureCode.PROVIDER_RESPONSE_INVALID);
             }
-            JsonNode responseNode = root.get(RESPONSE_FIELD);
-            if (responseNode == null || !responseNode.isTextual() || responseNode.asText().isBlank()) {
+            JsonNode firstChoice = choices.get(0);
+            JsonNode message = firstChoice == null || !firstChoice.isObject() ? null : firstChoice.get("message");
+            JsonNode content = message == null || !message.isObject() ? null : message.get("content");
+            if (content == null || !content.isTextual() || content.asText().isBlank()) {
                 return TargetExecutionResult.failed(TargetFailureCode.PROVIDER_RESPONSE_INVALID);
             }
-            return TargetExecutionResult.succeeded(responseNode.asText());
+            return TargetExecutionResult.succeeded(content.asText());
         } catch (JacksonException exception) {
             return TargetExecutionResult.failed(TargetFailureCode.PROVIDER_RESPONSE_INVALID);
         }

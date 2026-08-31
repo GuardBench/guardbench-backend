@@ -21,11 +21,11 @@ import com.guardbench.testsupport.PostgresTestConfiguration;
 class PersistenceFoundationIntegrationTest {
 
     @Test
-    @DisplayName("빈 PostgreSQL에 Flyway V1~V6 스키마를 적용한다")
+    @DisplayName("빈 PostgreSQL에 Flyway V1~V7 스키마를 적용한다")
     void appliesApprovedSchemaToPostgreSql(@Autowired Flyway flyway, @Autowired JdbcTemplate jdbcTemplate) {
         MigrationInfo current = flyway.info().current();
         assertNotNull(current);
-        assertEquals("6", current.getVersion().getVersion());
+        assertEquals("7", current.getVersion().getVersion());
         Integer tableCount = jdbcTemplate.queryForObject("""
                 SELECT count(*) FROM information_schema.tables
                 WHERE table_schema = 'public' AND table_name IN (

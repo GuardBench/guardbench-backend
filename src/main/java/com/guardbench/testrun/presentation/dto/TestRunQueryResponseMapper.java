@@ -36,7 +36,7 @@ public final class TestRunQueryResponseMapper {
                 detail.status().name(),
                 detail.testCaseCount(),
                 toProgressRes(detail.progress()),
-                new TargetReferenceRes(detail.target().referenceId(), detail.target().type(), detail.target().identifier(), detail.target().revision()),
+                new TargetReferenceRes(detail.target().referenceId(), detail.target().type(), detail.target().identifier(), detail.target().revision(), detail.target().model()),
                 TestRunCreateRes.toResponse(detail.evaluationProfile()),
                 detail.executionOutcome() != null ? detail.executionOutcome().name() : null,
                 detail.qualityGate() != null ? toQualityGateRes(detail.qualityGate()) : null,

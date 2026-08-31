@@ -43,8 +43,8 @@ class TargetReferencePersistenceAdapter implements RegisterTargetReferencePort {
     }
 
     private void registerHttpEndpoint(TargetReference reference, TargetRegistration registration) {
-        jdbcTemplate.update("INSERT INTO http_endpoint_target(reference_id, endpoint_url, requested_revision) VALUES (?, ?, ?)",
-                reference.value(), registration.identifier(), registration.revision());
+        jdbcTemplate.update("INSERT INTO http_endpoint_target(reference_id, endpoint_url, requested_revision, model) VALUES (?, ?, ?, ?)",
+                reference.value(), registration.identifier(), registration.revision(), registration.model());
     }
 
     private static boolean isDraft(String revision) {

@@ -16,7 +16,9 @@ public final class TargetReferenceReqValidator implements ConstraintValidator<Va
     public boolean isValid(TargetReferenceReq target, ConstraintValidatorContext context) {
         if (target == null || target.type() == null) return true;
         return switch (target.type()) {
-            case HTTP_ENDPOINT -> (target.revision() == null || !target.revision().isBlank()) && isHttpUrl(target.identifier());
+            case HTTP_ENDPOINT -> (target.revision() == null || !target.revision().isBlank())
+                    && (target.model() == null || !target.model().isBlank())
+                    && isHttpUrl(target.identifier());
             default -> true;
         };
     }

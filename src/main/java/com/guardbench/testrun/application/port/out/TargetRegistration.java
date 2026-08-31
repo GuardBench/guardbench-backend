@@ -5,11 +5,18 @@ package com.guardbench.testrun.application.port.out;
  *
  * <p>TestRun은 각 값의 provider 의미를 해석하지 않는다.
  */
-public record TargetRegistration(String typeCode, String identifier, String revision) {
+public record TargetRegistration(String typeCode, String identifier, String revision, String model) {
+
+    public TargetRegistration(String typeCode, String identifier, String revision) {
+        this(typeCode, identifier, revision, null);
+    }
 
     public TargetRegistration {
         requireNonBlank(typeCode, "target type code");
         requireNonBlank(identifier, "target identifier");
+        if (model != null && model.isBlank()) {
+            throw new IllegalArgumentException("target model must not be blank");
+        }
     }
 
     private static void requireNonBlank(String value, String field) {

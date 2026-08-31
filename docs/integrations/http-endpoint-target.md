@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Related Issue: #115
+> Related Issue: #115, #125
 > Target architecture: [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)
 
 ## 역할
@@ -56,3 +56,26 @@ Worker는 기본적으로 DNS 결과의 loopback, private/site-local, link-local
 함께 적용해야 한다.
 
 입력·응답 본문, endpoint URL, 인증 정보와 provider 원문은 일반 로그나 오류 결과에 기록하지 않는다.
+
+## OpenAI-compatible Adapter — #125
+
+`target.model`이 있으면 OpenAI-compatible Adapter를 선택한다. `model`이 없으면 위 generic HTTP
+Adapter를 선택한다. 이 선택 기준은 사용자 API의 단일 `HTTP_ENDPOINT` 타입을 유지하면서 request
+형식만 명시적으로 고정한다.
+
+```http
+POST {endpoint_url}
+Content-Type: application/json
+Accept: application/json
+
+{"model":"<target.model>","messages":[{"role":"user","content":"<snapshot input>"}]}
+```
+
+성공 응답은 OpenAI-compatible response object에서 `choices[0].message.content`를 추출한다.
+`choices`가 비어 있거나 첫 항목의 `message` 또는 `content`가 없거나, `content`가 문자열이
+아니거나 비어 있으면 `PROVIDER_RESPONSE_INVALID`다. 응답 object의 다른 metadata는 허용하지만
+streaming/SSE, tool/function calling과 multimodal content는 지원하지 않는다.
+
+`model`은 TestRun 접수 시 사용자에게 받아 Target reference와 함께 저장하며, idempotency fingerprint에도
+포함한다. 조회 응답의 generic Target은 `model: null`이고 OpenAI-compatible Target은 저장된 모델을
+반환한다. API Key·Secret과 custom header는 이 계약에 포함하지 않는다.

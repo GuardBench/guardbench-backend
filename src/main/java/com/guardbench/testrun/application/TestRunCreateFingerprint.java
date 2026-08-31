@@ -24,6 +24,7 @@ final class TestRunCreateFingerprint {
                 intent.targetType(),
                 intent.targetIdentifier(),
                 intent.targetRevision() == null ? "" : intent.targetRevision(),
+                intent.targetModel() == null ? "" : intent.targetModel(),
                 intent.evaluationProfile() == null ? "" : String.join(",", intent.evaluationProfile().checks()),
                 intent.evaluationProfile() == null ? "" : intent.evaluationProfile().strictness()
         );

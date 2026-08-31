@@ -41,7 +41,14 @@ class HttpEndpointTargetRequestTest {
         org.junit.jupiter.api.Assertions.assertEquals("HTTP_ENDPOINT", captor.getValue().targetType());
         org.junit.jupiter.api.Assertions.assertEquals("https://example.com/model/evaluate", captor.getValue().targetIdentifier());
         org.junit.jupiter.api.Assertions.assertNull(captor.getValue().targetRevision());
+        org.junit.jupiter.api.Assertions.assertNull(captor.getValue().targetModel());
         org.junit.jupiter.api.Assertions.assertEquals(java.util.List.of("PII_LEAKAGE"), captor.getValue().evaluationProfile().checks());
+
+        String openAi = "{\"testSuiteId\":1,\"target\":{\"type\":\"HTTP_ENDPOINT\",\"identifier\":\"https://example.com/v1/chat/completions\",\"model\":\"gpt-4o-mini\"},\"evaluationProfile\":{\"checks\":[\"PII_LEAKAGE\"],\"strictness\":\"STANDARD\"}}";
+        mockMvc.perform(post("/api/v1/test-runs").contentType(MediaType.APPLICATION_JSON).content(openAi))
+                .andExpect(status().isAccepted());
+        verify(createTestRunService, org.mockito.Mockito.times(2)).create(captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("gpt-4o-mini", captor.getAllValues().getLast().targetModel());
 
         String withRevision = "{\"testSuiteId\":1,\"target\":{\"type\":\"HTTP_ENDPOINT\",\"identifier\":\"https://example.com/evaluate\",\"revision\":\"1\"},\"evaluationProfile\":{\"checks\":[\"PII_LEAKAGE\"],\"strictness\":\"STANDARD\"}}";
         String invalidUrl = "{\"testSuiteId\":1,\"target\":{\"type\":\"HTTP_ENDPOINT\",\"identifier\":\"ftp://example.com/evaluate\"},\"evaluationProfile\":{\"checks\":[\"PII_LEAKAGE\"],\"strictness\":\"STANDARD\"}}";

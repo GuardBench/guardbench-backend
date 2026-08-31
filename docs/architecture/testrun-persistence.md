@@ -28,7 +28,7 @@
 | Core schema | `src/main/resources/db/migration/V1__create_guardbench_schema.sql` | TestRun, Snapshot, Execution, Assertion, Change, Quality Gate 테이블·PK/FK/CHECK·index |
 | Async technical schema | `src/main/resources/db/migration/V2__create_async_testrun_technical_tables.sql` | HTTP idempotency, Outbox, resolution/execution claim 물리 계약 |
 | Single Target schema | `src/main/resources/db/migration/V3__single_target_execution_model.sql` | Target reference/provider table, 단일 execution·claim PK, pending v2 Outbox 이관 |
-| HTTP Endpoint Target schema | `src/main/resources/db/migration/V4__http_endpoint_target.sql` | `HTTP_ENDPOINT` Target type과 `http_endpoint_target` provider table 추가 |
+| HTTP Endpoint Target schema | `src/main/resources/db/migration/V4__http_endpoint_target.sql`, `V7__openai_compatible_http_target.sql` | `HTTP_ENDPOINT` Target type와 `http_endpoint_target` provider table, optional OpenAI-compatible `model` 추가 |
 | HTTP Endpoint URL constraint | `src/main/resources/db/migration/V5__strengthen_http_endpoint_url_constraint.sql` | `endpoint_url`의 HTTP/HTTPS scheme과 host 형태 DB 제약 강화 |
 | Evaluator reference and Profile snapshot | `src/main/resources/db/migration/V6__evaluator_reference_and_profile.sql` | Evaluator provider/revision 고정, TestRun profile snapshot 및 legacy nullable pair, HTTP Target revision |
 | ERD | [PlantUML ERD](../diagrams/guardbench-mvp-physical-erd.puml) | V1~V6 적용 후 관계와 cardinality |
