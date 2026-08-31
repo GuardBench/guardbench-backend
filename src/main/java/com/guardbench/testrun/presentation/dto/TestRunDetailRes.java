@@ -13,6 +13,7 @@ public record TestRunDetailRes(
         int testCaseCount,
         TestRunProgressRes progress,
         TargetReferenceRes target,
+        EvaluationProfileRes evaluationProfile,
         String executionOutcome,
         QualityGateRes qualityGate,
         String createdAt,
