@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 
 class CreateTestRunServiceTest {
 
+    private static final String MODEL = "test-model";
     private static final TestCaseSnapshotSource SOURCE = new TestCaseSnapshotSource(
             1L, 501L, "case", "input", "ALLOW", "HIGH", "category");
 
@@ -26,7 +27,7 @@ class CreateTestRunServiceTest {
         adapters.givenTestSuite(1L, List.of(SOURCE, SOURCE));
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand command = new TestRunCreateCommand(
-                1L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), null);
+                1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, profile(), null);
 
         TestRunCreateResult result = service.create(command);
 
@@ -49,7 +50,7 @@ class CreateTestRunServiceTest {
         CreateTestRunFakeAdapters adapters = new CreateTestRunFakeAdapters();
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand command = new TestRunCreateCommand(
-                404L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), null);
+                404L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, profile(), null);
 
         ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(command));
 
@@ -63,7 +64,7 @@ class CreateTestRunServiceTest {
         adapters.givenTestSuite(2L, List.of());
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand command = new TestRunCreateCommand(
-                2L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), null);
+                2L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, profile(), null);
 
         ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(command));
 
@@ -77,7 +78,7 @@ class CreateTestRunServiceTest {
         adapters.givenTestSuite(1L, List.of(SOURCE));
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand command = new TestRunCreateCommand(
-                1L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), "idem-key-1");
+                1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, profile(), "idem-key-1");
 
         TestRunCreateResult first = service.create(command);
         TestRunCreateResult second = service.create(command);
@@ -94,9 +95,9 @@ class CreateTestRunServiceTest {
         adapters.givenTestSuite(2L, List.of(SOURCE));
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand first = new TestRunCreateCommand(
-                1L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), "idem-key-2");
+                1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, profile(), "idem-key-2");
         TestRunCreateCommand different = new TestRunCreateCommand(
-                2L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), "idem-key-2");
+                2L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, profile(), "idem-key-2");
 
         service.create(first);
         ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(different));
@@ -110,13 +111,13 @@ class CreateTestRunServiceTest {
         CreateTestRunFakeAdapters adapters = new CreateTestRunFakeAdapters();
         adapters.givenTestSuite(1L, List.of(SOURCE));
         CreateTestRunService service = newService(adapters);
-        TestRunCreateCommand generic = new TestRunCreateCommand(
-                1L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", null, profile(), "idem-model-key");
-        TestRunCreateCommand openAi = new TestRunCreateCommand(
-                1L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", "gpt-4o-mini", profile(), "idem-model-key");
+        TestRunCreateCommand firstModel = new TestRunCreateCommand(
+                1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", "model-a", profile(), "idem-model-key");
+        TestRunCreateCommand secondModel = new TestRunCreateCommand(
+                1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", "model-b", profile(), "idem-model-key");
 
-        service.create(generic);
-        ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(openAi));
+        service.create(firstModel);
+        ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(secondModel));
 
         assertEquals(ApplicationErrorCode.IDEMPOTENCY_KEY_CONFLICT, exception.errorCode());
     }
@@ -128,7 +129,7 @@ class CreateTestRunServiceTest {
         adapters.givenTestSuite(1L, List.of(SOURCE));
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand command = new TestRunCreateCommand(
-                1L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), null);
+                1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, profile(), null);
 
         TestRunCreateResult first = service.create(command);
         TestRunCreateResult second = service.create(command);
@@ -145,7 +146,8 @@ class CreateTestRunServiceTest {
         adapters.evaluatorCatalogDoesNotSupportProfile();
 
         ApplicationException exception = assertThrows(ApplicationException.class, () -> newService(adapters).create(
-                new TestRunCreateCommand(1L, "HTTP_ENDPOINT", "https://example.com/chat", null, profile(), null)));
+                new TestRunCreateCommand(1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", null,
+                        MODEL, profile(), null)));
 
         assertEquals(ApplicationErrorCode.EVALUATION_PROFILE_NOT_SUPPORTED, exception.errorCode());
         assertEquals(0, adapters.savedEvaluatorReferenceCount());
