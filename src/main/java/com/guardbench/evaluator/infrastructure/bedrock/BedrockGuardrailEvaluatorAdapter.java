@@ -1,13 +1,13 @@
-package com.guardbench.target.infrastructure.bedrock;
+package com.guardbench.evaluator.infrastructure.bedrock;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-import com.guardbench.testrun.application.port.out.TargetExecutionPort;
-import com.guardbench.testrun.application.port.out.TargetExecutionRequest;
-import com.guardbench.testrun.application.port.out.TargetExecutionResult;
-import com.guardbench.testrun.application.port.out.TargetFailureCode;
+import com.guardbench.testrun.application.port.out.EvaluatorExecutionPort;
+import com.guardbench.testrun.application.port.out.EvaluatorExecutionRequest;
+import com.guardbench.testrun.application.port.out.EvaluatorExecutionResult;
+import com.guardbench.testrun.application.port.out.EvaluatorFailureCode;
 
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
@@ -19,10 +19,8 @@ import software.amazon.awssdk.services.bedrockruntime.model.GuardrailContentSour
 import software.amazon.awssdk.services.bedrockruntime.model.GuardrailOutputScope;
 import software.amazon.awssdk.services.bedrockruntime.model.GuardrailTextBlock;
 
-/**
- * Bedrock Runtime {@code ApplyGuardrail} 호출을 TestRun이 소유한 실행 Port로 변환한다.
- */
-public final class BedrockGuardrailExecutionAdapter implements TargetExecutionPort {
+/** Application response를 Bedrock {@code ApplyGuardrail}로 평가하는 Evaluator adapter다. */
+public final class BedrockGuardrailEvaluatorAdapter implements EvaluatorExecutionPort {
 
     private static final String NONE_ACTION = "NONE";
     private static final String INTERVENED_ACTION = "GUARDRAIL_INTERVENED";
@@ -33,52 +31,48 @@ public final class BedrockGuardrailExecutionAdapter implements TargetExecutionPo
     private static final String NO_POLICY_ACTION = "NONE";
 
     private final BedrockRuntimeClient client;
-    private final BedrockGuardrailTargetStore targetStore;
+    private final BedrockGuardrailEvaluatorStore evaluatorStore;
 
-    public BedrockGuardrailExecutionAdapter(
+    public BedrockGuardrailEvaluatorAdapter(
             BedrockRuntimeClient client,
-            BedrockGuardrailTargetStore targetStore
+            BedrockGuardrailEvaluatorStore evaluatorStore
     ) {
         this.client = Objects.requireNonNull(client, "BedrockRuntimeClient must not be null");
-        this.targetStore = Objects.requireNonNull(targetStore, "target store must not be null");
+        this.evaluatorStore = Objects.requireNonNull(evaluatorStore, "evaluator store must not be null");
     }
 
     @Override
-    public TargetExecutionResult execute(TargetExecutionRequest request) {
-        Objects.requireNonNull(request, "execution request must not be null");
-        BedrockGuardrailTargetStore.BedrockGuardrailTarget target = targetStore
-                .findByReference(request.targetReference().value())
+    public EvaluatorExecutionResult evaluate(EvaluatorExecutionRequest request) {
+        Objects.requireNonNull(request, "evaluator request must not be null");
+        BedrockGuardrailEvaluatorStore.BedrockGuardrailEvaluator evaluator = evaluatorStore
+                .findByReference(request.evaluatorReference().value())
                 .orElse(null);
-        if (target == null) {
-            return TargetExecutionResult.failed(TargetFailureCode.TARGET_NOT_FOUND);
+        if (evaluator == null) {
+            return EvaluatorExecutionResult.failed(EvaluatorFailureCode.EVALUATOR_NOT_FOUND);
         }
 
         try {
-            ApplyGuardrailResponse response = client.applyGuardrail(toSdkRequest(request, target));
+            ApplyGuardrailResponse response = client.applyGuardrail(toSdkRequest(request, evaluator));
             return normalizeResponse(response);
         } catch (SdkException exception) {
-            return TargetExecutionResult.failed(BedrockGuardrailFailureCodeMapper.map(exception));
+            return EvaluatorExecutionResult.failed(BedrockGuardrailFailureCodeMapper.map(exception));
         }
     }
 
-    private static TargetExecutionResult normalizeResponse(ApplyGuardrailResponse response) {
+    private static EvaluatorExecutionResult normalizeResponse(ApplyGuardrailResponse response) {
         if (response == null || response.actionAsString() == null || response.actionAsString().isBlank()) {
             return invalidProviderResponse();
         }
 
         return switch (response.actionAsString()) {
-            case NONE_ACTION -> TargetExecutionResult.succeeded(ALLOW_ACTION);
+            case NONE_ACTION -> EvaluatorExecutionResult.succeeded(ALLOW_ACTION);
             case INTERVENED_ACTION -> normalizeIntervention(response.assessments());
             default -> invalidProviderResponse();
         };
     }
 
-    /**
-     * {@code GUARDRAIL_INTERVENED} alone is ambiguous: AWS uses it for both hard blocks and anonymization.
-     * Only allowlisted structured policy actions are inspected; raw matches, regexes, PII, outputs, and reasons
-     * never cross the Port boundary.
-     */
-    private static TargetExecutionResult normalizeIntervention(List<GuardrailAssessment> assessments) {
+    /** Structured assessment만 사용해 intervention을 공통 verdict로 정규화한다. */
+    private static EvaluatorExecutionResult normalizeIntervention(List<GuardrailAssessment> assessments) {
         if (assessments == null || assessments.isEmpty()) {
             return invalidProviderResponse();
         }
@@ -108,10 +102,10 @@ public final class BedrockGuardrailExecutionAdapter implements TargetExecutionPo
         }
 
         if (blocked) {
-            return TargetExecutionResult.succeeded(BLOCK_ACTION);
+            return EvaluatorExecutionResult.succeeded(BLOCK_ACTION);
         }
         if (anonymized) {
-            return TargetExecutionResult.succeeded(ALLOW_ACTION);
+            return EvaluatorExecutionResult.succeeded(ALLOW_ACTION);
         }
         return invalidProviderResponse();
     }
@@ -150,20 +144,20 @@ public final class BedrockGuardrailExecutionAdapter implements TargetExecutionPo
         }
     }
 
-    private static TargetExecutionResult invalidProviderResponse() {
-        return TargetExecutionResult.failed(TargetFailureCode.PROVIDER_RESPONSE_INVALID);
+    private static EvaluatorExecutionResult invalidProviderResponse() {
+        return EvaluatorExecutionResult.failed(EvaluatorFailureCode.PROVIDER_RESPONSE_INVALID);
     }
 
     private static ApplyGuardrailRequest toSdkRequest(
-            TargetExecutionRequest request,
-            BedrockGuardrailTargetStore.BedrockGuardrailTarget target
+            EvaluatorExecutionRequest request,
+            BedrockGuardrailEvaluatorStore.BedrockGuardrailEvaluator evaluator
     ) {
         return ApplyGuardrailRequest.builder()
-                .guardrailIdentifier(target.guardrailIdentifier())
-                .guardrailVersion(target.executableRevision())
-                .source(GuardrailContentSource.INPUT)
+                .guardrailIdentifier(evaluator.guardrailIdentifier())
+                .guardrailVersion(evaluator.revision())
+                .source(GuardrailContentSource.OUTPUT)
                 .content(GuardrailContentBlock.fromText(GuardrailTextBlock.builder()
-                        .text(request.input())
+                        .text(request.applicationResponse())
                         .build()))
                 .outputScope(GuardrailOutputScope.INTERVENTIONS)
                 .build();
