@@ -23,23 +23,6 @@ public record TestRunCreateCommand(
         }
     }
 
-    /**
-     * Legacy source compatibility only. HTTP_ENDPOINT 신규 요청은 model이 필수이므로 호출 시 검증에 실패한다.
-     */
-    @Deprecated
-    public TestRunCreateCommand(long testSuiteId, String targetType, String targetIdentifier, String targetRevision, String idempotencyKey) {
-        this(testSuiteId, targetType, targetIdentifier, targetRevision, null, null, idempotencyKey);
-    }
-
-    /**
-     * Legacy source compatibility only. HTTP_ENDPOINT 신규 요청은 model이 필수이므로 호출 시 검증에 실패한다.
-     */
-    @Deprecated
-    public TestRunCreateCommand(long testSuiteId, String targetType, String targetIdentifier, String targetRevision,
-                                com.guardbench.testrun.domain.EvaluationProfile evaluationProfile, String idempotencyKey) {
-        this(testSuiteId, targetType, targetIdentifier, targetRevision, null, evaluationProfile, idempotencyKey);
-    }
-
     boolean hasIdempotencyKey() {
         return idempotencyKey != null;
     }
