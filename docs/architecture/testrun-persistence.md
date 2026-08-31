@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Scope: GitHub Issues #14, #106, #110
+> Scope: GitHub Issues #14, #106, #110, #114
 > Last reviewed: 2026-08-31
 > Target architecture: [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)
 > Related broad documentation issue: [#49](https://github.com/GuardBench/guardbench-backend/issues/49)
@@ -11,7 +11,7 @@
 
 ## 계약 층위
 
-이 문서와 물리 ERD는 **current implementation**을 기록한다. 현재 schema의 `BEDROCK_GUARDRAIL` Target, `ActualResult`와 Quality Gate metric은 목표 Application Target + Evaluator 구조가 아니다. #113에서는 미래 물리 모델을 추측해 Migration·PlantUML·PNG를 변경하지 않는다. #114~#118이 실제 구현과 함께 물리 계약을 갱신한다.
+이 문서와 물리 ERD는 **current implementation**을 기록한다. #114는 새 접수에 HTTP Application Target과 inline EvaluationProfile을 요구하고, 운영자 catalog가 해석한 immutable Bedrock Guardrail Evaluator reference를 함께 고정한다. 기존 `BEDROCK_GUARDRAIL` Target history는 profile/evaluator가 없는 legacy history로 유지한다. HTTP 실행, Evaluator 적용과 Quality Gate 의미 전환은 아직 후속 Issue 범위다.
 
 ## 승인 계약
 
@@ -30,9 +30,10 @@
 | Single Target schema | `src/main/resources/db/migration/V3__single_target_execution_model.sql` | Target reference/provider table, 단일 execution·claim PK, pending v2 Outbox 이관 |
 | HTTP Endpoint Target schema | `src/main/resources/db/migration/V4__http_endpoint_target.sql` | `HTTP_ENDPOINT` Target type과 `http_endpoint_target` provider table 추가 |
 | HTTP Endpoint URL constraint | `src/main/resources/db/migration/V5__strengthen_http_endpoint_url_constraint.sql` | `endpoint_url`의 HTTP/HTTPS scheme과 host 형태 DB 제약 강화 |
-| ERD | [PlantUML ERD](../diagrams/guardbench-mvp-physical-erd.puml) | V1~V5 적용 후 관계와 cardinality |
+| Evaluator reference and Profile snapshot | `src/main/resources/db/migration/V6__evaluator_reference_and_profile.sql` | Evaluator provider/revision 고정, TestRun profile snapshot 및 legacy nullable pair, HTTP Target revision |
+| ERD | [PlantUML ERD](../diagrams/guardbench-mvp-physical-erd.puml) | V1~V6 적용 후 관계와 cardinality |
 | TestRun write adapters | `testrun/infrastructure/persistence` | TestRun, Snapshot, TestExecution, idempotency, Outbox, claim Adapter |
-| Target adapters | `target/infrastructure/persistence`, `target/infrastructure/bedrock` | Target 등록·revision 준비·Bedrock 실행 Adapter와 provider별 Target persistence |
+| Target/Evaluator adapters | `target/infrastructure/persistence`, `testrun/infrastructure/evaluator` | HTTP Target 등록, operator catalog 해석과 immutable EvaluatorReference persistence |
 | Evaluation write adapters | `evaluation/infrastructure/persistence` | Assertion-only SnapshotEvaluation 및 NOT_EVALUATED QualityGateResult Adapter |
 | Evaluation write ports | `evaluation/domain/repository` | Evaluation 소유 local reference VO를 쓰는 write-side Port |
 | PostgreSQL integration tests | `src/test/java/com/guardbench/*Persistence*IntegrationTest.java`, `EvaluationPersistenceAdapterIntegrationTest.java` | Flyway schema와 Repository round-trip·제약 검증 |
@@ -45,7 +46,7 @@
 
 ## 목표 구조와의 차이
 
-현재 `target_reference`는 Bedrock Guardrail과 HTTP Endpoint를 같은 Target provider로 저장하며 EvaluatorReference가 없다. Bedrock Adapter는 Snapshot input을 직접 평가해 Target ActualResult를 만들고 Quality Gate는 `NOT_EVALUATED`다. Regression 저장/API도 없다.
+새 TestRun은 HTTP Target과 profile/evaluator snapshot을 저장하지만, 아직 Bedrock Adapter는 legacy Target 실행 경로를 유지하고 Snapshot input을 직접 평가해 `ActualResult`를 만든다. HTTP 호출·자연어 response 수집과 Evaluator 실행은 구현되지 않았고 Quality Gate는 `NOT_EVALUATED`다. Regression 저장/API도 없다.
 
 #114~#119가 Application Target, Evaluator, Quality Gate와 Regression을 구현한다. 그 전까지 아래 산출물은 current implementation 검증에만 사용한다.
 

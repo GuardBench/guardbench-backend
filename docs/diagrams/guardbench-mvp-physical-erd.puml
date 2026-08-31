@@ -43,6 +43,9 @@ entity "test_run" as test_run {
   * test_case_count : INTEGER
   * processed_test_case_count : INTEGER
   * target_reference_id : TEXT <<UK, FK>>
+    evaluation_checks : TEXT <<nullable legacy>>
+    evaluation_strictness : VARCHAR(16) <<nullable legacy>>
+    evaluator_reference_id : TEXT <<FK, nullable legacy>>
     execution_outcome : VARCHAR(16)
   * created_at : TIMESTAMPTZ(6)
     started_at : TIMESTAMPTZ(6)
@@ -68,6 +71,20 @@ entity "http_endpoint_target" as http_endpoint_target {
   * reference_id : TEXT <<PK, FK>>
   --
   * endpoint_url : TEXT
+    requested_revision : TEXT
+}
+
+entity "evaluator_reference" as evaluator_reference {
+  * reference_id : TEXT <<PK>>
+  --
+  * evaluator_type : VARCHAR(32)
+}
+
+entity "bedrock_guardrail_evaluator" as bedrock_evaluator {
+  * reference_id : TEXT <<PK, FK>>
+  --
+  * guardrail_identifier : TEXT
+  * guardrail_revision : VARCHAR(8)
 }
 
 entity "test_case_snapshot" as snapshot {
@@ -169,6 +186,8 @@ test_suite ||--o{ test_run : selected by
 target_reference ||--|| test_run : referenced by
 target_reference ||--o| bedrock_target : provider detail
 target_reference ||--o| http_endpoint_target : provider detail
+evaluator_reference ||--o| bedrock_evaluator : provider detail
+evaluator_reference ||--o| test_run : immutable evaluator snapshot
 test_run ||--|{ snapshot : fixes
 test_case ||--o{ snapshot : source of
 snapshot ||--o| execution : single target
@@ -186,7 +205,7 @@ note right of target_reference
 end note
 
 note right of http_endpoint_target
-  V4 adds HTTP_ENDPOINT persistence.
+  V4 adds HTTP_ENDPOINT persistence; V6 adds requested revision.
   V5 requires an http/https URL with host-like text.
 end note
 
@@ -216,7 +235,7 @@ legend left
   carries the immutable event identifiers.
   Claim relations are technical leases, not Domain IDs
   or Aggregate Repositories.
-  Diagram reflects Flyway V1 through V5.
+  Diagram reflects Flyway V1 through V6.
 endlegend
 
 @enduml
