@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
+import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,7 +27,12 @@ import com.guardbench.testsupport.PostgresTestConfiguration;
  * <p>TestRun, Snapshot과 {@code TestRunRequested} Outbox 저장이 ADR 0005/0008에 따라 하나의
  * 트랜잭션으로 커밋되는지, Idempotency 판정이 실제 저장된 레코드를 기준으로 동작하는지 검증한다.
  */
-@SpringBootTest
+@SpringBootTest(properties = {
+        "guardbench.evaluator-catalog.entries[0].checks[0]=PROMPT_INJECTION",
+        "guardbench.evaluator-catalog.entries[0].strictness=STANDARD",
+        "guardbench.evaluator-catalog.entries[0].guardrail-identifier=test-guardrail",
+        "guardbench.evaluator-catalog.entries[0].guardrail-revision=1"
+})
 @Import(PostgresTestConfiguration.class)
 class CreateTestRunServiceIntegrationTest {
 
@@ -54,7 +60,7 @@ class CreateTestRunServiceIntegrationTest {
             @Autowired CreateTestRunService service,
             @Autowired JdbcTemplate jdbcTemplate) {
         TestRunCreateCommand command = new TestRunCreateCommand(
-                900L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", null);
+                900L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), null);
 
         TestRunCreateResult result = service.create(command);
 
@@ -79,7 +85,7 @@ class CreateTestRunServiceIntegrationTest {
     @DisplayName("같은 Idempotency-Key와 같은 요청을 재전송하면 새 행을 만들지 않고 기존 TestRun을 반환한다")
     void reusesExistingTestRunAcrossRequestsWithSameKey(@Autowired CreateTestRunService service) {
         TestRunCreateCommand command = new TestRunCreateCommand(
-                900L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", "idem-key-integration-1");
+                900L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), "idem-key-integration-1");
 
         TestRunCreateResult first = service.create(command);
         TestRunCreateResult second = service.create(command);
@@ -93,9 +99,9 @@ class CreateTestRunServiceIntegrationTest {
         fixture.insertTestSuite(910L, CREATED_AT);
         fixture.insertTestCase(911L, 910L, CREATED_AT);
         TestRunCreateCommand first = new TestRunCreateCommand(
-                900L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", "idem-key-integration-2");
+                900L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), "idem-key-integration-2");
         TestRunCreateCommand different = new TestRunCreateCommand(
-                910L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", "idem-key-integration-2");
+                910L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), "idem-key-integration-2");
 
         service.create(first);
         ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(different));
@@ -111,7 +117,7 @@ class CreateTestRunServiceIntegrationTest {
     void doesNotPersistAnythingWhenTestSuiteMissing(
             @Autowired CreateTestRunService service, @Autowired JdbcTemplate jdbcTemplate) {
         TestRunCreateCommand command = new TestRunCreateCommand(
-                999L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", null);
+                999L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), null);
 
         assertThrows(ApplicationException.class, () -> service.create(command));
 
@@ -127,7 +133,7 @@ class CreateTestRunServiceIntegrationTest {
             @Autowired CreateTestRunService service, @Autowired JdbcTemplate jdbcTemplate) {
         fixture.insertTestSuite(920L, CREATED_AT);
         TestRunCreateCommand command = new TestRunCreateCommand(
-                920L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", null);
+                920L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), null);
 
         ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(command));
 
@@ -142,7 +148,7 @@ class CreateTestRunServiceIntegrationTest {
     void createdTestRunHasQueuedStatusAndFixedTestCaseCount(
             @Autowired CreateTestRunService service, @Autowired JdbcTemplate jdbcTemplate) {
         TestRunCreateCommand command = new TestRunCreateCommand(
-                900L, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT", null);
+                900L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), null);
 
         TestRunCreateResult result = service.create(command);
 
@@ -153,5 +159,9 @@ class CreateTestRunServiceIntegrationTest {
         assertEquals("QUEUED", status);
         assertEquals(2, testCaseCount);
         assertTrue(result.createdAt() != null);
+    }
+
+    private static com.guardbench.testrun.domain.EvaluationProfile profile() {
+        return new com.guardbench.testrun.domain.EvaluationProfile(List.of("PROMPT_INJECTION"), "STANDARD");
     }
 }

@@ -22,6 +22,9 @@ import com.guardbench.testrun.application.port.out.NextTestRunIdPort;
 import com.guardbench.testrun.application.port.out.OutboxEventRecord;
 import com.guardbench.testrun.application.port.out.OutboxPort;
 import com.guardbench.testrun.application.port.out.RegisterTargetReferencePort;
+import com.guardbench.testrun.application.port.out.RegisterEvaluatorReferencePort;
+import com.guardbench.testrun.application.port.out.ResolveEvaluatorCatalogPort;
+import com.guardbench.testrun.application.port.out.EvaluatorRegistration;
 import com.guardbench.testrun.application.port.out.TargetRegistration;
 import com.guardbench.testrun.application.port.out.TestCaseSnapshotSource;
 import com.guardbench.testrun.domain.TestCaseSnapshot;
@@ -29,6 +32,8 @@ import com.guardbench.testrun.domain.TestCaseSnapshotId;
 import com.guardbench.testrun.domain.TestRun;
 import com.guardbench.testrun.domain.TestRunId;
 import com.guardbench.testrun.domain.TargetReference;
+import com.guardbench.testrun.domain.EvaluatorReference;
+import com.guardbench.testrun.domain.EvaluationProfile;
 import com.guardbench.testrun.domain.repository.TestCaseSnapshotRepository;
 import com.guardbench.testrun.domain.repository.TestRunRepository;
 
@@ -39,7 +44,7 @@ import com.guardbench.testrun.domain.repository.TestRunRepository;
 final class CreateTestRunFakeAdapters
         implements ExistsTestSuitePort, LoadTestCaseSnapshotSourcesPort,
         TestRunRepository, TestCaseSnapshotRepository, OutboxPort, IdempotencyPort,
-        RegisterTargetReferencePort {
+        RegisterTargetReferencePort, RegisterEvaluatorReferencePort, ResolveEvaluatorCatalogPort {
 
     static final Instant FIXED_NOW = Instant.parse("2026-08-26T00:00:00Z");
     final Clock clock = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
@@ -53,6 +58,8 @@ final class CreateTestRunFakeAdapters
     private final List<OutboxEventRecord> outboxEvents = new ArrayList<>();
     private final Map<String, IdempotencyRecord> idempotencyRecords = new HashMap<>();
     private final Map<String, TargetRegistration> targetRegistrations = new HashMap<>();
+    private final Map<String, EvaluatorRegistration> evaluatorRegistrations = new HashMap<>();
+    private boolean evaluatorCatalogSupportsProfile = true;
 
     void givenTestSuite(long testSuiteId, List<TestCaseSnapshotSource> sources) {
         existingTestSuiteIds.add(testSuiteId);
@@ -66,6 +73,10 @@ final class CreateTestRunFakeAdapters
     Map<Long, TestCaseSnapshot> savedSnapshots() {
         return snapshotsById;
     }
+
+    int savedEvaluatorReferenceCount() { return evaluatorRegistrations.size(); }
+
+    void evaluatorCatalogDoesNotSupportProfile() { evaluatorCatalogSupportsProfile = false; }
 
     @Override
     public boolean existsBySourceTestSuiteId(long sourceTestSuiteId) {
@@ -144,5 +155,17 @@ final class CreateTestRunFakeAdapters
     @Override
     public void register(TargetReference reference, TargetRegistration registration) {
         targetRegistrations.put(reference.value(), registration);
+    }
+
+    @Override
+    public void register(EvaluatorReference reference, EvaluatorRegistration registration) {
+        evaluatorRegistrations.put(reference.value(), registration);
+    }
+
+    @Override
+    public Optional<EvaluatorRegistration> resolve(EvaluationProfile profile) {
+        return evaluatorCatalogSupportsProfile
+                ? Optional.of(new EvaluatorRegistration("BEDROCK_GUARDRAIL", "guardrail-123", "1"))
+                : Optional.empty();
     }
 }

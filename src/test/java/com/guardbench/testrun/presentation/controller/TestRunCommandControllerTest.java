@@ -38,7 +38,8 @@ class TestRunCommandControllerTest {
     private static final String VALID_BODY = """
             {
               "testSuiteId": 1,
-              "target": { "type": "BEDROCK_GUARDRAIL", "identifier": "guardrail-123", "revision": "DRAFT" }
+              "target": { "type": "HTTP_ENDPOINT", "identifier": "https://example.com/chat", "revision": "v1" },
+              "evaluationProfile": { "checks": ["PROMPT_INJECTION"], "strictness": "STANDARD" }
             }
             """;
 
@@ -62,7 +63,8 @@ class TestRunCommandControllerTest {
                 .andExpect(jsonPath("$.data.id").value(901))
                 .andExpect(jsonPath("$.data.testSuiteId").value(1))
                 .andExpect(jsonPath("$.data.status").value("QUEUED"))
-                .andExpect(jsonPath("$.data.testCaseCount").value(253));
+                .andExpect(jsonPath("$.data.testCaseCount").value(253))
+                .andExpect(jsonPath("$.data.evaluationProfile.checks[0]").value("PROMPT_INJECTION"));
     }
 
     @Test
@@ -87,7 +89,8 @@ class TestRunCommandControllerTest {
     void missingTestSuiteIdReturnsValidationError() throws Exception {
         String body = """
                 {
-                  "target": { "type": "BEDROCK_GUARDRAIL", "identifier": "guardrail-123", "revision": "DRAFT" }
+                  "target": { "type": "HTTP_ENDPOINT", "identifier": "https://example.com/chat" },
+                  "evaluationProfile": { "checks": ["PROMPT_INJECTION"], "strictness": "STANDARD" }
                 }
                 """;
 
@@ -112,12 +115,13 @@ class TestRunCommandControllerTest {
     }
 
     @Test
-    @DisplayName("Target revision이 DRAFT나 숫자 버전이 아니면 400 VALIDATION_ERROR를 반환한다")
-    void invalidTargetRevisionReturnsValidationError() throws Exception {
+    @DisplayName("BEDROCK_GUARDRAIL 신규 Target 요청이면 400 VALIDATION_ERROR를 반환한다")
+    void bedrockTargetRequestReturnsValidationError() throws Exception {
         String body = """
                 {
                   "testSuiteId": 1,
-                  "target": { "type": "BEDROCK_GUARDRAIL", "identifier": "guardrail-123", "revision": "LATEST" }
+                  "target": { "type": "BEDROCK_GUARDRAIL", "identifier": "guardrail-123", "revision": "1" },
+                  "evaluationProfile": { "checks": ["PROMPT_INJECTION"], "strictness": "STANDARD" }
                 }
                 """;
 
@@ -177,7 +181,8 @@ class TestRunCommandControllerTest {
     private static TestRunCreateResult result(long id, int testCaseCount) {
         return new TestRunCreateResult(id, 1L, "QUEUED", testCaseCount,
                 new com.guardbench.testrun.application.port.out.TargetReferenceView(
-                        "target-ref-" + id, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT"),
+                        "target-ref-" + id, "HTTP_ENDPOINT", "https://example.com/chat", "v1"),
+                new com.guardbench.testrun.domain.EvaluationProfile(java.util.List.of("PROMPT_INJECTION"), "STANDARD"),
                 Instant.parse("2026-08-24T14:30:00Z"));
     }
 
