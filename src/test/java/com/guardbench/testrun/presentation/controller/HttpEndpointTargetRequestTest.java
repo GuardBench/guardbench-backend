@@ -29,7 +29,9 @@ class HttpEndpointTargetRequestTest {
     @Test
     void mapsHttpEndpointWithoutRevisionAndRejectsInvalidCombinations() throws Exception {
         when(createTestRunService.create(any())).thenReturn(new TestRunCreateResult(
-                902L, 1L, "QUEUED", 1, Instant.parse("2026-08-24T14:30:00Z")));
+                902L, 1L, "QUEUED", 1, new com.guardbench.testrun.application.port.out.TargetReferenceView(
+                        "target-ref", "HTTP_ENDPOINT", "https://example.com/model/evaluate", null),
+                Instant.parse("2026-08-24T14:30:00Z")));
         ArgumentCaptor<TestRunCreateCommand> captor = ArgumentCaptor.forClass(TestRunCreateCommand.class);
         String valid = "{\"testSuiteId\":1,\"target\":{\"type\":\"HTTP_ENDPOINT\",\"identifier\":\"https://example.com/model/evaluate\"}}";
 

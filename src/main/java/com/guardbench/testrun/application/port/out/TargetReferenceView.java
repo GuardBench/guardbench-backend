@@ -6,9 +6,6 @@ public record TargetReferenceView(String referenceId, String type, String identi
         requireNonBlank(type, "target type");
         requireNonBlank(identifier, "target identifier");
     }
-    public TargetReferenceView(String referenceId) {
-        this(referenceId, "BEDROCK_GUARDRAIL", "unknown", "DRAFT");
-    }
 
     private static void requireNonBlank(String value, String field) {
         if (value == null || value.isBlank()) throw new IllegalArgumentException(field + " must not be blank");

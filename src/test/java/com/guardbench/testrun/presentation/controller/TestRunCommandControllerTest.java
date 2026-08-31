@@ -51,8 +51,7 @@ class TestRunCommandControllerTest {
     @Test
     @DisplayName("유효한 요청은 202와 Location 헤더, 접수된 TestRun을 반환한다")
     void createReturnsAcceptedWithLocationHeader() throws Exception {
-        when(createTestRunService.create(any())).thenReturn(new TestRunCreateResult(
-                901L, 1L, "QUEUED", 253, Instant.parse("2026-08-24T14:30:00Z")));
+        when(createTestRunService.create(any())).thenReturn(result(901L, 253));
 
         mockMvc.perform(post(BASE)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -69,8 +68,7 @@ class TestRunCommandControllerTest {
     @Test
     @DisplayName("Idempotency-Key 헤더가 있으면 Command에 전달한다")
     void passesIdempotencyKeyToCommand() throws Exception {
-        when(createTestRunService.create(any())).thenReturn(new TestRunCreateResult(
-                901L, 1L, "QUEUED", 253, Instant.parse("2026-08-24T14:30:00Z")));
+        when(createTestRunService.create(any())).thenReturn(result(901L, 253));
         ArgumentCaptor<TestRunCreateCommand> captor = ArgumentCaptor.forClass(TestRunCreateCommand.class);
 
         mockMvc.perform(post(BASE)
@@ -176,4 +174,11 @@ class TestRunCommandControllerTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.data.code").value("IDEMPOTENCY_KEY_CONFLICT"));
     }
+    private static TestRunCreateResult result(long id, int testCaseCount) {
+        return new TestRunCreateResult(id, 1L, "QUEUED", testCaseCount,
+                new com.guardbench.testrun.application.port.out.TargetReferenceView(
+                        "target-ref-" + id, "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT"),
+                Instant.parse("2026-08-24T14:30:00Z"));
+    }
+
 }
