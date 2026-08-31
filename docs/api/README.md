@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Last reviewed: 2026-08-31
+> Last reviewed: 2026-09-01
 > Canonical source: GitHub
 > Origin: [Notion API 명세서](https://app.notion.com/p/3c0eeed6b62d805dac0be8db487b1359)
 
@@ -10,14 +10,14 @@ API의 단일 명세는 [openapi.yaml](openapi.yaml)이다. Endpoint, 필드, En
 
 ## 계약 층위
 
-OpenAPI는 [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)을 HTTP로 구체화한 **합의된 목표 API 계약**이다. 아직 Java·DB에 모두 구현된 계약은 아니며 #114~#119가 구현 차이를 순차 해소한다.
+OpenAPI는 [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)을 HTTP로 구체화한 **합의된 목표 API 계약**이다. #114의 Evaluation Profile → EvaluatorReference 고정과 #115/#125/#128의 HTTP Application Target 경계는 구현되었고, #116~#119가 Evaluator orchestration, Quality Gate와 Regression의 남은 차이를 해소한다.
 
 ```text
-TestCaseSnapshot → AI Application Target → Natural Language Response
+TestCaseSnapshot → OpenAI-compatible AI Application Target → Natural Language Response
                  → Evaluator → EvaluationResult → Assertion → Quality Gate
 ```
 
-이번 #113은 공개 request/response와 endpoint 의미를 확정하지만 미래 물리 저장 구조를 추측하지 않는다. 현재 배포 동작이 필요하면 [TestRun Persistence](../architecture/testrun-persistence.md)의 current implementation 경계와 코드를 함께 확인한다.
+현재 배포 동작이 필요하면 [TestRun Persistence](../architecture/testrun-persistence.md)의 current implementation 경계와 코드를 함께 확인한다.
 
 ## 빠른 탐색
 
@@ -76,55 +76,44 @@ TestCaseSnapshot → AI Application Target → Natural Language Response
 - `POST /api/v1/test-runs`는 비동기 작업을 접수하고 `202 Accepted`를 반환한다.
 - `Idempotency-Key`는 선택 사항이다. 키와 정규화된 요청 fingerprint가 같으면 기존 접수 결과를, 다르면 `409 IDEMPOTENCY_KEY_CONFLICT`를 반환한다. 생략하면 요청마다 새 TestRun을 만든다.
 - 요청 핵심은 `testSuiteId`, 단일 `HTTP_ENDPOINT` Application `target`, inline `evaluationProfile`이다. OpenAPI DTO는 `TestRunCreateReq → TargetReferenceReq + EvaluationProfileReq` 구조다.
+- `target.identifier`는 OpenAI-compatible chat completions를 호출할 full HTTP/HTTPS URL이고 `target.model`은 필수다. `target.revision`만 선택 값이다.
 - `evaluationProfile.checks`는 `PROMPT_INJECTION | PII_LEAKAGE | HARMFUL_CONTENT`, `strictness`는 `RELAXED | STANDARD | STRICT`다. 이는 UI 설문·선택으로 정한 평가 목적이며 독립 저장 리소스나 `evaluationProfileId`가 아니다.
 - 사용자는 `evaluator.type`, provider, `AWS_BEDROCK`, Guardrail identifier/version을 요청에 제출하지 않는다. GuardBench가 profile을 실제 Evaluator 설정으로 해석하고 실행에 사용한 설정을 내부적으로 고정한다.
 - 운영 catalog에 canonical profile이 없으면 `409 EVALUATION_PROFILE_NOT_SUPPORTED`를 반환한다. PII-only profile은 strictness를 collapse해 하나의 canonical entry를 사용한다.
 - 접수 시 TestSuite의 현재 TestCase를 불변 Snapshot으로 복사한다. 빈 Suite는 `409 TEST_SUITE_EMPTY`다.
-- 접수 트랜잭션의 목표 의미는 `QUEUED` TestRun, 요청한 Evaluation Profile, 실행 조건, Snapshot, 선택적인 idempotency 정보와 `TestRunRequested` OutboxEvent를 원자적으로 고정하는 것이다. 구체 물리 저장 모델은 #114가 확정한다. 외부 호출은 commit 뒤 Worker가 수행하며 이후 오류는 접수 HTTP 응답을 바꾸지 않는다.
+- 접수 트랜잭션은 `QUEUED` TestRun, 요청한 Evaluation Profile, HTTP Target의 identifier/model/revision, immutable EvaluatorReference, Snapshot, 선택적인 idempotency 정보와 `TestRunRequested` OutboxEvent를 원자적으로 고정한다. 외부 호출은 commit 뒤 Worker가 수행하며 이후 오류는 접수 HTTP 응답을 바꾸지 않는다.
 
-### HTTP Application Target MVP 실행 계약 — #115
+### HTTP Application Target MVP 실행 계약 — #115, #125, #128
 
-`HTTP_ENDPOINT` Target은 Worker가 Snapshot input마다 대상 URL로 `POST` 요청을 보내고 자연어 응답을 수집하는 실제 SUT다. 외부 Application은 다음의 명시적 JSON 계약을 구현해야 한다.
+`HTTP_ENDPOINT` Target은 Worker가 Snapshot input마다 OpenAI-compatible chat completions endpoint로 `POST` 요청을 보내고 자연어 응답을 수집하는 실제 SUT다. MVP에서는 generic `{"input": ...}` / `{"response": ...}` HTTP 계약을 지원하지 않는다.
 
 ```http
 POST {target.identifier}
 Content-Type: application/json
 Accept: application/json
-
-{"input":"<TestCaseSnapshot.input>"}
 ```
-
-성공 응답은 HTTP `2xx`, `Content-Type: application/json`인 단일 필드 객체여야 한다.
-
-```json
-{"response":"<natural language application response>"}
-```
-
-`response`는 비어 있지 않은 문자열이어야 하며, 임의 JSONPath·사용자 정의 extractor·범용 인증 scheme·redirect는 MVP에서 지원하지 않는다. 응답 본문은 1 MiB를 넘을 수 없다.
-
-실행 오류는 `TargetFailureCode`로 안전하게 수렴한다: `404 → TARGET_NOT_FOUND`, `401/403 → TARGET_ACCESS_DENIED`, 그 밖의 `4xx → TARGET_CONFIGURATION_INVALID`, `5xx → PROVIDER_UNAVAILABLE`, timeout → `PROVIDER_TIMEOUT`, `2xx`가 아닌 redirect·Content-Type/JSON/shape 위반 → `PROVIDER_RESPONSE_INVALID`.
-
-Target 실행 Adapter는 호출 내부 retry를 수행하지 않는다. 기존 Worker의 execution claim 재전달·최대 3회 시도 경계를 사용해 at-least-once 특성은 유지하되 한 메시지 수신당 Application 호출은 한 번으로 제한한다. 오류 메시지와 로그에는 응답 본문, 입력, URL, 인증 정보와 Provider 원문을 포함하지 않는다.
-
-Target URL은 HTTP/HTTPS absolute URL, host 필수, userinfo·fragment 금지다. Worker 기본 egress 정책은 loopback/private/link-local/multicast 주소를 차단하며, 내부 SUT가 필요한 배포만 `guardbench.http-endpoint.allow-private-addresses=true`를 명시적으로 설정한다.
-
-현재 Java worker의 결과 저장·평가 경계는 아직 legacy `ActualResult`를 사용한다. HTTP Application Target adapter와 inline Evaluation Profile 접수는 구현되었고, Evaluator 전환과 결과 저장/API shape 변경은 #116~#118이 담당한다.
-
-`target.model`을 함께 제출하면 동일한 HTTP endpoint를 OpenAI-compatible chat completions Adapter로 선택한다. 이때 endpoint URL은 사용자가 지정한 full `/v1/chat/completions` URL이고 model은 다음 request에 전달된다.
 
 ```json
 {
-  "model": "gpt-4o-mini",
+  "model": "<target.model>",
   "messages": [{"role": "user", "content": "<TestCaseSnapshot.input>"}]
 }
 ```
 
-`model`을 생략하면 위의 generic `{input}` 계약을 사용한다. OpenAI-compatible 성공 응답은 추가 metadata를 허용하며 `choices[0].message.content`가 비어 있지 않은 문자열이어야 한다. streaming/SSE, tool/function calling과 multimodal content는 지원하지 않는다.
+성공 응답은 HTTP `2xx`, `Content-Type: application/json`이어야 하며 `choices[0].message.content`의 비어 있지 않은 문자열을 자연어 Application response로 정규화한다. 응답 object의 다른 metadata는 허용한다. streaming/SSE, tool/function calling과 multimodal content는 지원하지 않는다.
+
+실행 오류는 `TargetFailureCode`로 안전하게 수렴한다: `404 → TARGET_NOT_FOUND`, `401/403 → TARGET_ACCESS_DENIED`, 그 밖의 `4xx → TARGET_CONFIGURATION_INVALID`, `5xx → PROVIDER_UNAVAILABLE`, timeout → `PROVIDER_TIMEOUT`, redirect·Content-Type/JSON/shape 위반 → `PROVIDER_RESPONSE_INVALID`.
+
+Target 실행 Adapter는 호출 내부 retry를 수행하지 않는다. 기존 Worker의 execution claim 재전달·최대 3회 시도 경계를 사용해 at-least-once 특성은 유지하되 한 메시지 수신당 Application 호출은 한 번으로 제한한다. 오류 메시지와 로그에는 응답 본문, 입력, URL, 인증 정보와 Provider 원문을 포함하지 않는다.
+
+Target URL은 HTTP/HTTPS absolute URL, host 필수, userinfo·fragment 금지다. Worker 기본 egress 정책은 loopback/private/link-local/multicast 주소를 차단하며, 내부 SUT가 필요한 배포만 `guardbench.http-endpoint.allow-private-addresses=true`를 명시적으로 설정한다. 응답 본문은 1 MiB를 넘을 수 없다.
+
+HTTP Application Target 실행, OpenAI-compatible response 정규화, inline Evaluation Profile 접수와 EvaluatorReference 고정은 구현되었다. 현재 Java worker의 결과 저장·평가 경계는 아직 legacy `ActualResult`를 사용하며 Evaluator 전환과 결과 저장/API shape 변경은 #116~#118이 담당한다.
 
 ### TestRun 조회와 평가 결과 — agreed contract
 
 - 목록과 상세는 실행 중에도 조회할 수 있다. 아직 평가되지 않은 값은 `null`이고 이를 `NOT_EVALUATED`로 바꾸지 않는다.
-- 상세는 요청한 Application `target`과 `evaluationProfile`을 다시 확인할 수 있어야 한다. Evaluator/provider 설정은 사용자 요청 필드가 아니며, 공개 응답 metadata는 #114·#116의 실제 고정 모델이 확정될 때 별도로 검토한다.
+- 상세는 요청한 Application `target`과 `evaluationProfile`을 다시 확인할 수 있어야 한다. HTTP Target의 `model`은 항상 존재하며 `revision`은 요청에서 생략했으면 null이다. Evaluator/provider 내부 식별자는 사용자 입력 필드가 아니다.
 - 상세의 `qualityGate`는 실행 중 `null`이다. 종료 후 Quality Gate는 같은 TestRun의 Assertion 결과만 집계한다.
 - 개별 결과 목록은 `FINISHED`에서만 조회한다. 그 전에는 `409 TEST_RUN_NOT_FINISHED`다.
 - 개별 결과의 `TestRunResultItemRes`는 Snapshot input, `executionStatus`, `evaluatorVerdict`, `expectedAction`, `assertionStatus`와 안전한 `error`를 제공한다. 값은 실행 당시 저장 결과이며 현재 TestCase 수정과 무관하다.
@@ -140,7 +129,7 @@ Target URL은 HTTP/HTTPS absolute URL, host 필수, userinfo·fragment 금지다
 | ALLOW | BLOCK | FALSE_POSITIVE |
 | ALLOW | ALLOW | TRUE_NEGATIVE |
 
-현재 구현은 Application response와 Evaluator verdict를 분리하지 않고 `actualAction`으로 공개하며 Quality Gate를 계산하지 않는다. #115~#118이 이 차이를 구현한다.
+현재 구현은 Application response와 Evaluator verdict를 분리하지 않고 `actualAction`으로 공개하며 Quality Gate를 계산하지 않는다. #116~#118이 이 차이를 구현한다.
 
 `QualityGateRes`의 public 최소 shape은 `status`와 nullable `metrics`다. `status`는 `PASS | FAIL | NOT_EVALUATED`이며 metrics 필드와 threshold 정책은 #118이 최종 소유한다. Regression 또는 과거 Run 동시 비교 기반 metric을 Quality Gate에 넣지 않는다.
 
@@ -158,7 +147,7 @@ Target URL은 HTTP/HTTPS absolute URL, host 필수, userinfo·fragment 금지다
 
 | Frontend Issue | 참조할 backend 공개 계약 | 구현 시 전제 |
 | --- | --- | --- |
-| #27 TestRun 생성 | `POST /api/v1/test-runs`, `TestRunCreateReq`, `TargetReferenceReq`, `EvaluationProfileReq`, `EvaluationCheck`, `EvaluationStrictness` | HTTP Application Target과 inline profile만 제출하며 provider/Guardrail 입력은 없다. |
+| #27 TestRun 생성 | `POST /api/v1/test-runs`, `TestRunCreateReq`, `TargetReferenceReq`, `EvaluationProfileReq`, `EvaluationCheck`, `EvaluationStrictness` | OpenAI-compatible HTTP Application endpoint와 필수 model, inline profile만 제출하며 provider/Guardrail 입력은 없다. |
 | #28 실행 상세·결과 | `GET /api/v1/test-runs/{testRunId}`, `TestRunDetailRes`, `GET .../results`, `TestRunResultItemRes`, `QualityGateRes` | 요청 profile, Evaluator verdict, ExpectedResult, Assertion, 실행 상태와 안전한 오류를 표시한다. ApplicationResponse는 표시하지 않는다. |
 | #29 FN/FP 분석 | 결과의 `evaluationOutcome`과 `GET .../evaluator-metrics`의 `EvaluatorMetricsRes` | backend 분류를 source of truth로 사용하고 TestRun 상세의 Evaluation Profile을 분석 맥락으로 표시한다. |
 | #30 Regression | `GET .../comparable-runs`, `GET .../comparisons/{comparisonRunId}` | backend가 반환한 comparable Run만 사용한다. provider 선택 UI나 재실행 흐름을 만들지 않으며 상세 DTO는 #119를 기다린다. |

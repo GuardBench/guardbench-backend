@@ -7,16 +7,10 @@ package com.guardbench.testrun.application.port.out;
  */
 public record TargetRegistration(String typeCode, String identifier, String revision, String model) {
 
-    public TargetRegistration(String typeCode, String identifier, String revision) {
-        this(typeCode, identifier, revision, null);
-    }
-
     public TargetRegistration {
         requireNonBlank(typeCode, "target type code");
         requireNonBlank(identifier, "target identifier");
-        if (model != null && model.isBlank()) {
-            throw new IllegalArgumentException("target model must not be blank");
-        }
+        requireNonBlank(model, "target model");
     }
 
     private static void requireNonBlank(String value, String field) {

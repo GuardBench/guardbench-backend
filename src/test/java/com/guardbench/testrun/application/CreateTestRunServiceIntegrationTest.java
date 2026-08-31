@@ -32,6 +32,8 @@ import com.guardbench.testsupport.PostgresTestConfiguration;
 class CreateTestRunServiceIntegrationTest {
 
     private static final Instant CREATED_AT = Instant.parse("2026-08-26T00:00:00Z");
+    private static final String TARGET_URL = "https://example.com/v1/chat/completions";
+    private static final String MODEL = "test-model";
 
     private TestRunPersistenceFixture fixture;
 
@@ -55,7 +57,7 @@ class CreateTestRunServiceIntegrationTest {
             @Autowired CreateTestRunService service,
             @Autowired JdbcTemplate jdbcTemplate) {
         TestRunCreateCommand command = new TestRunCreateCommand(
-                900L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), null);
+                900L, "HTTP_ENDPOINT", TARGET_URL, "v1", MODEL, profile(), null);
 
         TestRunCreateResult result = service.create(command);
 
@@ -74,13 +76,18 @@ class CreateTestRunServiceIntegrationTest {
                 "SELECT COUNT(*) FROM outbox_event WHERE deduplication_key = ?",
                 Integer.class, "TestRunRequested:" + result.id());
         assertEquals(1, outboxCount);
+
+        String storedModel = jdbcTemplate.queryForObject(
+                "SELECT model FROM http_endpoint_target WHERE reference_id = ?",
+                String.class, result.target().referenceId());
+        assertEquals(MODEL, storedModel);
     }
 
     @Test
     @DisplayName("같은 Idempotency-Key와 같은 요청을 재전송하면 새 행을 만들지 않고 기존 TestRun을 반환한다")
     void reusesExistingTestRunAcrossRequestsWithSameKey(@Autowired CreateTestRunService service) {
         TestRunCreateCommand command = new TestRunCreateCommand(
-                900L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), "idem-key-integration-1");
+                900L, "HTTP_ENDPOINT", TARGET_URL, "v1", MODEL, profile(), "idem-key-integration-1");
 
         TestRunCreateResult first = service.create(command);
         TestRunCreateResult second = service.create(command);
@@ -94,9 +101,9 @@ class CreateTestRunServiceIntegrationTest {
         fixture.insertTestSuite(910L, CREATED_AT);
         fixture.insertTestCase(911L, 910L, CREATED_AT);
         TestRunCreateCommand first = new TestRunCreateCommand(
-                900L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), "idem-key-integration-2");
+                900L, "HTTP_ENDPOINT", TARGET_URL, "v1", MODEL, profile(), "idem-key-integration-2");
         TestRunCreateCommand different = new TestRunCreateCommand(
-                910L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), "idem-key-integration-2");
+                910L, "HTTP_ENDPOINT", TARGET_URL, "v1", MODEL, profile(), "idem-key-integration-2");
 
         service.create(first);
         ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(different));
@@ -112,7 +119,7 @@ class CreateTestRunServiceIntegrationTest {
     void doesNotPersistAnythingWhenTestSuiteMissing(
             @Autowired CreateTestRunService service, @Autowired JdbcTemplate jdbcTemplate) {
         TestRunCreateCommand command = new TestRunCreateCommand(
-                999L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), null);
+                999L, "HTTP_ENDPOINT", TARGET_URL, "v1", MODEL, profile(), null);
 
         assertThrows(ApplicationException.class, () -> service.create(command));
 
@@ -128,7 +135,7 @@ class CreateTestRunServiceIntegrationTest {
             @Autowired CreateTestRunService service, @Autowired JdbcTemplate jdbcTemplate) {
         fixture.insertTestSuite(920L, CREATED_AT);
         TestRunCreateCommand command = new TestRunCreateCommand(
-                920L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), null);
+                920L, "HTTP_ENDPOINT", TARGET_URL, "v1", MODEL, profile(), null);
 
         ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(command));
 
@@ -143,7 +150,7 @@ class CreateTestRunServiceIntegrationTest {
     void createdTestRunHasQueuedStatusAndFixedTestCaseCount(
             @Autowired CreateTestRunService service, @Autowired JdbcTemplate jdbcTemplate) {
         TestRunCreateCommand command = new TestRunCreateCommand(
-                900L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", profile(), null);
+                900L, "HTTP_ENDPOINT", TARGET_URL, "v1", MODEL, profile(), null);
 
         TestRunCreateResult result = service.create(command);
 

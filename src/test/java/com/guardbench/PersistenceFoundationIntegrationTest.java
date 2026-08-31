@@ -21,11 +21,11 @@ import com.guardbench.testsupport.PostgresTestConfiguration;
 class PersistenceFoundationIntegrationTest {
 
     @Test
-    @DisplayName("빈 PostgreSQL에 Flyway V1~V7 스키마를 적용한다")
+    @DisplayName("빈 PostgreSQL에 Flyway V1~V8 스키마를 적용한다")
     void appliesApprovedSchemaToPostgreSql(@Autowired Flyway flyway, @Autowired JdbcTemplate jdbcTemplate) {
         MigrationInfo current = flyway.info().current();
         assertNotNull(current);
-        assertEquals("7", current.getVersion().getVersion());
+        assertEquals("8", current.getVersion().getVersion());
         Integer tableCount = jdbcTemplate.queryForObject("""
                 SELECT count(*) FROM information_schema.tables
                 WHERE table_schema = 'public' AND table_name IN (
@@ -45,6 +45,17 @@ class PersistenceFoundationIntegrationTest {
         jdbcTemplate.update("INSERT INTO target_reference(reference_id, target_type) VALUES (?, 'HTTP_ENDPOINT')", referenceId);
 
         assertThrows(DataIntegrityViolationException.class, () -> jdbcTemplate.update(
-                "INSERT INTO http_endpoint_target(reference_id, endpoint_url) VALUES (?, 'http://')", referenceId));
+                "INSERT INTO http_endpoint_target(reference_id, endpoint_url, model) VALUES (?, 'http://', 'test-model')", referenceId));
+    }
+
+    @Test
+    @DisplayName("HTTP Endpoint는 model 없는 저장을 허용하지 않는다")
+    void rejectsHttpEndpointWithoutModel(@Autowired JdbcTemplate jdbcTemplate) {
+        String referenceId = "missing-http-endpoint-model";
+        jdbcTemplate.update("INSERT INTO target_reference(reference_id, target_type) VALUES (?, 'HTTP_ENDPOINT')", referenceId);
+
+        assertThrows(DataIntegrityViolationException.class, () -> jdbcTemplate.update(
+                "INSERT INTO http_endpoint_target(reference_id, endpoint_url) VALUES (?, 'https://example.com/v1/chat/completions')",
+                referenceId));
     }
 }

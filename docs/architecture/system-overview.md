@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Last reviewed: 2026-08-31
+> Last reviewed: 2026-09-01
 > Canonical source: GitHub
 > Origin: [Notion 도메인 모델 정의](https://app.notion.com/p/3c0eeed6b62d81b48c03ed6034440936)
 > Related: [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)
@@ -22,9 +22,11 @@ HTTP/SQS Adapter → Application Use Case → Domain/Core
 - Controller는 Application Service만 호출한다.
 - Repository 계약은 Domain에, 구현은 Infrastructure에 둔다.
 - TestRun은 하나의 AI Application Target을 실행하고 실제 사용한 Evaluator 설정과 버전을 불변하게 식별한다.
-- MVP 공개 Application Target type은 `HTTP_ENDPOINT`이며 TestRun 생성 요청은 inline Evaluation Profile을 포함한다.
-- GuardBench가 Evaluation Profile을 실제 Evaluator/provider 설정으로 해석하며 사용자는 provider를 직접 지정하지 않는다.
-- Application Target Adapter는 Snapshot input을 외부 Application에 전달하고 자연어 ApplicationResponse를 반환한다.
+- MVP 공개 Application Target type은 `HTTP_ENDPOINT`다.
+- `HTTP_ENDPOINT`는 OpenAI-compatible chat completions 계약만 지원하며 `identifier`와 `model`을 필수 실행 정보로 사용한다.
+- TestRun 생성 요청은 inline Evaluation Profile을 포함한다.
+- GuardBench가 Evaluation Profile을 catalog를 통해 실제 Evaluator/provider 설정으로 해석하며 사용자는 provider나 Guardrail identifier/version을 직접 지정하지 않는다.
+- Application Target Adapter는 Snapshot input을 OpenAI-compatible request로 외부 Application에 전달하고 `choices[0].message.content`를 자연어 ApplicationResponse로 정규화한다.
 - Evaluator Adapter는 ApplicationResponse를 `EvaluationResult(ALLOW | BLOCK)`로 변환한다.
 - AWS Bedrock Guardrail은 첫 번째 Evaluator Adapter 구현이다.
 - TestSuite, TestCase, ExpectedResult, Assertion, Quality Gate와 Regression의 의미는 AWS SDK와 독립적이다.
@@ -33,7 +35,7 @@ HTTP/SQS Adapter → Application Use Case → Domain/Core
 ```text
 TestCaseSnapshot
       ↓
-AI Application Target Adapter
+OpenAI-compatible HTTP Application Target Adapter
       ↓
 Natural Language ApplicationResponse
       ↓
@@ -48,8 +50,12 @@ Regression은 위 실행 흐름에 포함되지 않는다. 완료된 두 TestRun
 
 ## 현재 구현
 
-현재 `target` 경계는 `BEDROCK_GUARDRAIL`과 `HTTP_ENDPOINT`를 모두 Target provider로 저장하고, Bedrock Adapter가 Snapshot input을 `ApplyGuardrail`에 직접 전달해 `ActualResult`를 만든다. inline Evaluation Profile 해석도 없다. 이는 목표 경계가 구현된 상태가 아니다.
+#114를 통해 inline Evaluation Profile을 canonical catalog entry로 정규화하고 실제 immutable `EvaluatorReference`를 TestRun에 고정하는 경계가 구현되었다.
 
-#114~#117에서 Application Target과 Evaluator 실행 경계를 전환하고, #118~#119에서 Quality Gate와 Regression을 구현한다. 전환 전 물리 구조는 [TestRun Persistence 구현 인덱스](testrun-persistence.md)에서 current implementation으로만 확인한다.
+#115와 #125를 통해 `HTTP_ENDPOINT` Application Target이 자연어 응답을 수집하고 OpenAI-compatible chat completions 요청·응답을 처리하는 Adapter가 구현되었다. #128에서는 MVP 계약을 단순화하여 generic `{input}` / `{response}` HTTP 경로를 제거하고 모든 HTTP Target에 `model`을 필수화한다.
+
+현재 남은 핵심 전환은 #116의 Bedrock Guardrail Evaluator Adapter와 #117의 Worker orchestration이다. #118은 현재 TestRun Assertion 기반 Quality Gate, #119는 저장된 완료 Run 기반 Regression을 담당한다.
+
+전환 중 물리 구조는 [TestRun Persistence 구현 인덱스](testrun-persistence.md)에서 확인한다.
 
 이 구조는 물리적 MSA 전환을 요구하지 않는다. 목적은 각 Context가 상대 구현 없이 Core를 개발·테스트하고 실제 통합 결합을 Adapter에 제한하는 것이다. 세부 타입 격리는 [ADR 0006](../decisions/0006-independent-domain-contract-boundaries.md)의 대체되지 않은 원칙을 따른다.
