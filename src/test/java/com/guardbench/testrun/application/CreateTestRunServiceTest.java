@@ -105,6 +105,23 @@ class CreateTestRunServiceTest {
     }
 
     @Test
+    @DisplayName("같은 Idempotency-Key를 다른 model에 재사용하면 충돌로 거부한다")
+    void throwsConflictWhenSameKeyReusedForDifferentModel() {
+        CreateTestRunFakeAdapters adapters = new CreateTestRunFakeAdapters();
+        adapters.givenTestSuite(1L, List.of(SOURCE));
+        CreateTestRunService service = newService(adapters);
+        TestRunCreateCommand generic = new TestRunCreateCommand(
+                1L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", null, profile(), "idem-model-key");
+        TestRunCreateCommand openAi = new TestRunCreateCommand(
+                1L, "HTTP_ENDPOINT", "https://example.com/chat", "v1", "gpt-4o-mini", profile(), "idem-model-key");
+
+        service.create(generic);
+        ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(openAi));
+
+        assertEquals(ApplicationErrorCode.IDEMPOTENCY_KEY_CONFLICT, exception.errorCode());
+    }
+
+    @Test
     @DisplayName("Idempotency-Key를 생략하면 매 요청마다 새로운 TestRun을 생성한다")
     void createsNewTestRunWhenIdempotencyKeyOmitted() {
         CreateTestRunFakeAdapters adapters = new CreateTestRunFakeAdapters();

@@ -62,7 +62,7 @@ class BedrockGuardrailExecutionAdapterTest {
         assertEquals(GuardrailOutputScope.INTERVENTIONS, sdkRequest.outputScope());
         assertEquals(1, sdkRequest.content().size());
         assertEquals("test input", sdkRequest.content().getFirst().text().text());
-        assertEquals("ALLOW", result.actionCode());
+        assertEquals("ALLOW", result.response());
         assertNull(result.failureCode());
     }
 
@@ -75,7 +75,7 @@ class BedrockGuardrailExecutionAdapterTest {
 
         TargetExecutionResult result = adapter.execute(executionRequest());
 
-        assertEquals("BLOCK", result.actionCode());
+        assertEquals("BLOCK", result.response());
         assertNull(result.failureCode());
     }
 
@@ -89,7 +89,7 @@ class BedrockGuardrailExecutionAdapterTest {
 
         TargetExecutionResult result = adapter.execute(executionRequest());
 
-        assertEquals("ALLOW", result.actionCode());
+        assertEquals("ALLOW", result.response());
         assertNull(result.failureCode());
     }
 
@@ -102,7 +102,7 @@ class BedrockGuardrailExecutionAdapterTest {
 
         TargetExecutionResult result = adapter.execute(executionRequest());
 
-        assertEquals("BLOCK", result.actionCode());
+        assertEquals("BLOCK", result.response());
         assertNull(result.failureCode());
     }
 
@@ -116,7 +116,7 @@ class BedrockGuardrailExecutionAdapterTest {
 
         TargetExecutionResult result = adapter.execute(executionRequest());
 
-        assertNull(result.actionCode());
+        assertNull(result.response());
         assertEquals(TargetFailureCode.PROVIDER_RESPONSE_INVALID, result.failureCode());
     }
 
@@ -128,7 +128,7 @@ class BedrockGuardrailExecutionAdapterTest {
 
         TargetExecutionResult result = adapter.execute(executionRequest());
 
-        assertNull(result.actionCode());
+        assertNull(result.response());
         assertEquals(TargetFailureCode.PROVIDER_RESPONSE_INVALID, result.failureCode());
     }
 

@@ -23,6 +23,7 @@ public record TestRunCreateReq(
                 target.type(),
                 target.identifier(),
                 target.revision(),
+                target.model(),
                 evaluationProfile.toDomain(),
                 idempotencyKey
         );

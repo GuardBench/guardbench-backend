@@ -11,6 +11,7 @@ public record TargetReferenceReq(
         @NotBlank(message = "target.type은 필수입니다.")
         @Pattern(regexp = "^HTTP_ENDPOINT$", message = "target.type은 HTTP_ENDPOINT만 지원합니다.") String type,
         @NotBlank(message = "target.identifier는 필수입니다.") String identifier,
-        String revision
+        String revision,
+        String model
 ) {
 }

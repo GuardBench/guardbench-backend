@@ -50,7 +50,7 @@ class GuardrailPortContractTest {
         void exposesActionCodeOnSuccess() {
             TargetExecutionResult success = TargetExecutionResult.succeeded("NONE");
 
-            assertEquals("NONE", success.actionCode());
+            assertEquals("NONE", success.response());
             assertNull(success.failureCode());
         }
 
@@ -61,7 +61,7 @@ class GuardrailPortContractTest {
                     TargetExecutionResult.failed(TargetFailureCode.PROVIDER_UNAVAILABLE);
 
             assertEquals(TargetFailureCode.PROVIDER_UNAVAILABLE, failure.failureCode());
-            assertNull(failure.actionCode());
+            assertNull(failure.response());
         }
 
         @Test
