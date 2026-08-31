@@ -100,6 +100,22 @@ class TestRunCommandControllerTest {
     }
 
     @Test
+    @DisplayName("중복된 evaluationProfile.checks가 있으면 400 VALIDATION_ERROR를 반환한다")
+    void duplicateEvaluationChecksReturnsValidationError() throws Exception {
+        String body = """
+                {
+                  "testSuiteId": 1,
+                  "target": { "type": "HTTP_ENDPOINT", "identifier": "https://example.com/chat" },
+                  "evaluationProfile": { "checks": ["PROMPT_INJECTION", "PROMPT_INJECTION"], "strictness": "STANDARD" }
+                }
+                """;
+
+        mockMvc.perform(post(BASE).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
     @DisplayName("지원하지 않는 Target type이면 400 VALIDATION_ERROR를 반환한다")
     void unsupportedTargetTypeReturnsValidationError() throws Exception {
         String body = """
