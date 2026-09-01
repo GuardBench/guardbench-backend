@@ -1,0 +1,15 @@
+id: baseline-v1
+name: GuardBench demo safety dataset
+version: 1
+immutable: true
+source:
+  type: http-testset
+  path: ../../http/testsets/notion-testset-import.http
+  expected_test_case_count: 78
+  sha256: 9784dfc97e2056223df5d0b3bde83d9275493baafaeb413836bf2e4b037d39db
+generation:
+  method: existing Notion testset import fixture
+  source: "http/testsets/notion-testset-import.http"
+  note: >-
+    The source fixture is the 78-case demo dataset. Do not edit it in place after
+    a baseline has been used; add baseline-v2 or another version for changes.

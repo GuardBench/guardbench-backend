@@ -1,0 +1,104 @@
+# Resource names are deployment inputs, not workload/profile inputs. Empty or
+# unresolved dimensions are skipped so the same collector works across topologies.
+metrics:
+  - id: ecs_cpu_utilization
+    namespace: AWS/ECS
+    metric_name: CPUUtilization
+    statistic: Average
+    period_seconds: 60
+    dimensions:
+      ClusterName: "${PERF_ECS_CLUSTER}"
+      ServiceName: "${PERF_ECS_SERVICE}"
+  - id: ecs_memory_utilization
+    namespace: AWS/ECS
+    metric_name: MemoryUtilization
+    statistic: Average
+    period_seconds: 60
+    dimensions:
+      ClusterName: "${PERF_ECS_CLUSTER}"
+      ServiceName: "${PERF_ECS_SERVICE}"
+  - id: ecs_running_task_count
+    namespace: ECS/ContainerInsights
+    metric_name: RunningTaskCount
+    statistic: Average
+    period_seconds: 60
+    dimensions:
+      ClusterName: "${PERF_ECS_CLUSTER}"
+      ServiceName: "${PERF_ECS_SERVICE}"
+  - id: sqs_resolve_visible
+    namespace: AWS/SQS
+    metric_name: ApproximateNumberOfMessagesVisible
+    statistic: Average
+    period_seconds: 60
+    dimensions:
+      QueueName: "${PERF_SOURCE_QUEUE_RESOLVE_NAME}"
+  - id: sqs_workitems_visible
+    namespace: AWS/SQS
+    metric_name: ApproximateNumberOfMessagesVisible
+    statistic: Average
+    period_seconds: 60
+    dimensions:
+      QueueName: "${PERF_SOURCE_QUEUE_WORK_ITEMS_NAME}"
+  - id: sqs_finalize_visible
+    namespace: AWS/SQS
+    metric_name: ApproximateNumberOfMessagesVisible
+    statistic: Average
+    period_seconds: 60
+    dimensions:
+      QueueName: "${PERF_SOURCE_QUEUE_FINALIZE_NAME}"
+  - id: sqs_resolve_oldest_age
+    namespace: AWS/SQS
+    metric_name: ApproximateAgeOfOldestMessage
+    statistic: Maximum
+    period_seconds: 60
+    dimensions:
+      QueueName: "${PERF_SOURCE_QUEUE_RESOLVE_NAME}"
+  - id: sqs_workitems_oldest_age
+    namespace: AWS/SQS
+    metric_name: ApproximateAgeOfOldestMessage
+    statistic: Maximum
+    period_seconds: 60
+    dimensions:
+      QueueName: "${PERF_SOURCE_QUEUE_WORK_ITEMS_NAME}"
+  - id: sqs_finalize_oldest_age
+    namespace: AWS/SQS
+    metric_name: ApproximateAgeOfOldestMessage
+    statistic: Maximum
+    period_seconds: 60
+    dimensions:
+      QueueName: "${PERF_SOURCE_QUEUE_FINALIZE_NAME}"
+  - id: sqs_resolve_dlq_visible
+    namespace: AWS/SQS
+    metric_name: ApproximateNumberOfMessagesVisible
+    statistic: Average
+    period_seconds: 60
+    dimensions:
+      QueueName: "${PERF_DLQ_RESOLVE_NAME}"
+  - id: sqs_workitems_dlq_visible
+    namespace: AWS/SQS
+    metric_name: ApproximateNumberOfMessagesVisible
+    statistic: Average
+    period_seconds: 60
+    dimensions:
+      QueueName: "${PERF_DLQ_WORK_ITEMS_NAME}"
+  - id: sqs_finalize_dlq_visible
+    namespace: AWS/SQS
+    metric_name: ApproximateNumberOfMessagesVisible
+    statistic: Average
+    period_seconds: 60
+    dimensions:
+      QueueName: "${PERF_DLQ_FINALIZE_NAME}"
+  - id: rds_cpu_utilization
+    namespace: AWS/RDS
+    metric_name: CPUUtilization
+    statistic: Average
+    period_seconds: 60
+    dimensions:
+      DBInstanceIdentifier: "${PERF_RDS_INSTANCE_ID}"
+  - id: rds_database_connections
+    namespace: AWS/RDS
+    metric_name: DatabaseConnections
+    statistic: Average
+    period_seconds: 60
+    dimensions:
+      DBInstanceIdentifier: "${PERF_RDS_INSTANCE_ID}"

@@ -1,0 +1,2 @@
+# Generated run artifacts are retained locally or in CI artifact storage, not in source control.
+*/
