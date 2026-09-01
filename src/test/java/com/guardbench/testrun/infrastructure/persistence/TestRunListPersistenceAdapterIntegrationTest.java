@@ -144,13 +144,10 @@ class TestRunListPersistenceAdapterIntegrationTest {
         boolean evaluated = !"NOT_EVALUATED".equals(status);
         jdbcTemplate.update("""
                 INSERT INTO quality_gate_result (
-                    test_run_id, gate_status, candidate_assertion_pass_rate,
-                    security_regression_count, security_regression_rate,
-                    usability_regression_rate, test_execution_success_rate, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    test_run_id, gate_status, assertion_pass_rate, execution_success_rate, created_at)
+                VALUES (?, ?, ?, ?, ?)
                 """,
                 testRunId, status,
-                evaluated ? 1.0 : null, evaluated ? 0 : null, evaluated ? 0.0 : null,
-                evaluated ? 0.0 : null, evaluated ? 1.0 : null, Timestamp.from(T0));
+                evaluated ? 1.0 : null, evaluated ? 1.0 : null, Timestamp.from(T0));
     }
 }

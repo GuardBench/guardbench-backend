@@ -33,6 +33,7 @@
 | HTTP Endpoint URL constraint | `src/main/resources/db/migration/V5__strengthen_http_endpoint_url_constraint.sql` | `endpoint_url`의 HTTP/HTTPS scheme과 host 형태 DB 제약 강화 |
 | Evaluator reference and Profile snapshot | `src/main/resources/db/migration/V6__evaluator_reference_and_profile.sql` | Evaluator provider/revision 고정, TestRun profile snapshot 및 HTTP Target revision |
 | Application/Evaluator execution result | `src/main/resources/db/migration/V9__separate_application_and_evaluator_results.sql`, `V10__remove_legacy_actual_action.sql` | Application response, Evaluator verdict, 실패 단계와 legacy action column 제거 및 execution shape CHECK 제약 |
+| Current-run Quality Gate metrics | `src/main/resources/db/migration/V11__current_run_quality_gate_metrics.sql` | 현재 Run의 Assertion 통과율·실행 성공률과 `NOT_EVALUATED` 저장 shape |
 | ERD | [PlantUML ERD](../diagrams/guardbench-mvp-physical-erd.puml) | migration 적용 후 관계와 cardinality |
 | TestRun write adapters | `testrun/infrastructure/persistence` | TestRun, Snapshot, TestExecution, idempotency, Outbox, claim Adapter |
 | Target/Evaluator adapters | `target/infrastructure/persistence`, `testrun/infrastructure/evaluator`, `evaluator/infrastructure/bedrock` | HTTP Target 등록, operator catalog 해석, immutable EvaluatorReference persistence와 `bedrock_guardrail_evaluator` 조회 |
@@ -54,7 +55,7 @@
 
 #114의 profile/evaluator snapshot과 #115/#125/#128의 OpenAI-compatible HTTP Application Target 경계가 구현되어 있다. #116에서 Bedrock Guardrail Evaluator Adapter가 추가되었고, #117에서 Worker가 Application response → Evaluator verdict → Assertion 경계를 사용해 결과를 저장·조회한다. Application response는 내부 저장 값이며 public 결과에는 노출하지 않는다.
 
-Quality Gate와 Regression 저장/API는 각각 #118과 #119의 범위다.
+Quality Gate는 #118에서 현재 Run의 평가 가능한 Assertion 통과율과 전체 실행 성공률을 저장하며, Regression 저장/API는 #119의 범위다.
 
 ## 범위 제외
 

@@ -11,11 +11,8 @@ import jakarta.persistence.Table;
 class QualityGateResultEntity {
     @Id long testRunId;
     String gateStatus;
-    Double candidateAssertionPassRate;
-    Integer securityRegressionCount;
-    Double securityRegressionRate;
-    Double usabilityRegressionRate;
-    Double testExecutionSuccessRate;
+    Double assertionPassRate;
+    Double executionSuccessRate;
     Instant createdAt;
 
     protected QualityGateResultEntity() {
@@ -24,39 +21,27 @@ class QualityGateResultEntity {
     private QualityGateResultEntity(
             long testRunId,
             String gateStatus,
-            Double candidateAssertionPassRate,
-            Integer securityRegressionCount,
-            Double securityRegressionRate,
-            Double usabilityRegressionRate,
-            Double testExecutionSuccessRate,
+            Double assertionPassRate,
+            Double executionSuccessRate,
             Instant createdAt) {
         this.testRunId = testRunId;
         this.gateStatus = gateStatus;
-        this.candidateAssertionPassRate = candidateAssertionPassRate;
-        this.securityRegressionCount = securityRegressionCount;
-        this.securityRegressionRate = securityRegressionRate;
-        this.usabilityRegressionRate = usabilityRegressionRate;
-        this.testExecutionSuccessRate = testExecutionSuccessRate;
+        this.assertionPassRate = assertionPassRate;
+        this.executionSuccessRate = executionSuccessRate;
         this.createdAt = createdAt;
     }
 
     static QualityGateResultEntity of(
             long testRunId,
             String gateStatus,
-            Double candidateAssertionPassRate,
-            Integer securityRegressionCount,
-            Double securityRegressionRate,
-            Double usabilityRegressionRate,
-            Double testExecutionSuccessRate,
+            Double assertionPassRate,
+            Double executionSuccessRate,
             Instant createdAt) {
         return new QualityGateResultEntity(
                 testRunId,
                 gateStatus,
-                candidateAssertionPassRate,
-                securityRegressionCount,
-                securityRegressionRate,
-                usabilityRegressionRate,
-                testExecutionSuccessRate,
+                assertionPassRate,
+                executionSuccessRate,
                 createdAt);
     }
 }

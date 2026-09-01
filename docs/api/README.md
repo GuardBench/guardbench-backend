@@ -10,7 +10,7 @@ API의 단일 명세는 [openapi.yaml](openapi.yaml)이다. Endpoint, 필드, En
 
 ## 계약 층위
 
-OpenAPI는 [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)을 HTTP로 구체화한 **합의된 API 계약**이다. #114의 Evaluation Profile → EvaluatorReference 고정, #115/#125/#128의 OpenAI-compatible HTTP Application Target 경계, #116의 Bedrock Guardrail Evaluator Adapter와 #117의 Worker orchestration은 구현되었다. #118~#119가 Quality Gate와 Regression의 남은 차이를 해소한다.
+OpenAPI는 [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)을 HTTP로 구체화한 **합의된 API 계약**이다. #114의 Evaluation Profile → EvaluatorReference 고정, #115/#125/#128의 OpenAI-compatible HTTP Application Target 경계, #116의 Bedrock Guardrail Evaluator Adapter, #117의 Worker orchestration과 #118의 현재 Run Quality Gate 집계가 구현되었다. #119가 Regression의 남은 차이를 해소한다.
 
 ```text
 TestCaseSnapshot → OpenAI-compatible AI Application Target → Natural Language Response
@@ -131,7 +131,7 @@ HTTP Application Target 실행, OpenAI-compatible response 정규화, inline Eva
 
 현재 구현은 Application response를 내부에만 보존하고 Evaluator verdict와 Assertion을 public 결과에서 분리한다. Quality Gate 계산은 #118 범위다.
 
-`QualityGateRes`의 public 최소 shape은 `status`와 nullable `metrics`다. `status`는 `PASS | FAIL | NOT_EVALUATED`이며 metrics 필드와 threshold 정책은 #118이 최종 소유한다. Regression 또는 과거 Run 동시 비교 기반 metric을 Quality Gate에 넣지 않는다.
+`QualityGateRes`는 `status`와 nullable `metrics`를 제공한다. `metrics`는 평가 가능한 Assertion의 `assertionPassRate`와 전체 Snapshot 실행의 `executionSuccessRate`를 포함한다. 두 비율이 각각 95% 이상이면 `PASS`, 하나라도 기준 미만이면 `FAIL`이다. 평가 가능한 Assertion이 하나도 없으면 `NOT_EVALUATED`와 `metrics: null`이다. Assertion 실패와 실행 실패는 서로 다른 분모로 집계하며, Regression 또는 과거 Run 결과를 Quality Gate에 넣지 않는다.
 
 ### Regression — agreed contract
 
