@@ -141,7 +141,15 @@ HTTP Application Target 실행, OpenAI-compatible response 정규화, inline Eva
 - 비교 불가능한 두 Run의 직접 비교 요청은 `409 TEST_RUNS_NOT_COMPARABLE`이다.
 - #113은 endpoint와 Run 식별자까지 고정하며 구체 comparability key와 Regression 상세 response DTO는 #119가 최종 소유한다.
 
-현재 Java에는 이 endpoint가 없으며 #119가 구현한다.
+Regression API는 #119에서 구현한다. 비교 가능성은 TestCaseSnapshot의 전체 정의
+`sourceTestCaseId/name/input/expectedAction/severity/category`와 Evaluator provider 설정
+`type/identifier/fixed revision`이 모두 같은지로 판단한다. EvaluatorReference의 생성별 UUID 자체는
+비교 키로 사용하지 않는다.
+
+변화 방향은 `comparisonRun → currentRun`이다. 두 verdict가 같으면 `NO_CHANGE`이고, ExpectedResult가
+`BLOCK`일 때 current가 `ALLOW`면 `SECURITY_REGRESSION`, ExpectedResult가 `ALLOW`일 때 current가
+`BLOCK`이면 `USABILITY_REGRESSION`이다. 반대 방향은 `IMPROVEMENT`이며, 저장 verdict가 없는 케이스는
+`NOT_COMPARABLE`로 집계한다. 목록과 직접 비교 모두 완료된 Run만 대상으로 하며 외부 Target/Evaluator를 호출하지 않는다.
 
 ## Frontend 계약 라우팅
 

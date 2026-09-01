@@ -55,6 +55,8 @@
 
 #114의 profile/evaluator snapshot과 #115/#125/#128의 OpenAI-compatible HTTP Application Target 경계가 구현되어 있다. #116에서 Bedrock Guardrail Evaluator Adapter가 추가되었고, #117에서 Worker가 Application response → Evaluator verdict → Assertion 경계를 사용해 결과를 저장·조회한다. Application response는 내부 저장 값이며 public 결과에는 노출하지 않는다.
 
+#119의 Regression은 별도 결과를 저장하지 않고 완료된 두 Run의 Snapshot 정의와 저장 verdict를 읽어 조회 시 계산한다. 고정 Evaluator provider/identifier/revision은 비교 후보 필터에 사용하며 Application Target/Evaluator 재호출은 없다.
+
 Quality Gate는 #118에서 현재 Run의 평가 가능한 Assertion 통과율과 전체 실행 성공률을 저장하며, Regression 저장/API는 #119의 범위다.
 
 ## 범위 제외
