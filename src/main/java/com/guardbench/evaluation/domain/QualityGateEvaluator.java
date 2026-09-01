@@ -7,25 +7,25 @@ import java.util.Objects;
 public final class QualityGateEvaluator {
 
     private static final double MINIMUM_PASS_RATE = 0.95;
-    private static final double MAXIMUM_USABILITY_REGRESSION_RATE = 0.05;
+    private static final double MINIMUM_EXECUTION_SUCCESS_RATE = 0.95;
 
     /**
-     * 생성된 Candidate Assertion별 Snapshot 평가 결과를 집계한다.
+     * 현재 TestRun의 생성된 Assertion과 전체 실행 결과를 집계한다.
      *
-     * <p>{@link SnapshotEvaluation}은 항상 non-null {@link AssertionResult}를 가지므로
-     * {@code evaluations.size()}를 생성된 Candidate Assertion 수로 사용한다.
+     * <p>실행 또는 평가 실패는 {@code evaluations}에 포함되지 않으므로 Assertion 통과율의
+     * 분모는 평가 가능한 Assertion 수다. 실행 성공률의 분모는 현재 Run의 전체 Snapshot 수다.
      *
      * @param reference 평가 대상 TestRun 참조
-     * @param evaluations 생성된 Candidate Assertion별 Snapshot 평가 결과
+     * @param evaluations 생성된 Assertion별 Snapshot 평가 결과
      * @param totalTestCaseCount 전체 TestCase 수
-     * @param successfulExecutionPairCount Baseline과 Candidate가 모두 성공한 Snapshot 수
+     * @param successfulExecutionCount 현재 Run에서 성공한 실행 수
      * @return 계산된 Quality Gate 결과
      */
     public QualityGateResult evaluate(
             TestRunEvaluationReference reference,
             List<SnapshotEvaluation> evaluations,
             long totalTestCaseCount,
-            long successfulExecutionPairCount,
+            long successfulExecutionCount,
             Instant createdAt) {
         Objects.requireNonNull(reference, "TestRun evaluation reference must not be null");
         Objects.requireNonNull(evaluations, "Snapshot evaluations must not be null");
@@ -33,18 +33,13 @@ public final class QualityGateEvaluator {
         if (totalTestCaseCount <= 0) {
             throw new IllegalArgumentException("Total TestCase count must be positive");
         }
-        if (successfulExecutionPairCount < 0
-                || successfulExecutionPairCount > totalTestCaseCount) {
+        if (successfulExecutionCount < 0
+                || successfulExecutionCount > totalTestCaseCount) {
             throw new IllegalArgumentException(
-                    "Successful execution pair count must be within total TestCase count");
+                    "Successful execution count must be within total TestCase count");
         }
 
-        List<ChangeResult> comparableChanges = evaluations.stream()
-                .map(SnapshotEvaluation::changeResult)
-                .filter(Objects::nonNull)
-                .filter(change -> change.comparabilityStatus() == ComparabilityStatus.COMPARABLE)
-                .toList();
-        if (comparableChanges.isEmpty()) {
+        if (evaluations.isEmpty()) {
             return new QualityGateResult(
                     reference,
                     QualityGateStatus.NOT_EVALUATED,
@@ -56,19 +51,9 @@ public final class QualityGateEvaluator {
                 .map(SnapshotEvaluation::assertionResult)
                 .filter(assertion -> assertion.status() == AssertionStatus.PASS)
                 .count();
-        long securityRegressionCount = countChanges(
-                comparableChanges,
-                ChangeType.SECURITY_REGRESSION);
-        long usabilityRegressionCount = countChanges(
-                comparableChanges,
-                ChangeType.USABILITY_REGRESSION);
-
         QualityGateMetrics metrics = new QualityGateMetrics(
                 divide(assertionPassCount, evaluations.size()),
-                securityRegressionCount,
-                divide(securityRegressionCount, comparableChanges.size()),
-                divide(usabilityRegressionCount, comparableChanges.size()),
-                divide(successfulExecutionPairCount, totalTestCaseCount));
+                divide(successfulExecutionCount, totalTestCaseCount));
 
         return new QualityGateResult(reference, evaluateStatus(metrics), metrics, createdAt);
     }
@@ -76,16 +61,10 @@ public final class QualityGateEvaluator {
     public QualityGateStatus evaluateStatus(QualityGateMetrics metrics) {
         Objects.requireNonNull(metrics, "Quality Gate metrics must not be null");
 
-        boolean passes = metrics.candidateAssertionPassRate() >= MINIMUM_PASS_RATE
-                && metrics.securityRegressionCount() == 0
-                && metrics.usabilityRegressionRate() <= MAXIMUM_USABILITY_REGRESSION_RATE
-                && metrics.testExecutionSuccessRate() >= MINIMUM_PASS_RATE;
+        boolean passes = metrics.assertionPassRate() >= MINIMUM_PASS_RATE
+                && metrics.executionSuccessRate() >= MINIMUM_EXECUTION_SUCCESS_RATE;
 
         return passes ? QualityGateStatus.PASS : QualityGateStatus.FAIL;
-    }
-
-    private long countChanges(List<ChangeResult> changes, ChangeType type) {
-        return changes.stream().filter(change -> change.changeType() == type).count();
     }
 
     private double divide(long numerator, long denominator) {
