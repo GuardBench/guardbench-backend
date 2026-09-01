@@ -165,11 +165,12 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
         jdbcTemplate.update("""
                 INSERT INTO test_execution (
                     snapshot_id, result_status, application_response, evaluator_verdict,
-                    error_code, error_message, started_at, completed_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    error_stage, error_code, error_message, started_at, completed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, snapshotId, status,
                 evaluatorVerdict == null ? null : "stored application response",
-                evaluatorVerdict, errorCode, errorMessage, Timestamp.from(T0), Timestamp.from(T0));
+                evaluatorVerdict, errorCode == null ? null : "APPLICATION_TARGET", errorCode, errorMessage,
+                Timestamp.from(T0), Timestamp.from(T0));
     }
 
     private void insertModernExecution(long snapshotId, String evaluatorVerdict, String applicationResponse) {

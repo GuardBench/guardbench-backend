@@ -96,10 +96,26 @@ class AsyncTestRunPersistenceSchemaIntegrationTest {
     }
 
     @Test
-    @DisplayName("허용하지 않은 execution claim과 Outbox event 값은 저장하지 않는다")
-    void rejectsInvalidExecutionClaimAndOutboxValues(@Autowired JdbcTemplate jdbcTemplate) {
+    @DisplayName("허용하지 않은 execution 결과·claim과 Outbox event 값은 저장하지 않는다")
+    void rejectsInvalidExecutionResultClaimAndOutboxValues(@Autowired JdbcTemplate jdbcTemplate) {
         insertTestRunFixture();
         fixture.insertSnapshot(1000L, 100L, 11L, CREATED_AT);
+
+        assertThrows(
+                DataIntegrityViolationException.class,
+                () -> jdbcTemplate.update(
+                        """
+                        INSERT INTO test_execution(
+                            snapshot_id, result_status, error_code, error_message, started_at, completed_at
+                        ) VALUES (?, 'FAILED', ?, ?, ?, ?)
+                        """,
+                        1000L,
+                        "PROVIDER_UNAVAILABLE",
+                        "안전한 오류",
+                        Timestamp.from(CREATED_AT),
+                        Timestamp.from(CREATED_AT)
+                )
+        );
 
         assertThrows(
                 DataIntegrityViolationException.class,

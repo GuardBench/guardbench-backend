@@ -14,6 +14,7 @@ ALTER TABLE test_execution
                 result_status = 'SUCCEEDED'
                 AND application_response IS NOT NULL
                 AND evaluator_verdict IS NOT NULL
+                AND error_stage IS NULL
                 AND error_code IS NULL
                 AND error_message IS NULL
                 AND started_at IS NOT NULL
@@ -22,6 +23,7 @@ ALTER TABLE test_execution
             OR (
                 result_status IN ('FAILED', 'TIMED_OUT')
                 AND evaluator_verdict IS NULL
+                AND error_stage IS NOT NULL
                 AND error_code IS NOT NULL
                 AND error_message IS NOT NULL
                 AND started_at IS NOT NULL
