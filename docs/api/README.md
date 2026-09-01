@@ -10,7 +10,7 @@ API의 단일 명세는 [openapi.yaml](openapi.yaml)이다. Endpoint, 필드, En
 
 ## 계약 층위
 
-OpenAPI는 [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)을 HTTP로 구체화한 **합의된 목표 API 계약**이다. #114의 Evaluation Profile → EvaluatorReference 고정, #115/#125/#128의 OpenAI-compatible HTTP Application Target 경계와 #116의 Bedrock Guardrail Evaluator Adapter는 구현되었고, #117~#119가 Worker orchestration, Quality Gate와 Regression의 남은 차이를 해소한다.
+OpenAPI는 [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)을 HTTP로 구체화한 **합의된 API 계약**이다. #114의 Evaluation Profile → EvaluatorReference 고정, #115/#125/#128의 OpenAI-compatible HTTP Application Target 경계, #116의 Bedrock Guardrail Evaluator Adapter와 #117의 Worker orchestration은 구현되었다. #118~#119가 Quality Gate와 Regression의 남은 차이를 해소한다.
 
 ```text
 TestCaseSnapshot → OpenAI-compatible AI Application Target → Natural Language Response
@@ -108,7 +108,7 @@ Target 실행 Adapter는 호출 내부 retry를 수행하지 않는다. 기존 W
 
 Target URL은 HTTP/HTTPS absolute URL, host 필수, userinfo·fragment 금지다. Worker 기본 egress 정책은 loopback/private/link-local/multicast 주소를 차단하며, 내부 SUT가 필요한 배포만 `guardbench.http-endpoint.allow-private-addresses=true`를 명시적으로 설정한다. 응답 본문은 1 MiB를 넘을 수 없다.
 
-HTTP Application Target 실행, OpenAI-compatible response 정규화, inline Evaluation Profile 접수와 EvaluatorReference 고정은 구현되었다. #116~#117에서 Bedrock Guardrail Evaluator와 Application response → Evaluator verdict → Assertion Worker orchestration 및 결과 API shape를 구현한다. Quality Gate는 #118 범위다.
+HTTP Application Target 실행, OpenAI-compatible response 정규화, inline Evaluation Profile 접수와 EvaluatorReference 고정, Bedrock Guardrail Evaluator와 Application response → Evaluator verdict → Assertion Worker orchestration 및 결과 API shape는 구현되었다. Quality Gate는 #118 범위다.
 
 ### TestRun 조회와 평가 결과 — agreed contract
 

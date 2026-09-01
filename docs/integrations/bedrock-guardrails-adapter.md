@@ -63,9 +63,10 @@ claim lease(45초)보다 짧게 유지한다. 오류는 `EVALUATOR_NOT_FOUND`,
 `EVALUATOR_ACCESS_DENIED`, `EVALUATOR_CONFIGURATION_INVALID`, `PROVIDER_UNAVAILABLE`,
 `PROVIDER_RESPONSE_INVALID`, `PROVIDER_TIMEOUT`으로 안전하게 수렴한다.
 
-현재 `dev`에서 이 Adapter는 `EvaluatorExecutionPort` 구현으로 존재하지만 Worker 실행 경로는 아직
-호출하지 않고 Application 실행 결과를 legacy `ActualResult`로 저장한다. Application 실행 →
-Evaluator → Assertion orchestration 연결은 #117 범위다.
+현재 `dev`에서 이 Adapter는 `EvaluatorExecutionPort` 구현으로 존재하며 #117 Worker가
+Application response를 전달한다. Worker는 Evaluator의 `EvaluationResult`를 실행 결과로 저장하고,
+ExpectedResult와 비교한 Assertion을 생성한다. Application response 자체는 내부 실행 결과로만
+보존하며 public 결과에는 노출하지 않는다.
 
 AWS 근거는 [ApplyGuardrail API](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ApplyGuardrail.html)와
 [독립 ApplyGuardrail 사용 가이드](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-use-independent-api.html)다.

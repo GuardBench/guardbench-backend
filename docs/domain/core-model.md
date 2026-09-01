@@ -85,4 +85,4 @@ Completed TestRun A + Completed TestRun B
 
 #116과 #117을 통해 Bedrock Guardrail Evaluator와 Application 실행 → Evaluator → Assertion Worker orchestration이 구현되었다. #118과 #119가 각각 Quality Gate와 Regression을 완성한다.
 
-목표 OpenAPI를 배포 완료의 증거로 해석하지 않고, 아직 남은 #117~#119 구현 상태를 코드와 함께 확인한다.
+목표 OpenAPI를 배포 완료의 증거로 해석하지 않고, 아직 남은 #118~#119 구현 상태를 코드와 함께 확인한다.
