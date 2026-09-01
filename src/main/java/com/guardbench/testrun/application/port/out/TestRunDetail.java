@@ -21,13 +21,6 @@ public record TestRunDetail(
         Instant startedAt,
         Instant completedAt,
         Instant updatedAt) {
-    public TestRunDetail(long id, long testSuiteId, TestRunStatus status, int testCaseCount,
-                         TestRunProgress progress, TargetReferenceView target,
-                         TestRunExecutionOutcome executionOutcome, QualityGateView qualityGate,
-                         Instant createdAt, Instant startedAt, Instant completedAt, Instant updatedAt) {
-        this(id, testSuiteId, status, testCaseCount, progress, target, null, executionOutcome, qualityGate,
-                createdAt, startedAt, completedAt, updatedAt);
-    }
     public TestRunDetail {
         if (id <= 0 || testSuiteId <= 0 || testCaseCount <= 0) {
             throw new IllegalArgumentException("TestRun IDs and testCaseCount must be positive");

@@ -49,7 +49,7 @@ class SnapshotEvaluatorTest {
     class CreationBoundary {
 
         @Test
-        @DisplayName("ActualResult가 없으면 SnapshotEvaluation을 생성하지 않는다")
+    @DisplayName("Evaluator verdict가 없으면 SnapshotEvaluation을 생성하지 않는다")
         void createsNothingWhenActualActionIsAbsent() {
             Optional<SnapshotEvaluation> evaluation = evaluator.evaluate(
                     REFERENCE,

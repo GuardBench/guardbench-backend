@@ -29,8 +29,8 @@ import com.guardbench.testsupport.PostgresTestConfiguration;
 /**
  * 부분 완료 시 RUNNING 진행률 저장 통합 테스트다.
  *
- * <p>ADR 0005 4단계·OpenAPI 진행률 계약: 모든 pair가 terminal이 아니어도
- * 처리 완료된 pair 수만큼 {@code processed_test_case_count}를 갱신해야
+ * <p>ADR 0005 4단계·OpenAPI 진행률 계약: 모든 Snapshot 실행이 terminal이 아니어도
+ * 처리 완료된 실행 수만큼 {@code processed_test_case_count}를 갱신해야
  * 목록·상세 조회가 실제 진행 상황을 보여줄 수 있다.
  */
 @SpringBootTest
@@ -129,8 +129,9 @@ class PartialCompletionProgressIntegrationTest {
 
     private void insertSucceededExecution(long snapshotId) {
         jdbcTemplate.update("""
-                INSERT INTO test_execution(snapshot_id, result_status, actual_action, started_at, completed_at)
-                VALUES (?, 'SUCCEEDED', 'ALLOW', ?, ?)
+                INSERT INTO test_execution(snapshot_id, result_status, application_response, evaluator_verdict,
+                    started_at, completed_at)
+                VALUES (?, 'SUCCEEDED', 'stored application response', 'ALLOW', ?, ?)
                 """, snapshotId, Timestamp.from(NOW), Timestamp.from(NOW));
     }
 

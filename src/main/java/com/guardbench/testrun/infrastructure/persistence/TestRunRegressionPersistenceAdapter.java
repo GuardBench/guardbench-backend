@@ -122,7 +122,7 @@ class TestRunRegressionPersistenceAdapter implements LoadTestRunRegressionPort {
 
     private static final String SNAPSHOT_SELECT = """
             SELECT s.id, s.source_test_case_id, s.name, s.input, s.expected_action,
-                   s.severity, s.category, e.actual_action AS evaluator_verdict
+                   s.severity, s.category, e.evaluator_verdict
             FROM test_case_snapshot s
             LEFT JOIN test_execution e ON e.snapshot_id = s.id
             WHERE s.test_run_id = ?

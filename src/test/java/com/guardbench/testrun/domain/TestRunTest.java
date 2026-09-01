@@ -24,8 +24,8 @@ class TestRunTest {
         void queuedTestRunTransitionsToFinishedCompleted() {
             TestRun testRun = queuedTestRun(2);
             TestRunExecutionSummary executionSummary = summary(
-                    succeededPair(1),
-                    succeededPair(2)
+                    succeededExecution(1),
+                    succeededExecution(2)
             );
 
             testRun.beginPreparing(CREATED_AT.plusSeconds(1));
@@ -61,11 +61,11 @@ class TestRunTest {
             TestRun testRun = queuedTestRun(1);
 
             assertThrows(IllegalStateException.class, () -> testRun.beginRunning(CREATED_AT));
-            assertThrows(IllegalStateException.class, () -> testRun.finish(summary(succeededPair(1)), CREATED_AT));
+            assertThrows(IllegalStateException.class, () -> testRun.finish(summary(succeededExecution(1)), CREATED_AT));
 
             testRun.beginPreparing(CREATED_AT.plusSeconds(1));
 
-            assertThrows(IllegalStateException.class, () -> testRun.updateProgress(summary(succeededPair(1)), CREATED_AT));
+            assertThrows(IllegalStateException.class, () -> testRun.updateProgress(summary(succeededExecution(1)), CREATED_AT));
             assertThrows(IllegalStateException.class, () -> testRun.beginPreparing(CREATED_AT));
         }
 
@@ -78,7 +78,7 @@ class TestRunTest {
 
             assertThrows(
                     IllegalArgumentException.class,
-                    () -> testRun.finish(summary(succeededPair(1)), CREATED_AT.plusSeconds(9))
+                    () -> testRun.finish(summary(succeededExecution(1)), CREATED_AT.plusSeconds(9))
             );
 
             assertEquals(TestRunStatus.RUNNING, testRun.status());
@@ -92,6 +92,8 @@ class TestRunTest {
                 new TestRunId(1),
                 new SourceTestSuiteId(10),
                 new TargetReference("target-reference"),
+                new EvaluationProfile(List.of("PII_LEAKAGE"), "STANDARD"),
+                new EvaluatorReference("evaluator-reference"),
                 testCaseCount,
                 CREATED_AT
         );
@@ -101,7 +103,7 @@ class TestRunTest {
         return TestRunExecutionSummary.from(List.of(executionStatuses));
     }
 
-    private static SnapshotExecutionStatus succeededPair(long snapshotId) {
+    private static SnapshotExecutionStatus succeededExecution(long snapshotId) {
         return new SnapshotExecutionStatus(
                 new TestCaseSnapshotId(snapshotId),
                 TestExecutionStatus.SUCCEEDED

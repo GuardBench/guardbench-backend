@@ -103,24 +103,26 @@ public final class TestRunQueryResponseMapper {
     private static TestRunResultListItemRes toResultItemRes(TestRunResultItem item) {
         return new TestRunResultListItemRes(
                 item.snapshotId(),
-                item.testCaseId(),
                 item.name(),
                 item.input(),
                 item.expectedAction().name(),
                 item.severity().name(),
                 item.category(),
-                toExecutionRes(item.execution()),
-                item.assertionStatusCode());
+                item.execution().status().name(),
+                item.execution().evaluatorVerdict() != null
+                        ? item.execution().evaluatorVerdict().name() : null,
+                item.assertionStatusCode(),
+                item.evaluationOutcomeCode(),
+                toErrorRes(item.execution()));
     }
 
-    private static TestExecutionResultRes toExecutionRes(TestExecutionView execution) {
-        ExecutionErrorDetailRes error = execution.errorCode() != null
-                ? new ExecutionErrorDetailRes(execution.errorCode(), execution.errorMessage())
-                : null;
-        return new TestExecutionResultRes(
-                execution.status().name(),
-                execution.actualAction() != null ? execution.actualAction().name() : null,
-                error);
+    private static ExecutionErrorDetailRes toErrorRes(TestExecutionView execution) {
+        if (execution.errorCode() == null) {
+            return null;
+        }
+        String stage = execution.failureStage() == null
+                ? "APPLICATION_TARGET" : execution.failureStage();
+        return new ExecutionErrorDetailRes(stage, execution.errorCode(), execution.errorMessage());
     }
 
     private static TestRunProgressRes toProgressRes(TestRunProgress progress) {

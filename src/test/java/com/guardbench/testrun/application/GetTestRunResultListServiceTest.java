@@ -29,7 +29,8 @@ import org.junit.jupiter.api.Test;
 
 class GetTestRunResultListServiceTest {
 
-    private static final TargetReferenceView TARGET = new TargetReferenceView("target-ref", "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT");
+    private static final TargetReferenceView TARGET = new TargetReferenceView(
+            "target-ref", "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", "test-model");
 
     @Test
     @DisplayName("FINISHED TestRun의 결과를 조회하면 Port의 결과 페이지를 그대로 반환한다")
@@ -37,8 +38,8 @@ class GetTestRunResultListServiceTest {
         TestRunDetail finishedTestRun = detailWithStatus(TestRunStatus.FINISHED);
         TestRunResultItem resultItem = new TestRunResultItem(
                 1001L, 10L, "case", "input", Action.BLOCK, Severity.HIGH, "category",
-                new TestExecutionView(TestExecutionStatus.SUCCEEDED, Action.ALLOW, null, null),
-                "FAIL");
+                new TestExecutionView(TestExecutionStatus.SUCCEEDED, Action.ALLOW, null, null, null),
+                "FAIL", "FALSE_NEGATIVE");
         PageResult<TestRunResultItem> expected =
                 PageResult.of(List.of(resultItem), new PageCriteria(1, 20), 1L);
         LoadTestRunDetailPort detailPort = testRunId -> Optional.of(finishedTestRun);
@@ -85,7 +86,7 @@ class GetTestRunResultListServiceTest {
     private static TestRunDetail detailWithStatus(TestRunStatus status) {
         return new TestRunDetail(
                 901L, 1L, status, 253,
-                new TestRunProgress(253, 100.0), TARGET, null, null,
+                new TestRunProgress(253, 100.0), TARGET, null, null, null,
                 Instant.parse("2026-08-24T14:30:00Z"), Instant.parse("2026-08-24T14:30:03Z"),
                 null, Instant.parse("2026-08-24T14:31:20Z"));
     }

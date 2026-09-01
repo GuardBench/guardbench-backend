@@ -112,8 +112,9 @@ class TestRunRegressionPersistenceAdapterIntegrationTest {
     private void insertExecution(long snapshotId, String verdict) {
         jdbcTemplate.update("""
                 INSERT INTO test_execution (
-                    snapshot_id, result_status, actual_action, started_at, completed_at)
-                VALUES (?, 'SUCCEEDED', ?, ?, ?)
-                """, snapshotId, verdict, Timestamp.from(T0), Timestamp.from(T0));
+                    snapshot_id, result_status, application_response, evaluator_verdict,
+                    started_at, completed_at)
+                VALUES (?, 'SUCCEEDED', ?, ?, ?, ?)
+                """, snapshotId, "response", verdict, Timestamp.from(T0), Timestamp.from(T0));
     }
 }

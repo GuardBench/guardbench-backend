@@ -20,6 +20,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import com.guardbench.testrun.application.port.out.ClaimResult;
 import com.guardbench.testrun.application.port.out.ExecutionClaimPort;
+import com.guardbench.testrun.application.port.out.EvaluatorExecutionResult;
 import com.guardbench.testrun.application.port.out.TargetExecutionResult;
 import com.guardbench.testrun.application.port.out.TargetFailureCode;
 import com.guardbench.testrun.application.port.out.TargetPreparationPort;
@@ -135,6 +136,7 @@ class WorkerPhaseTransactionIntegrationTest {
                 testExecutionRepository,
                 loadExecutionContextPort,
                 request -> TargetExecutionResult.succeeded("ALLOW"),
+                request -> EvaluatorExecutionResult.succeeded("ALLOW"),
                 new FailingOutboxPort(),
                 transactionalPhasePort,
                 FIXED_CLOCK

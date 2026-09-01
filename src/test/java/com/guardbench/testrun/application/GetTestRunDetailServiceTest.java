@@ -19,14 +19,15 @@ import org.junit.jupiter.api.Test;
 
 class GetTestRunDetailServiceTest {
 
-    private static final TargetReferenceView TARGET = new TargetReferenceView("target-ref", "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT");
+    private static final TargetReferenceView TARGET = new TargetReferenceView(
+            "target-ref", "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", "test-model");
 
     @Test
     @DisplayName("존재하는 TestRun을 조회하면 Port의 상세 결과를 그대로 반환한다")
     void returnsDetailWhenTestRunExists() {
         TestRunDetail expected = new TestRunDetail(
                 901L, 1L, TestRunStatus.RUNNING, 253,
-                new TestRunProgress(120, 47.43), TARGET, null, null,
+                new TestRunProgress(120, 47.43), TARGET, null, null, null,
                 Instant.parse("2026-08-24T14:30:00Z"), Instant.parse("2026-08-24T14:30:03Z"),
                 null, Instant.parse("2026-08-24T14:31:20Z"));
         LoadTestRunDetailPort port = testRunId -> Optional.of(expected);
