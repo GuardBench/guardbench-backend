@@ -19,7 +19,7 @@ from .api import ApiClient, ApiError
 from .aws import CloudWatchMetricCollector, QueueInspector, queue_urls_from_environment
 from .config import ConfigurationError, load_dataset, load_profile
 from .dataset import load_seed_payload
-from .safety import validate_reset_safety
+from .safety import EXPECTED_DATABASE_NAME, validate_reset_safety
 
 
 class RunnerError(RuntimeError):
@@ -38,21 +38,26 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def _run(command: list[str], *, cwd: Path | None = None) -> None:
-    try:
-        subprocess.run(command, cwd=cwd, check=True)
-    except (OSError, subprocess.CalledProcessError) as exc:
-        executable = command[0] if command else "command"
-        raise RunnerError(f"{executable} 실행에 실패했습니다.") from exc
-
-
 def reset_database(environment: dict[str, str]) -> None:
-    validate_reset_safety(environment)
     database_url = environment.get("PERFORMANCE_DATABASE_URL")
-    if not database_url:
-        raise ConfigurationError("DB reset에는 PERFORMANCE_DATABASE_URL이 필요합니다.")
-    _run(["psql", "--dbname", database_url, "--set", "ON_ERROR_STOP=1", "--command",
-          "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"])
+    validate_reset_safety(environment, database_url)
+    command = [
+        "psql", "--no-psqlrc", "--dbname", database_url, "--no-align", "--tuples-only",
+        "--set", "ON_ERROR_STOP=1", "--command",
+        "SELECT current_database(); "
+        "DO $$ BEGIN "
+        "IF current_database() <> 'guardbench_perf' THEN "
+        "RAISE EXCEPTION 'performance reset target database mismatch'; "
+        "END IF; END $$; "
+        "DROP SCHEMA public CASCADE; CREATE SCHEMA public;",
+    ]
+    try:
+        result = subprocess.run(command, check=True, capture_output=True, text=True)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise RunnerError("DB reset 대상 확인 또는 실행에 실패했습니다.") from exc
+    first_output = next((line.strip() for line in result.stdout.splitlines() if line.strip()), "")
+    if first_output != EXPECTED_DATABASE_NAME:
+        raise RunnerError("DB reset 대상이 guardbench_perf인지 확인하지 못했습니다.")
 
 
 def apply_migrations(environment: dict[str, str], migration_dir: Path) -> None:
@@ -235,6 +240,10 @@ def execute(args: argparse.Namespace) -> int:
         print(json.dumps(plan, indent=2))
         return 0
 
+    if not args.reset:
+        raise ConfigurationError(
+            "Baseline 비교의 DB 상태를 고정하려면 실제 실행에 --reset을 지정해야 합니다."
+        )
     base_url = os.environ.get("PERF_BASE_URL", "http://localhost:8080")
     api = ApiClient(base_url)
     source_urls, dlq_urls = queue_urls_from_environment()
@@ -245,14 +254,10 @@ def execute(args: argparse.Namespace) -> int:
         reset_database(environment)
         apply_migrations(environment, repo_root / "src/main/resources/db/migration")
 
-    suite_id = args.suite_id
-    if not args.no_seed:
-        api.health_check()
-        suite_id = api.create_suite(payload)
-        if suite_id <= 0:
-            raise RunnerError("seed 결과의 TestSuite id가 양수가 아닙니다.")
-    if suite_id is None:
-        raise ConfigurationError("seed를 생략하면 --suite-id 또는 PERF_SUITE_ID가 필요합니다.")
+    api.health_check()
+    suite_id = api.create_suite(payload)
+    if suite_id <= 0:
+        raise RunnerError("seed 결과의 TestSuite id가 양수가 아닙니다.")
 
     started_at = _now()
     summary_path = result_dir / "k6-summary.json"
@@ -292,10 +297,8 @@ def parser() -> argparse.ArgumentParser:
     command = argparse.ArgumentParser(description="Run a repeatable GuardBench performance profile.")
     command.add_argument("--profile", default=str(root / "performance/profiles/small.yaml"))
     command.add_argument("--dataset", default=str(root / "performance/datasets/baseline-v1.yaml"))
-    command.add_argument("--suite-id", type=int, default=int(os.environ["PERF_SUITE_ID"]) if os.environ.get("PERF_SUITE_ID") else None)
     command.add_argument("--result-dir")
     command.add_argument("--reset", action="store_true", help="Reset and migrate only a guarded performance DB.")
-    command.add_argument("--no-seed", action="store_true", help="Use --suite-id instead of seeding the Dataset.")
     command.add_argument("--dry-run", action="store_true", help="Validate inputs and print the execution plan.")
     return command
 

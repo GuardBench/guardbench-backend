@@ -50,7 +50,12 @@ def evaluate(profile: dict[str, Any], summary: dict[str, Any],
                    "expected": f"<= {completion['dlq_messages']}",
                    "passed": dlq_messages <= completion["dlq_messages"]})
     collected_metrics = aws_metrics.get("metrics", [])
+    has_datapoint = lambda prefix: any(
+        metric.get("id", "").startswith(prefix) and bool(metric.get("values"))
+        for metric in collected_metrics
+    )
     checks.append({"name": "aws.metrics_collected", "actual": aws_metrics.get("status"),
-                   "expected": "COLLECTED with at least one metric",
-                   "passed": aws_metrics.get("status") == "COLLECTED" and bool(collected_metrics)})
+                   "expected": "COLLECTED with ECS/SQS/RDS datapoints",
+                   "passed": aws_metrics.get("status") == "COLLECTED"
+                   and has_datapoint("ecs_") and has_datapoint("sqs_") and has_datapoint("rds_")})
     return {"status": "PASS" if all(check["passed"] for check in checks) else "FAIL", "checks": checks}

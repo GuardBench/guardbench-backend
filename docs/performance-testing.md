@@ -91,8 +91,8 @@ export PERF_DLQ_FINALIZE_NAME=<finalize-dlq-name>
 # 입력과 실행 계획만 검증한다. API, AWS, DB를 호출하지 않는다.
 python3 -m performance.runner.cli --dry-run
 
-# 실제 실행: preflight → (선택) reset/migration → Dataset seed → k6 → drain → metrics → report
-python3 -m performance.runner.cli
+# 실제 비교 실행: preflight → reset/migration → Dataset seed → k6 → drain → metrics → report
+python3 -m performance.runner.cli --reset
 ```
 
 실행 결과는 `performance/results/<run-id>/`에 `profile.yaml`, `dataset.yaml`,
@@ -114,14 +114,14 @@ Runner는 실행 전 다음을 확인하고 하나라도 실패하면 k6를 시�
 3. Source Queue의 visible/in-flight/delayed 메시지가 없는지 확인
 4. DLQ에 메시지가 없는지 확인
 
-`--reset`을 사용하면 Dataset seed 전에 DB를 초기화하고 애플리케이션이 소유한 Flyway를
-non-web Boot run으로 실행한다. 별도 performance DB에서만 허용되며 아래 네 가지 값이 모두
-정확히 일치하지 않으면 reset 명령 자체가 실행되지 않는다.
+모든 비교 가능한 실제 실행은 `--reset`을 필수로 요구한다. `--reset`은 Dataset seed 전에 DB를
+초기화하고 애플리케이션이 소유한 Flyway를 non-web Boot run으로 실행한다. 별도 performance
+DB에서만 허용되며 아래 세 가지 guard와 연결 URL의 database name이 모두 정확히 일치하지
+않으면 reset 명령 자체가 실행되지 않는다.
 
 ```bash
 export PERFORMANCE_ENVIRONMENT=performance
 export PERFORMANCE_DB_NAME=guardbench_perf
-export PERFORMANCE_DB_IDENTIFIER=guardbench-perf
 export PERFORMANCE_RESET_CONFIRM=RESET_GUARDBENCH_PERF
 export PERFORMANCE_DATABASE_URL=postgresql://<performance-rds>:5432/guardbench_perf
 export PERFORMANCE_DATABASE_JDBC_URL=jdbc:postgresql://<performance-rds>:5432/guardbench_perf?sslmode=require
@@ -130,8 +130,14 @@ export PERFORMANCE_DB_PASSWORD=<secret>
 python3 -m performance.runner.cli --reset
 ```
 
+Runner는 `PERFORMANCE_DATABASE_URL`의 scheme/host/database name을 먼저 확인하고, destructive
+command와 같은 PostgreSQL connection에서 `SELECT current_database()` 결과가
+`guardbench_perf`인지 확인한 뒤에만 schema를 삭제한다. `PERFORMANCE_DB_NAME`은 이 실제 URL
+database name과 함께 검증된다. RDS instance identifier를 별도 문자열로 신뢰하지 않는다.
+AWS RDS를 사용할 때는 운영자가 URL host와 RDS endpoint를 별도로 대조해야 한다.
+
 `PERFORMANCE_MIGRATION_COMMAND_JSON`을 설정하면 기본 non-web Boot migration 명령을 명시적인
-문자열 배열로 대체할 수 있다. reset은 운영/개발 공용 DB, 식별자가 불명확한 DB, 확인 token이
+문자열 배열로 대체할 수 있다. reset은 운영/개발 공용 DB, database name이 다른 DB, 확인 token이
 없는 환경에서 금지한다. reset 후에는 동일 migration과 `baseline-v1` seed 결과의 실제
 `testSuiteId`를 k6에 전달하므로 Profile이나 TestCase가 PK를 고정하지 않는다.
 
@@ -153,7 +159,8 @@ CloudWatch는 실행 시작~완료 구간으로 ECS `CPUUtilization`, `MemoryUti
 `RunningTaskCount`, SQS visible/oldest age, RDS `CPUUtilization`과
 `DatabaseConnections`를 수집한다. 리소스 이름은 `performance/metrics/aws.yaml`과 환경변수에
 두며 Runner는 ECS 단일 Service인지 API/Worker 분리인지 가정하지 않는다. 리소스 dimension이
-없는 metric은 `aws-metrics.json`에 `skipped`로 남긴다.
+없는 metric은 `aws-metrics.json`에 `skipped`로 남긴다. AWS acceptance는 요청 성공만으로
+통과하지 않으며 ECS·SQS·RDS 각 그룹에 실제 datapoint가 하나 이상 있어야 통과한다.
 
 HTTP threshold나 시스템 assertion을 위반하면 결과는 `FAIL`로 저장된다. Profile 목표값을
 실행 후 바꾸어 결과를 PASS로 만들지 않는다. `report.md`의 metric 시계열과 workload를 함께
@@ -161,12 +168,22 @@ HTTP threshold나 시스템 assertion을 위반하면 결과는 `FAIL`로 저장
 
 ## Baseline 비교와 비용
 
-Baseline 비교 시 다음을 고정한다.
+Baseline 비교 시 매 실행마다 `--reset`으로 다음 상태를 재현하고 아래 항목을 고정한다.
 
 - 동일 Dataset version과 TestCase 수
 - 동일 Profile과 acceptance criteria
 - 가능한 한 동일 Application/Infrastructure revision 기록 방식
 - 테스트 시작 전 queue/DLQ와 DB 상태
+
+reset 없는 seed 반복 실행은 허용하지 않는다. 따라서 이전 Suite/TestRun/Execution/Outbox가
+다음 실행에 누적되어 DB 크기와 index 상태를 바꾸는 경로가 없다.
+
+`concurrent_test_runs`는 단순 POST 동시 요청 수가 아니라 각 VU가 하나의 TestRun을 접수한 뒤
+`FINISHED`까지 polling하는 동안 살아 있는 비동기 TestRun 수에 가깝다. 현재 `small`은
+`max_iterations_per_vu: 1`이므로 1 VU가 1건을 완료하고 끝나는 Smoke이며, `duration_seconds`
+동안 지속적으로 새 Run을 생성하는 Profile이 아니다. LOAD/STRESS/SOAK Profile에서는 이
+필드를 0(제한 없음) 또는 적절한 반복 수로 명시해 생성률과 완료 polling traffic을 함께
+검토한다.
 
 인프라 구조만 바꾸고 Dataset/Profile은 유지해야 CPU, memory, queue age, completion time의
 변화를 원인 후보로 비교할 수 있다. `target`, `peak`, `stress` 숫자는 Capacity Target 논의가
