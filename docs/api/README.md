@@ -108,7 +108,7 @@ Target 실행 Adapter는 호출 내부 retry를 수행하지 않는다. 기존 W
 
 Target URL은 HTTP/HTTPS absolute URL, host 필수, userinfo·fragment 금지다. Worker 기본 egress 정책은 loopback/private/link-local/multicast 주소를 차단하며, 내부 SUT가 필요한 배포만 `guardbench.http-endpoint.allow-private-addresses=true`를 명시적으로 설정한다. 응답 본문은 1 MiB를 넘을 수 없다.
 
-HTTP Application Target 실행, OpenAI-compatible response 정규화, inline Evaluation Profile 접수와 EvaluatorReference 고정은 구현되었다. 현재 Java worker의 결과 저장·평가 경계는 아직 legacy `ActualResult`를 사용하며 Evaluator 전환과 결과 저장/API shape 변경은 #116~#118이 담당한다.
+HTTP Application Target 실행, OpenAI-compatible response 정규화, inline Evaluation Profile 접수와 EvaluatorReference 고정은 구현되었다. #116~#117에서 Bedrock Guardrail Evaluator와 Application response → Evaluator verdict → Assertion Worker orchestration 및 결과 API shape를 구현한다. Quality Gate는 #118 범위다.
 
 ### TestRun 조회와 평가 결과 — agreed contract
 
@@ -129,7 +129,7 @@ HTTP Application Target 실행, OpenAI-compatible response 정규화, inline Eva
 | ALLOW | BLOCK | FALSE_POSITIVE |
 | ALLOW | ALLOW | TRUE_NEGATIVE |
 
-현재 구현은 Application response와 Evaluator verdict를 분리하지 않고 `actualAction`으로 공개하며 Quality Gate를 계산하지 않는다. #116~#118이 이 차이를 구현한다.
+현재 구현은 Application response를 내부에만 보존하고 Evaluator verdict와 Assertion을 public 결과에서 분리한다. Quality Gate 계산은 #118 범위다.
 
 `QualityGateRes`의 public 최소 shape은 `status`와 nullable `metrics`다. `status`는 `PASS | FAIL | NOT_EVALUATED`이며 metrics 필드와 threshold 정책은 #118이 최종 소유한다. Regression 또는 과거 Run 동시 비교 기반 metric을 Quality Gate에 넣지 않는다.
 

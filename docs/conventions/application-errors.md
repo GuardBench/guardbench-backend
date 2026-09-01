@@ -194,26 +194,29 @@ TestRun 재전송은 Validation 후 Idempotency 기록을 먼저 확인한다.
 
 ## TestExecution 실행 오류 Code
 
-> Current implementation contract: [ADR 0010: 단일 Target 실행 모델](../decisions/0010-single-target-test-run-model.md)
+> Current implementation contract: [ADR 0011: AI Application Target과 Guardrail Evaluator](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)
 > Target architecture: [ADR 0011: AI Application Target과 Guardrail Evaluator](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)
 
-이 섹션은 current implementation의 공개 가능한 TestExecution 오류 code를 나열한다. retry·timeout의 운영 근거는 ADR 0005의 대체되지 않은 부분을 참고하며, 이 표는 API·Adapter 구현이 참조할 확정된 code 목록이다.
+이 섹션은 current implementation의 공개 가능한 TestExecution 오류 code를 나열한다. retry·timeout의 운영 근거는 ADR 0005의 대체되지 않은 부분을 참고하며, 이 표는 API·Adapter 구현이 참조할 확정된 code 목록이다. `stage`는 Application Target 실패와 Evaluator 실패를 구분한다.
 
-`TestExecution.error`는 HTTP Application Error와 다른 계층이며 위의 공통 오류 응답 구조를 따르지 않는다. current implementation은 개별 결과의 `execution.error`에 `{ code, message }`를 노출한다. 목표 OpenAPI의 평탄한 `TestRunResultItemRes.error`는 `{ stage, code, message }`로 Application Target과 Evaluator 실패 단계를 구분한다.
+`TestExecution.error`는 HTTP Application Error와 다른 계층이며 위의 공통 오류 응답 구조를 따르지 않는다. 개별 결과의 평탄한 `error`에는 `{ stage, code, message }`를 노출해 Application Target과 Evaluator 실패 단계를 구분한다.
 
 | Code | Terminal 상태 | 발생 조건 |
 | --- | --- | --- |
-| `TARGET_NOT_FOUND` | `FAILED` | 실행 대상 Guardrail/버전을 Provider가 찾지 못함 |
-| `TARGET_ACCESS_DENIED` | `FAILED` | Provider가 대상에 대한 접근을 거부함 |
-| `TARGET_CONFIGURATION_INVALID` | `FAILED` | 대상 Guardrail 설정이 유효하지 않음 |
-| `PROVIDER_UNAVAILABLE` | `FAILED` | Provider 호출이 일시적으로 불가능함 (최대 재시도 소진 후) |
-| `PROVIDER_RESPONSE_INVALID` | `FAILED` | Provider 응답을 안전하게 정규화할 수 없음 |
-| `PROVIDER_TIMEOUT` | `TIMED_OUT` | Provider 호출이 전체 timeout(15초, ADR 0005) 안에 끝나지 않음 |
+| `TARGET_NOT_FOUND` | `FAILED` | Application Target을 찾지 못함 |
+| `TARGET_ACCESS_DENIED` | `FAILED` | Application Target 접근이 거부됨 |
+| `TARGET_CONFIGURATION_INVALID` | `FAILED` | Application Target 설정이 유효하지 않음 |
+| `EVALUATOR_NOT_FOUND` | `FAILED` | 고정된 Evaluator를 찾지 못함 |
+| `EVALUATOR_ACCESS_DENIED` | `FAILED` | 고정된 Evaluator 접근이 거부됨 |
+| `EVALUATOR_CONFIGURATION_INVALID` | `FAILED` | Evaluator 설정이 유효하지 않음 |
+| `PROVIDER_UNAVAILABLE` | `FAILED` | Application Target 또는 Evaluator Provider 호출이 일시적으로 불가능함 (최대 재시도 소진 후) |
+| `PROVIDER_RESPONSE_INVALID` | `FAILED` | Application Target 또는 Evaluator 응답을 안전하게 정규화할 수 없음 |
+| `PROVIDER_TIMEOUT` | `TIMED_OUT` | Application Target 또는 Evaluator 호출이 전체 timeout(15초, ADR 0005) 안에 끝나지 않음 |
 
-이 6개 code는 legacy/HTTP Application Target 실행을 위해 `com.guardbench.testrun.domain.TestExecutionErrorCode`(Domain enum)와 `com.guardbench.testrun.application.port.out.TargetFailureCode`(소비자 소유 Port enum)에 정의되어 있으며, `PROVIDER_UNAVAILABLE`과 `PROVIDER_TIMEOUT`만 재시도 가능하다(ADR 0005의 대체되지 않은 retry 계약 참고). Bedrock Guardrail Evaluator는 별도의 `EvaluatorFailureCode`를 사용해 대상 오류와 평가 오류를 구분한다.
+이 code는 `com.guardbench.testrun.domain.TestExecutionErrorCode`에 정의되어 있으며, Application Target과 Evaluator는 각각 소비자 소유 Port의 `TargetFailureCode`와 `EvaluatorFailureCode`를 사용한다. `PROVIDER_UNAVAILABLE`과 `PROVIDER_TIMEOUT`만 재시도 가능하다(ADR 0005의 대체되지 않은 retry 계약 참고). Evaluator 실패로 terminal 결과를 저장할 때는 Application response를 보존하지만 EvaluationResult와 Assertion은 생성하지 않는다.
 
 - 각 code는 고정된 안전한 message를 사용하며 Provider 원문, SDK 예외 메시지, stack trace, ARN, 자격 증명, 내부 endpoint를 노출하지 않는다.
 - HTTP Target 예외 → `TargetFailureCode` 매핑과 Bedrock Evaluator 예외 → `EvaluatorFailureCode` 매핑은 각각 해당 Adapter가 소유하고, Port 오류 → `TestExecutionErrorCode`·terminal 저장은 Worker Application Service가 소유한다.
 - 이 표에 없는 code를 추가하거나 기존 code의 terminal 상태·의미를 바꾸는 것은 공개 API 계약 변경이며 별도 ADR 또는 Issue 승인이 필요하다.
 
-목표 구조의 공개 shape은 `error.stage = APPLICATION_TARGET | EVALUATOR`로 실패 경계를 구분한다. 구체 code와 terminal 상태 매핑은 #115~#117이 확정하며, 이 current implementation의 6개 code 표를 미래 계약으로 확장 해석하지 않는다.
+공개 shape은 `error.stage = APPLICATION_TARGET | EVALUATOR`로 실패 경계를 구분한다. 구체 code와 terminal 상태 매핑은 #115~#117이 확정한다.
