@@ -51,7 +51,7 @@
 
 ## 목표 구조와의 차이
 
-#114의 profile/evaluator snapshot과 #115/#125/#128의 OpenAI-compatible HTTP Application Target 경계까지 구현되어 있다. 결과 persistence는 아직 legacy `ActualResult` 경계를 사용하고 Evaluator 실행·Quality Gate는 후속 Issue 범위다. Regression 저장/API도 아직 없다.
+#114의 profile/evaluator snapshot과 #115/#125/#128의 OpenAI-compatible HTTP Application Target 경계까지 구현되어 있다. Regression은 별도 결과를 저장하지 않고 완료된 두 Run의 Snapshot 정의와 저장 verdict를 읽어 조회 시 계산한다. 고정 Evaluator provider/identifier/revision은 비교 후보 필터에 사용하며 Application Target/Evaluator 재호출은 없다.
 
 #116~#119가 Evaluator 실행, Worker orchestration, Quality Gate와 Regression을 완성한다.
 

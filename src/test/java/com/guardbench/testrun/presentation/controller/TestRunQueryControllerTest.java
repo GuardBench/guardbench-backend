@@ -15,6 +15,8 @@ import java.util.List;
 
 import com.guardbench.common.error.ApplicationErrorCode;
 import com.guardbench.common.error.ApplicationException;
+import com.guardbench.testrun.application.CompareTestRunsService;
+import com.guardbench.testrun.application.GetComparableTestRunsService;
 import com.guardbench.testrun.application.GetTestRunDetailService;
 import com.guardbench.testrun.application.GetTestRunListService;
 import com.guardbench.testrun.application.GetTestRunResultListService;
@@ -29,6 +31,8 @@ import com.guardbench.testrun.application.port.out.TestRunProgress;
 import com.guardbench.testrun.application.port.out.TestRunResultItem;
 import com.guardbench.testrun.application.port.out.TestRunResultListCriteria;
 import com.guardbench.testrun.application.port.out.TestRunResultSortField;
+import com.guardbench.testrun.application.port.out.TestRunComparison;
+import com.guardbench.testrun.application.port.out.TestRunRegressionView;
 import com.guardbench.testrun.application.port.out.TargetReferenceView;
 import com.guardbench.testrun.domain.Action;
 import com.guardbench.testrun.domain.Severity;
@@ -68,6 +72,12 @@ class TestRunQueryControllerTest {
 
     @MockitoBean
     private GetTestRunResultListService getTestRunResultListService;
+
+    @MockitoBean
+    private GetComparableTestRunsService getComparableTestRunsService;
+
+    @MockitoBean
+    private CompareTestRunsService compareTestRunsService;
 
     @Nested
     @DisplayName("TestRun 목록 조회")
@@ -245,6 +255,55 @@ class TestRunQueryControllerTest {
             verify(getTestRunResultListService).getResults(eq(901L), criteriaCaptor.capture());
             List<SortOrder<TestRunResultSortField>> sort = criteriaCaptor.getValue().sort();
             assertEquals(SortOrder.desc(TestRunResultSortField.SEVERITY), sort.get(0));
+        }
+    }
+
+    @Nested
+    @DisplayName("TestRun Regression 조회")
+    class Regression {
+
+        @Test
+        @DisplayName("비교 가능한 과거 Run 목록을 반환한다")
+        void returnsComparableRuns() throws Exception {
+            TestRunRegressionView item = new TestRunRegressionView(
+                    800L, 1L, TestRunStatus.FINISHED, TARGET, null, "evaluator|guardrail|7",
+                    Instant.parse("2026-08-25T10:00:00Z"));
+            when(getComparableTestRunsService.getComparableRuns(eq(901L), any()))
+                    .thenReturn(PageResult.of(List.of(item), new PageCriteria(1, 20), 1L));
+
+            mockMvc.perform(get(BASE + "/901/comparable-runs"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.items[0].id").value(800))
+                    .andExpect(jsonPath("$.data.items[0].completedAt").value("2026-08-25T10:00:00Z"))
+                    .andExpect(jsonPath("$.data.page.totalElements").value(1));
+        }
+
+        @Test
+        @DisplayName("두 Run 비교 결과와 변화 집계를 반환한다")
+        void returnsComparison() throws Exception {
+            TestRunComparison comparison = new TestRunComparison(
+                    901L, 800L, 1L, 1L, 0L, 0L, 1L, 0L,
+                    List.of(new TestRunComparison.TestRunComparisonItem(
+                            1001L, 10L, "case", "input", Action.BLOCK, Action.ALLOW, Action.BLOCK,
+                            "COMPARABLE", "SECURITY_REGRESSION")));
+            when(compareTestRunsService.compare(901L, 800L)).thenReturn(comparison);
+
+            mockMvc.perform(get(BASE + "/901/comparisons/800"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.currentRunId").value(901))
+                    .andExpect(jsonPath("$.data.regressedCount").value(1))
+                    .andExpect(jsonPath("$.data.items[0].changeType").value("SECURITY_REGRESSION"));
+        }
+
+        @Test
+        @DisplayName("비교 불가능한 Run은 409를 반환한다")
+        void returnsConflictWhenRunsAreNotComparable() throws Exception {
+            when(compareTestRunsService.compare(901L, 800L))
+                    .thenThrow(new ApplicationException(ApplicationErrorCode.TEST_RUNS_NOT_COMPARABLE));
+
+            mockMvc.perform(get(BASE + "/901/comparisons/800"))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.data.code").value("TEST_RUNS_NOT_COMPARABLE"));
         }
     }
 }

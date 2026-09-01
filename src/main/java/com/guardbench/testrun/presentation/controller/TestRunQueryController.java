@@ -7,6 +7,8 @@ import java.util.Set;
 import com.guardbench.common.presentation.dto.ApiResponse;
 import com.guardbench.common.presentation.dto.FieldErrorDetail;
 import com.guardbench.common.presentation.dto.ValidationErrorDetail;
+import com.guardbench.testrun.application.CompareTestRunsService;
+import com.guardbench.testrun.application.GetComparableTestRunsService;
 import com.guardbench.testrun.application.GetTestRunDetailService;
 import com.guardbench.testrun.application.GetTestRunListService;
 import com.guardbench.testrun.application.GetTestRunResultListService;
@@ -20,6 +22,8 @@ import com.guardbench.testrun.application.port.out.TestRunListSortField;
 import com.guardbench.testrun.application.port.out.TestRunResultItem;
 import com.guardbench.testrun.application.port.out.TestRunResultListCriteria;
 import com.guardbench.testrun.application.port.out.TestRunResultSortField;
+import com.guardbench.testrun.application.port.out.TestRunComparison;
+import com.guardbench.testrun.application.port.out.TestRunRegressionView;
 import com.guardbench.testrun.domain.Action;
 import com.guardbench.testrun.domain.Severity;
 import com.guardbench.testrun.domain.TestExecutionStatus;
@@ -29,6 +33,8 @@ import com.guardbench.testrun.presentation.dto.TestRunDetailRes;
 import com.guardbench.testrun.presentation.dto.TestRunListRes;
 import com.guardbench.testrun.presentation.dto.TestRunQueryResponseMapper;
 import com.guardbench.testrun.presentation.dto.TestRunResultListRes;
+import com.guardbench.testrun.presentation.dto.ComparableTestRunListRes;
+import com.guardbench.testrun.presentation.dto.TestRunComparisonRes;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -65,18 +71,26 @@ public class TestRunQueryController {
     private static final String SUCCESS_MESSAGE_LIST = "TestRun 목록 조회에 성공했습니다.";
     private static final String SUCCESS_MESSAGE_DETAIL = "TestRun 조회에 성공했습니다.";
     private static final String SUCCESS_MESSAGE_RESULTS = "TestRun 개별 결과 조회에 성공했습니다.";
+    private static final String SUCCESS_MESSAGE_COMPARABLE = "비교 가능한 과거 TestRun 조회에 성공했습니다.";
+    private static final String SUCCESS_MESSAGE_COMPARISON = "TestRun 비교에 성공했습니다.";
 
     private final GetTestRunListService getTestRunListService;
     private final GetTestRunDetailService getTestRunDetailService;
     private final GetTestRunResultListService getTestRunResultListService;
+    private final GetComparableTestRunsService getComparableTestRunsService;
+    private final CompareTestRunsService compareTestRunsService;
 
     public TestRunQueryController(
             GetTestRunListService getTestRunListService,
             GetTestRunDetailService getTestRunDetailService,
-            GetTestRunResultListService getTestRunResultListService) {
+            GetTestRunResultListService getTestRunResultListService,
+            GetComparableTestRunsService getComparableTestRunsService,
+            CompareTestRunsService compareTestRunsService) {
         this.getTestRunListService = getTestRunListService;
         this.getTestRunDetailService = getTestRunDetailService;
         this.getTestRunResultListService = getTestRunResultListService;
+        this.getComparableTestRunsService = getComparableTestRunsService;
+        this.compareTestRunsService = compareTestRunsService;
     }
 
     /**
@@ -165,6 +179,28 @@ public class TestRunQueryController {
         PageResult<TestRunResultItem> result = getTestRunResultListService.getResults(testRunId, criteria);
         TestRunResultListRes response = TestRunQueryResponseMapper.toResultListRes(result);
         return ApiResponse.entity(HttpStatus.OK, SUCCESS_MESSAGE_RESULTS, response);
+    }
+
+    @GetMapping("/{testRunId}/comparable-runs")
+    public ResponseEntity<ApiResponse<ComparableTestRunListRes>> listComparableTestRuns(
+            @PathVariable @Positive(message = "testRunId는 양의 정수여야 합니다.") long testRunId,
+            @RequestParam(defaultValue = "1") @Min(value = 1, message = "page는 1 이상이어야 합니다.") int page,
+            @RequestParam(defaultValue = "20")
+                    @Min(value = 1, message = "size는 1 이상이어야 합니다.")
+                    @Max(value = 100, message = "size는 100 이하여야 합니다.") int size) {
+        PageResult<TestRunRegressionView> result = getComparableTestRunsService.getComparableRuns(
+                testRunId, new PageCriteria(page, size));
+        return ApiResponse.entity(HttpStatus.OK, SUCCESS_MESSAGE_COMPARABLE,
+                TestRunQueryResponseMapper.toComparableListRes(result));
+    }
+
+    @GetMapping("/{currentRunId}/comparisons/{comparisonRunId}")
+    public ResponseEntity<ApiResponse<TestRunComparisonRes>> compareTestRuns(
+            @PathVariable @Positive(message = "currentRunId는 양의 정수여야 합니다.") long currentRunId,
+            @PathVariable @Positive(message = "comparisonRunId는 양의 정수여야 합니다.") long comparisonRunId) {
+        TestRunComparison comparison = compareTestRunsService.compare(currentRunId, comparisonRunId);
+        return ApiResponse.entity(HttpStatus.OK, SUCCESS_MESSAGE_COMPARISON,
+                TestRunQueryResponseMapper.toComparisonRes(comparison));
     }
 
     /**

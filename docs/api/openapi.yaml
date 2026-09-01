@@ -1339,6 +1339,14 @@ components:
     AssertionStatus:
       type: string
       enum: [PASS, FAIL]
+    ComparabilityStatus:
+      type: string
+      description: 저장 verdict 두 개를 비교할 수 있는지 나타낸다.
+      enum: [COMPARABLE, NOT_COMPARABLE]
+    RegressionChangeType:
+      type: string
+      description: ExpectedResult 기준으로 comparison Run에서 current Run으로의 변화 분류
+      enum: [NO_CHANGE, SECURITY_REGRESSION, USABILITY_REGRESSION, IMPROVEMENT, POLICY_BEHAVIOR_CHANGED]
     EvaluationOutcome:
       type: string
       description: |
@@ -1475,13 +1483,65 @@ components:
     TestRunComparisonRes:
       type: object
       description: |
-        comparison Run에서 current Run으로의 저장 결과 비교 응답 식별자다.
-        구체 comparability key와 Regression 결과 DTO는 #119가 최종 소유한다.
-      required: [currentRunId, comparisonRunId]
+        comparison Run에서 current Run으로의 저장된 Evaluator verdict 변화다.
+        current Run은 최신 실행이고 comparison Run은 과거 실행이다.
+        비교 과정에서 Application Target과 Evaluator를 다시 호출하지 않는다.
+      required:
+        - currentRunId
+        - comparisonRunId
+        - totalCases
+        - changedCount
+        - unchangedCount
+        - improvedCount
+        - regressedCount
+        - notComparableCount
+        - items
       additionalProperties: false
       properties:
         currentRunId: { type: integer, format: int64, minimum: 1 }
         comparisonRunId: { type: integer, format: int64, minimum: 1 }
+        totalCases: { type: integer, minimum: 0 }
+        changedCount: { type: integer, minimum: 0, description: 개선 또는 Regression으로 분류된 케이스 수 }
+        unchangedCount: { type: integer, minimum: 0, description: 두 Run의 verdict가 같은 케이스 수 }
+        improvedCount: { type: integer, minimum: 0, description: ExpectedResult 기준으로 현재 Run이 개선된 케이스 수 }
+        regressedCount: { type: integer, minimum: 0, description: ExpectedResult 기준으로 현재 Run이 악화된 케이스 수 }
+        notComparableCount: { type: integer, minimum: 0, description: 두 Run 중 저장 verdict가 없어 변화 판단을 할 수 없는 케이스 수 }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/TestRunComparisonItemRes' }
+    TestRunComparisonItemRes:
+      type: object
+      description: 하나의 동일 TestCaseSnapshot 정의에 대한 저장 verdict 비교
+      required:
+        - snapshotId
+        - testCaseId
+        - name
+        - input
+        - expectedAction
+        - comparisonVerdict
+        - currentVerdict
+        - comparabilityStatus
+        - changeType
+      additionalProperties: false
+      properties:
+        snapshotId: { type: integer, format: int64, minimum: 1, description: current Run의 Snapshot ID }
+        testCaseId: { type: integer, format: int64, minimum: 1 }
+        name: { type: string, minLength: 1 }
+        input: { type: string, minLength: 1 }
+        expectedAction: { $ref: '#/components/schemas/Action' }
+        comparisonVerdict:
+          type: string
+          allOf: [{ $ref: '#/components/schemas/Action' }]
+          nullable: true
+        currentVerdict:
+          type: string
+          allOf: [{ $ref: '#/components/schemas/Action' }]
+          nullable: true
+        comparabilityStatus: { $ref: '#/components/schemas/ComparabilityStatus' }
+        changeType:
+          type: string
+          allOf: [{ $ref: '#/components/schemas/RegressionChangeType' }]
+          nullable: true
     ErrorDetail:
       type: object
       required: [code]
