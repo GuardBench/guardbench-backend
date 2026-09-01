@@ -53,7 +53,7 @@
 | 결정 | [ADR 0009: TestCase 논리 삭제의 동시 요청 처리](decisions/0009-testcase-soft-delete-concurrency.md) | APPROVED | Backend | 2026-08-25 | 없음 |
 | 결정 | [ADR 0010: TestRun 단일 Target 실행 모델](decisions/0010-single-target-test-run-model.md) | APPROVED | Backend | 2026-08-30 | 없음 |
 | 결정 | [ADR 0011: AI Application Target과 Guardrail Evaluator 역할 분리](decisions/0011-ai-application-target-and-guardrail-evaluator.md) | APPROVED | Backend | 2026-08-31 | 없음 |
-| AI 개발 | [작업 워크플로](ai-development/workflow.md) | APPROVED | Team | 2026-08-24 | 현재 대화에서 승격 |
+| AI 개발 | [작업 워크플로](ai-development/workflow.md) | APPROVED | Team | 2026-09-01 | 현재 대화에서 승격 |
 | AI 개발 | [Backend CI와 dev Merge Gate](ai-development/backend-ci-merge-gate.md) | DRAFT | Backend | 2026-08-26 | 없음 |
 | AI 개발 | [코드 리뷰](ai-development/review.md) | APPROVED | Team | 2026-08-31 | PR #20·#23 사례와 Issue #33 |
 
