@@ -10,7 +10,7 @@ API의 단일 명세는 [openapi.yaml](openapi.yaml)이다. Endpoint, 필드, En
 
 ## 계약 층위
 
-OpenAPI는 [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)을 HTTP로 구체화한 **합의된 목표 API 계약**이다. #114의 Evaluation Profile → EvaluatorReference 고정과 #115/#125/#128의 HTTP Application Target 경계는 구현되었고, #116~#119가 Evaluator orchestration, Quality Gate와 Regression의 남은 차이를 해소한다.
+OpenAPI는 [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)을 HTTP로 구체화한 **합의된 목표 API 계약**이다. #114의 Evaluation Profile → EvaluatorReference 고정, #115/#125/#128의 OpenAI-compatible HTTP Application Target 경계와 #116의 Bedrock Guardrail Evaluator Adapter는 구현되었고, #117~#119가 Worker orchestration, Quality Gate와 Regression의 남은 차이를 해소한다.
 
 ```text
 TestCaseSnapshot → OpenAI-compatible AI Application Target → Natural Language Response
@@ -118,7 +118,7 @@ HTTP Application Target 실행, OpenAI-compatible response 정규화, inline Eva
 - 개별 결과 목록은 `FINISHED`에서만 조회한다. 그 전에는 `409 TEST_RUN_NOT_FINISHED`다.
 - 개별 결과의 `TestRunResultItemRes`는 Snapshot input, `executionStatus`, `evaluatorVerdict`, `expectedAction`, `assertionStatus`와 안전한 `error`를 제공한다. 값은 실행 당시 저장 결과이며 현재 TestCase 수정과 무관하다.
 - Application의 자연어 응답은 내부 Evaluator 입력이지만 public DTO에는 `applicationResponse`, `targetResponse`, `naturalLanguageResponse` 어떤 이름으로도 노출하지 않는다.
-- `error.stage`는 `APPLICATION_TARGET | EVALUATOR`로 실패 단계를 구분한다. code의 구체 taxonomy는 #115~#117이 소유하며 provider 원문, stack trace, credential과 ARN은 노출하지 않는다.
+- `error.stage`는 `APPLICATION_TARGET | EVALUATOR`로 실패 단계를 구분한다. code의 구체 taxonomy는 #117이 소유하며 provider 원문, stack trace, credential과 ARN은 노출하지 않는다.
 - `evaluationOutcome` 필터는 `TRUE_POSITIVE | TRUE_NEGATIVE | FALSE_POSITIVE | FALSE_NEGATIVE` 상세 조회에 사용한다.
 - Evaluator metrics의 분류는 다음과 같다.
 

@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Scope: GitHub Issues #14, #106, #110, #114, #125, #128
+> Scope: GitHub Issues #14, #106, #110, #114, #116, #125, #128
 > Last reviewed: 2026-09-01
 > Target architecture: [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)
 > Related broad documentation issue: [#49](https://github.com/GuardBench/guardbench-backend/issues/49)
@@ -35,14 +35,14 @@
 | Application/Evaluator execution result | `src/main/resources/db/migration/V9__separate_application_and_evaluator_results.sql`, `V10__remove_legacy_actual_action.sql` | Application response, Evaluator verdict, 실패 단계와 legacy action column 제거 및 execution shape CHECK 제약 |
 | ERD | [PlantUML ERD](../diagrams/guardbench-mvp-physical-erd.puml) | migration 적용 후 관계와 cardinality |
 | TestRun write adapters | `testrun/infrastructure/persistence` | TestRun, Snapshot, TestExecution, idempotency, Outbox, claim Adapter |
-| Target/Evaluator adapters | `target/infrastructure/persistence`, `testrun/infrastructure/evaluator` | HTTP Target 등록, operator catalog 해석과 immutable EvaluatorReference persistence |
+| Target/Evaluator adapters | `target/infrastructure/persistence`, `testrun/infrastructure/evaluator`, `evaluator/infrastructure/bedrock` | HTTP Target 등록, operator catalog 해석, immutable EvaluatorReference persistence와 `bedrock_guardrail_evaluator` 조회 |
 | Evaluation write adapters | `evaluation/infrastructure/persistence` | Assertion-only SnapshotEvaluation 및 NOT_EVALUATED QualityGateResult Adapter |
 | Evaluation write ports | `evaluation/domain/repository` | Evaluation 소유 local reference VO를 쓰는 write-side Port |
 | PostgreSQL integration tests | `src/test/java/com/guardbench/*Persistence*IntegrationTest.java`, `EvaluationPersistenceAdapterIntegrationTest.java` | Flyway schema와 Repository round-trip·제약 검증 |
 
 ## HTTP Target persistence 계약
 
-`http_endpoint_target.model`은 신규 MVP 데이터에서 필수다. `TargetReferenceReq.model`, Target 등록 값, DB column과 조회 응답이 모두 non-blank/non-null 의미로 정렬된다. Generic `{"input": ...}` / `{"response": ...}` Target 구분을 위해 nullable model을 사용하지 않는다.
+`http_endpoint_target.model`은 신규 MVP 데이터에서 필수다. `TargetReferenceReq.model`, Target 등록 값, DB column과 조회 응답이 모두 non-blank/non-null 의미로 정렬된다. MVP는 generic `{"input": ...}` / `{"response": ...}` Target 계약을 지원하지 않으므로 Target 종류를 구분하기 위한 nullable model을 두지 않는다.
 
 ## 시각 소유권
 

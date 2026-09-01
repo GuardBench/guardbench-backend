@@ -1353,7 +1353,7 @@ components:
         사용자에게 안전하게 노출할 수 있는 실행 오류 Detail이다.
         Provider 원문 응답, stack trace, 내부 예외 메시지는 포함하지 않는다.
         stage는 Application/Execution 실패와 Evaluator 실패를 구분한다.
-        code의 목표 값 목록과 terminal 상태 매핑은 #115~#117이 최종 소유한다.
+        code의 목표 값 목록과 terminal 상태 매핑은 #117이 최종 소유한다.
       required: [stage, code, message]
       additionalProperties: false
       properties:

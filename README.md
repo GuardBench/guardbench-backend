@@ -15,7 +15,7 @@ AI Application의 자연어 응답을 Evaluator로 판정하고, 기대 동작 �
 
 ## 구현 상태
 
-목표 계약은 [ADR 0011](docs/decisions/0011-ai-application-target-and-guardrail-evaluator.md)과 [OpenAPI](docs/api/openapi.yaml)다. 현재 코드는 아직 Bedrock Guardrail과 HTTP Endpoint를 같은 Target abstraction으로 취급하고 inline Evaluation Profile을 해석하지 않으며 단일 Target Quality Gate를 `NOT_EVALUATED`로 저장한다. #114~#119에서 Application Target, Evaluator, Quality Gate와 Regression 구현을 순차 전환한다.
+목표 계약은 [ADR 0011](docs/decisions/0011-ai-application-target-and-guardrail-evaluator.md)과 [OpenAPI](docs/api/openapi.yaml)다. 현재 코드는 OpenAI-compatible `HTTP_ENDPOINT` Application Target만 접수하고, inline Evaluation Profile을 운영자 catalog로 해석해 immutable `EvaluatorReference`를 고정하며, Bedrock Guardrail을 Evaluator Adapter로 구현했다. 다만 Worker는 아직 Evaluator를 호출하지 않고 Application 응답이 정확히 `ALLOW` 또는 `BLOCK`일 때만 결과를 저장하며 단일 Target Quality Gate를 `NOT_EVALUATED`로 저장한다. #117~#119에서 Worker orchestration, Quality Gate와 Regression을 순차 전환한다.
 
 ## 로컬 개발
 
