@@ -51,9 +51,9 @@
 
 ## 목표 구조와의 차이
 
-#114의 profile/evaluator snapshot과 #115/#125/#128의 OpenAI-compatible HTTP Application Target 경계까지 구현되어 있다. #116의 Bedrock Guardrail Evaluator Adapter도 구현되었으나 Worker 실행 경로에 연결되지 않았고, 결과 persistence는 아직 legacy `ActualResult` 경계를 사용한다. Quality Gate는 `NOT_EVALUATED`만 저장하며 Regression 저장/API는 없다.
+#114의 profile/evaluator snapshot과 #115/#125/#128의 OpenAI-compatible HTTP Application Target 경계까지 구현되어 있다. #116의 Bedrock Guardrail Evaluator Adapter도 구현되었으나 Worker 실행 경로에 연결되지 않았고, 결과 persistence는 아직 legacy `ActualResult` 경계를 사용한다. Quality Gate는 현재 Run의 평가 가능한 Assertion 통과율과 전체 실행 성공률을 저장하며, Regression 저장/API는 없다.
 
-#117~#119가 Worker orchestration, Quality Gate와 Regression을 완성한다.
+#117과 #119가 Worker orchestration과 Regression을 완성한다.
 
 ## 범위 제외
 

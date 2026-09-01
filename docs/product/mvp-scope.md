@@ -71,7 +71,7 @@ Completed TestRun A + Completed TestRun B
 
 공개 Application Target type은 OpenAI-compatible `HTTP_ENDPOINT` 하나이며 `model`이 필수다. 접수 시 inline Evaluation Profile을 운영자 catalog로 해석해 immutable `EvaluatorReference`를 고정하고, Bedrock Guardrail은 Evaluator Adapter로 존재한다.
 
-아직 Worker는 Evaluator를 호출하지 않는다. Application 자연어 응답이 정확히 `ALLOW` 또는 `BLOCK`일 때만 `ActualResult`로 저장하고 그 밖의 응답은 실패로 수렴하며, Quality Gate는 `NOT_EVALUATED`이고 Regression API는 없다. 이는 목표 계약의 구현 완료 상태가 아니다.
+아직 Worker는 Evaluator를 호출하지 않는다. Application 자연어 응답이 정확히 `ALLOW` 또는 `BLOCK`일 때만 `ActualResult`로 저장하고 그 밖의 응답은 실패로 수렴한다. Quality Gate는 현재 Run의 Assertion 통과율과 실행 성공률을 집계하며, Regression API는 없다. 이는 목표 계약의 전체 구현 완료 상태가 아니다.
 
 완료된 전환:
 
@@ -83,7 +83,7 @@ Completed TestRun A + Completed TestRun B
 남은 전환:
 
 - #117: Application 실행 → Evaluator → Assertion Worker
-- #118: 현재 TestRun Assertion 기반 Quality Gate
+- #118: 현재 TestRun Assertion 기반 Quality Gate (완료)
 - #119: 저장 결과 기반 Regression API
 
 ## Non-Goals
