@@ -66,11 +66,8 @@ final class EvaluationPersistenceMapper {
         return QualityGateResultEntity.of(
                 source.reference().value(),
                 source.status().name(),
-                metrics == null ? null : metrics.candidateAssertionPassRate(),
-                metrics == null ? null : Math.toIntExact(metrics.securityRegressionCount()),
-                metrics == null ? null : metrics.securityRegressionRate(),
-                metrics == null ? null : metrics.usabilityRegressionRate(),
-                metrics == null ? null : metrics.testExecutionSuccessRate(),
+                metrics == null ? null : metrics.assertionPassRate(),
+                metrics == null ? null : metrics.executionSuccessRate(),
                 source.createdAt());
     }
 
@@ -79,11 +76,8 @@ final class EvaluationPersistenceMapper {
         QualityGateMetrics metrics = status == QualityGateStatus.NOT_EVALUATED
                 ? null
                 : new QualityGateMetrics(
-                        source.candidateAssertionPassRate,
-                        source.securityRegressionCount,
-                        source.securityRegressionRate,
-                        source.usabilityRegressionRate,
-                        source.testExecutionSuccessRate);
+                        source.assertionPassRate,
+                        source.executionSuccessRate);
         return new QualityGateResult(
                 new TestRunEvaluationReference(source.testRunId),
                 status,
