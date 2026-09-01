@@ -25,7 +25,7 @@ class PersistenceFoundationIntegrationTest {
     void appliesApprovedSchemaToPostgreSql(@Autowired Flyway flyway, @Autowired JdbcTemplate jdbcTemplate) {
         MigrationInfo current = flyway.info().current();
         assertNotNull(current);
-        assertEquals("10", current.getVersion().getVersion());
+        assertEquals("11", current.getVersion().getVersion());
         Integer tableCount = jdbcTemplate.queryForObject("""
                 SELECT count(*) FROM information_schema.tables
                 WHERE table_schema = 'public' AND table_name IN (

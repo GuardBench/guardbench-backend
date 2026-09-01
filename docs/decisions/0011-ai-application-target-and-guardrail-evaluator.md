@@ -69,6 +69,7 @@ Completed TestRun A + Completed TestRun B
 ### 현재 구현과 전환
 
 이 ADR과 [OpenAPI](../api/openapi.yaml)는 합의된 계약이다. ADR 승인 당시의 구현 차이는 후속 Issue에서 해소되었으며, 현재 구현은 새 TestRun에 `HTTP_ENDPOINT` Application Target과 immutable EvaluatorReference를 고정하고 Bedrock Guardrail을 Evaluator로 호출한다. Worker는 Application response → `EvaluationResult` → Assertion 흐름으로 결과를 저장한다. `bedrock_guardrail_target`은 기존 V3 데이터 조회를 위해 남아 있지만 새 TestRun 등록에는 사용하지 않는다.
+Quality Gate는 현재 Run의 평가 가능한 Assertion 통과율과 전체 실행 성공률을 집계하며, 두 비율이 각각 95% 이상일 때 PASS, 평가 가능한 Assertion이 없으면 NOT_EVALUATED가 된다. Regression은 #119 범위다.
 
 이 계약을 구현한 후속 Issue와 남은 범위는 다음과 같다.
 

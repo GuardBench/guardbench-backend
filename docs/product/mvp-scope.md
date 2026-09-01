@@ -71,6 +71,8 @@ Completed TestRun A + Completed TestRun B
 
 현재 코드는 OpenAI-compatible `HTTP_ENDPOINT` Application Target과 Bedrock Guardrail Evaluator를 분리하고, Application response를 Evaluator의 입력으로 사용해 `EvaluationResult`와 Assertion을 생성한다. Quality Gate와 Regression API는 각각 #118과 #119 범위다.
 
+Quality Gate는 현재 Run의 평가 가능한 Assertion 통과율과 전체 Snapshot 실행 성공률을 집계하며, 95% 기준을 적용한다. Regression API는 #119 범위다.
+
 - #114: EvaluatorReference 고정과 Guardrail Target 의존 제거
 - #115: HTTP Endpoint AI Application 실행과 자연어 응답 수집
 - #125·#128: OpenAI-compatible 전용 계약과 필수 `model`
@@ -79,7 +81,7 @@ Completed TestRun A + Completed TestRun B
 남은 전환:
 
 - #117: Application 실행 → Evaluator → Assertion Worker
-- #118: 현재 TestRun Assertion 기반 Quality Gate
+- #118: 현재 TestRun Assertion 기반 Quality Gate (완료)
 - #119: 저장 결과 기반 Regression API
 
 ## Non-Goals

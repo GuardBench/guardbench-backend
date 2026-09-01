@@ -118,13 +118,13 @@ class EvaluationPersistenceAdapterIntegrationTest {
     }
 
     @Test
-    @DisplayName("PASS QualityGate의 모든 metrics와 Application Clock createdAt을 저장·복원한다")
+    @DisplayName("PASS QualityGate의 현재 Run metrics와 Application Clock createdAt을 저장·복원한다")
     void persistsEvaluatedQualityGate(
             @Autowired QualityGateResultRepository repository) {
         QualityGateResult result = new QualityGateResult(
                 new TestRunEvaluationReference(FIRST_TEST_RUN_ID),
                 QualityGateStatus.PASS,
-                new QualityGateMetrics(0.95, 0L, 0.0, 0.05, 0.95),
+                new QualityGateMetrics(0.95, 0.95),
                 CREATED_AT.plusSeconds(2));
 
         repository.save(result);
@@ -144,7 +144,7 @@ class EvaluationPersistenceAdapterIntegrationTest {
         QualityGateResult replacement = new QualityGateResult(
                 result.reference(),
                 QualityGateStatus.FAIL,
-                new QualityGateMetrics(0.0, 1L, 1.0, 0.0, 0.0),
+                new QualityGateMetrics(0.0, 0.0),
                 CREATED_AT.plusSeconds(4));
 
         repository.save(result);

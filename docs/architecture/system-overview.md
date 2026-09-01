@@ -56,7 +56,7 @@ Regression은 위 실행 흐름에 포함되지 않는다. 완료된 두 TestRun
 
 #116을 통해 AWS Bedrock Guardrail이 Evaluator Adapter로 전환되어 `EvaluatorExecutionPort` 구현으로 존재한다. #117을 통해 Worker가 Application response를 Evaluator에 전달하고 `EvaluationResult`와 Assertion을 저장한다. Application response는 내부 실행 결과로만 보존하며 public 결과에는 노출하지 않는다.
 
-현재 남은 핵심 구현은 #118의 현재 TestRun Assertion 기반 Quality Gate와 #119의 저장된 완료 Run 기반 Regression이다.
+현재 남은 핵심 구현은 #119의 저장된 완료 Run 기반 Regression이다. #117의 Worker orchestration과 #118의 현재 TestRun Assertion 기반 Quality Gate는 구현되었다.
 
 전환 중 물리 구조는 [TestRun Persistence 구현 인덱스](testrun-persistence.md)에서 확인한다.
 

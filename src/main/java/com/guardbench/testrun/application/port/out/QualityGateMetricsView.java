@@ -1,17 +1,10 @@
 package com.guardbench.testrun.application.port.out;
 
 public record QualityGateMetricsView(
-        double candidateAssertionPassRate,
-        long securityRegressionCount,
-        double securityRegressionRate,
-        double usabilityRegressionRate,
-        double testExecutionSuccessRate) {
+        double assertionPassRate,
+        double executionSuccessRate) {
     public QualityGateMetricsView {
-        if (!isRate(candidateAssertionPassRate)
-                || securityRegressionCount < 0
-                || !isRate(securityRegressionRate)
-                || !isRate(usabilityRegressionRate)
-                || !isRate(testExecutionSuccessRate)) {
+        if (!isRate(assertionPassRate) || !isRate(executionSuccessRate)) {
             throw new IllegalArgumentException("invalid Quality Gate metrics");
         }
     }

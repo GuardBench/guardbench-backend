@@ -135,11 +135,8 @@ entity "quality_gate_result" as quality_gate {
   * test_run_id : BIGINT <<PK, FK>>
   --
   * gate_status : VARCHAR(32)
-    candidate_assertion_pass_rate : DOUBLE PRECISION
-    security_regression_count : INTEGER
-    security_regression_rate : DOUBLE PRECISION
-    usability_regression_rate : DOUBLE PRECISION
-    test_execution_success_rate : DOUBLE PRECISION
+    assertion_pass_rate : DOUBLE PRECISION
+    execution_success_rate : DOUBLE PRECISION
   * created_at : TIMESTAMPTZ(6)
 }
 
