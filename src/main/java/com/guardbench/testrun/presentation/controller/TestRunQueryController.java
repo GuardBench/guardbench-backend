@@ -148,7 +148,10 @@ public class TestRunQueryController {
             @RequestParam(required = false) Severity severity,
             @RequestParam(required = false) TestExecutionStatus executionStatus,
             @RequestParam(required = false)
-                    @Pattern(regexp = "PASS|FAIL", message = "허용되지 않은 값입니다.") String assertionStatus) {
+                    @Pattern(regexp = "PASS|FAIL", message = "허용되지 않은 값입니다.") String assertionStatus,
+            @RequestParam(required = false)
+                    @Pattern(regexp = "TRUE_POSITIVE|TRUE_NEGATIVE|FALSE_POSITIVE|FALSE_NEGATIVE",
+                            message = "허용되지 않은 값입니다.") String evaluationOutcome) {
         List<SortOrder<TestRunResultSortField>> sortOrders =
                 SortParamParser.parse(sort, TestRunResultSortField.class);
         TestRunResultListCriteria criteria = new TestRunResultListCriteria(
@@ -159,6 +162,7 @@ public class TestRunQueryController {
                 severity,
                 executionStatus,
                 assertionStatus,
+                evaluationOutcome,
                 sortOrders,
                 new PageCriteria(page, size));
 

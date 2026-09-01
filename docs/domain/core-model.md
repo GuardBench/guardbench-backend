@@ -83,6 +83,6 @@ Completed TestRun A + Completed TestRun B
 
 #114를 통해 EvaluationProfile catalog resolution과 immutable EvaluatorReference 고정 구조가 구현되었다. #115와 #125를 통해 HTTP Application Target 실행과 OpenAI-compatible 응답 정규화가 구현되었고, #128에서 generic HTTP 경로를 제거해 OpenAI-compatible 전용 계약으로 단순화했다. #116을 통해 Bedrock Guardrail이 Evaluator Adapter로 전환되었다.
 
-현재 legacy worker는 아직 Evaluator Port를 호출하지 않고 결과를 `ActualResult`로 저장한다. #117이 Worker orchestration을 Application 실행 → Evaluator → Assertion 흐름으로 변경하고, #118과 #119가 각각 Quality Gate와 Regression을 완성한다.
+#116과 #117을 통해 Bedrock Guardrail Evaluator와 Application 실행 → Evaluator → Assertion Worker orchestration이 구현되었다. #118과 #119가 각각 Quality Gate와 Regression을 완성한다.
 
-목표 OpenAPI를 배포 완료의 증거로 해석하지 않고, 아직 남은 #117~#119 구현 상태를 코드와 함께 확인한다.
+목표 OpenAPI를 배포 완료의 증거로 해석하지 않고, 아직 남은 #118~#119 구현 상태를 코드와 함께 확인한다.

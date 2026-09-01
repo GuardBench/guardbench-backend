@@ -54,9 +54,9 @@ Regression은 위 실행 흐름에 포함되지 않는다. 완료된 두 TestRun
 
 #115와 #125를 통해 `HTTP_ENDPOINT` Application Target이 자연어 응답을 수집하고 OpenAI-compatible chat completions 요청·응답을 처리하는 Adapter가 구현되었다. #128은 MVP 계약을 단순화해 generic HTTP 경로를 제거하고 모든 HTTP Target에 `model`을 필수화했다.
 
-#116을 통해 AWS Bedrock Guardrail이 Evaluator Adapter로 전환되어 `EvaluatorExecutionPort` 구현으로 존재한다. 다만 Worker는 아직 이 Port를 호출하지 않고 Application 실행 결과를 legacy `ActualResult`로 저장한다.
+#116을 통해 AWS Bedrock Guardrail이 Evaluator Adapter로 전환되어 `EvaluatorExecutionPort` 구현으로 존재한다. #117을 통해 Worker가 Application response를 Evaluator에 전달하고 `EvaluationResult`와 Assertion을 저장한다. Application response는 내부 실행 결과로만 보존하며 public 결과에는 노출하지 않는다.
 
-현재 남은 핵심 전환은 #117의 Worker orchestration과 #119의 저장된 완료 Run 기반 Regression이다. #118의 현재 TestRun Assertion 기반 Quality Gate는 구현되었다.
+현재 남은 핵심 구현은 #119의 저장된 완료 Run 기반 Regression이다. #117의 Worker orchestration과 #118의 현재 TestRun Assertion 기반 Quality Gate는 구현되었다.
 
 전환 중 물리 구조는 [TestRun Persistence 구현 인덱스](testrun-persistence.md)에서 확인한다.
 

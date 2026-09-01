@@ -72,8 +72,8 @@ class FinalizeTestRunServiceTest {
         @DisplayName("모든 Assertion이 통과하고 실행이 성공하면 PASS다")
         void allAssertionsPass() {
             loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
-                    succeededPair(10L, "BLOCK", "BLOCK", "BLOCK"),
-                    succeededPair(20L, "BLOCK", "BLOCK", "BLOCK")
+                    succeededExecution(10L, "BLOCK", "BLOCK"),
+                    succeededExecution(20L, "BLOCK", "BLOCK")
             )));
 
             FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
@@ -100,7 +100,7 @@ class FinalizeTestRunServiceTest {
         @DisplayName("일부 실행이 FAILED terminal이면 outcome=INCOMPLETE로 최종화한다")
         void incompleteExecution() {
             loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
-                    succeededPair(10L, "BLOCK", "BLOCK", "BLOCK"),
+                    succeededExecution(10L, "BLOCK", "BLOCK"),
                     new SnapshotExecutionFact(20L, "BLOCK", terminal("FAILED", null))
             )));
 
@@ -155,10 +155,10 @@ class FinalizeTestRunServiceTest {
     class ReadinessScenario {
 
         @Test
-        @DisplayName("실행 결과가 아직 없으면 최종화하지 않지만 진행도는 갱신한다")
-        void notReadyWhenExecutionIsMissing() {
+        @DisplayName("실행 결과가 아직 없는 Snapshot이 있으면 최종화하지 않지만 진행도는 갱신한다")
+        void notReadyWhenSnapshotHasNoExecutionYet() {
             loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
-                    succeededPair(10L, "BLOCK", "BLOCK", "BLOCK"),
+                    succeededExecution(10L, "BLOCK", "BLOCK"),
                     new SnapshotExecutionFact(20L, "BLOCK", TargetExecutionFact.notExecuted())
             )));
 
@@ -175,7 +175,7 @@ class FinalizeTestRunServiceTest {
         @DisplayName("Snapshot이 TestCase 수만큼 준비되지 않았으면 최종화도 진행도 갱신도 하지 않는다")
         void notReadyWhenSnapshotsIncomplete() {
             loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(3, List.of(
-                    succeededPair(10L, "BLOCK", "BLOCK", "BLOCK")
+                    succeededExecution(10L, "BLOCK", "BLOCK")
             )));
 
             FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
@@ -190,14 +190,14 @@ class FinalizeTestRunServiceTest {
         @DisplayName("마지막 완료로 모든 실행이 terminal이 되면 최종화한다")
         void finalizesWhenLastExecutionBecomesTerminal() {
             loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
-                    succeededPair(10L, "BLOCK", "BLOCK", "BLOCK"),
+                    succeededExecution(10L, "BLOCK", "BLOCK"),
                     new SnapshotExecutionFact(20L, "BLOCK", TargetExecutionFact.notExecuted())
             )));
             assertInstanceOf(FinalizationOutcome.NotReady.class, service.finalize(TEST_RUN_ID));
 
             loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
-                    succeededPair(10L, "BLOCK", "BLOCK", "BLOCK"),
-                    succeededPair(20L, "BLOCK", "BLOCK", "BLOCK")
+                    succeededExecution(10L, "BLOCK", "BLOCK"),
+                    succeededExecution(20L, "BLOCK", "BLOCK")
             )));
 
             FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
@@ -224,8 +224,8 @@ class FinalizeTestRunServiceTest {
             qualityGateResultRepo.preStore(existing);
             loadFactsPort.setFacts(TEST_RUN_ID, new TestRunExecutionFacts(
                     TEST_RUN_ID, "FINISHED", 2, List.of(
-                    succeededPair(10L, "BLOCK", "BLOCK", "BLOCK"),
-                    succeededPair(20L, "BLOCK", "BLOCK", "BLOCK"))));
+                    succeededExecution(10L, "BLOCK", "BLOCK"),
+                    succeededExecution(20L, "BLOCK", "BLOCK"))));
 
             FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
 
@@ -256,8 +256,8 @@ class FinalizeTestRunServiceTest {
             snapshotEvaluationRepo.preStore(preExisting);
 
             loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
-                    succeededPair(10L, "BLOCK", "BLOCK", "BLOCK"),
-                    succeededPair(20L, "BLOCK", "BLOCK", "BLOCK")
+                    succeededExecution(10L, "BLOCK", "BLOCK"),
+                    succeededExecution(20L, "BLOCK", "BLOCK")
             )));
 
             FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
@@ -305,10 +305,9 @@ class FinalizeTestRunServiceTest {
         return new TestRunExecutionFacts(TEST_RUN_ID, "RUNNING", testCaseCount, facts);
     }
 
-    private static SnapshotExecutionFact succeededPair(
+    private static SnapshotExecutionFact succeededExecution(
             long snapshotId,
             String expectedActionCode,
-            String ignoredBaselineActionCode,
             String targetActionCode
     ) {
         return new SnapshotExecutionFact(

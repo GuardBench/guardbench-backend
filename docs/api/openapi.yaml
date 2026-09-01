@@ -10,9 +10,9 @@ info:
     Origin: https://app.notion.com/p/3c0eeed6b62d805dac0be8db487b1359
     HTTP 상태와 GuardBench의 실행·판정 상태는 서로 독립적이다.
     이 schema는 ADR 0011의 합의된 AI Application Target + Evaluator 목표 계약을 명세한다.
-    #114의 EvaluatorReference 고정, #115/#125/#128의 OpenAI-compatible HTTP Application Target 계약과
-    #116의 Bedrock Guardrail Evaluator Adapter는 구현되었고,
-    #117과 #119가 Worker orchestration과 Regression의 남은 차이를 해소한다.
+    #114의 EvaluatorReference 고정, #115/#125/#128의 OpenAI-compatible HTTP Application Target 계약,
+    #116~#117의 Evaluator Adapter·Worker orchestration과 결과 경계는 구현되었고,
+    #118의 현재 Run Quality Gate가 구현되었으며 #119가 Regression을 담당한다.
 servers:
   - url: http://localhost:8080
 security: []

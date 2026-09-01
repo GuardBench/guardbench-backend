@@ -71,4 +71,5 @@ HTTP 오류 ≠ Application 실행 오류 ≠ Evaluator 오류 ≠ Assertion FAI
 
 ## 현재 구현
 
-현재 worker는 Application 자연어 응답을 Evaluator에 전달하지 않는다. 응답 문자열이 정확히 `ALLOW` 또는 `BLOCK`일 때만 `ActualResult`로 저장해 ExpectedResult와 Assertion하고, 그 밖의 자연어 응답은 `PROVIDER_RESPONSE_INVALID` 실패로 수렴한다. 현재 Quality Gate는 저장된 Assertion과 실행 결과를 집계하고, 평가 가능한 Assertion이 없을 때만 `NOT_EVALUATED`로 저장한다. Worker의 Evaluator 연결은 #117, Regression API는 #119에서 해소한다.
+현재 코드는 Application response를 내부 execution에 저장하고 Bedrock Guardrail Evaluator가 만든 `EvaluationResult`를 ExpectedResult와 Assertion에 사용한다. 단일 TestRun Quality Gate와 Regression은 각각 #118과 #119 범위다.
+Quality Gate는 현재 Run의 평가 가능한 Assertion 통과율과 전체 Snapshot 실행 성공률을 집계하고, 두 비율이 각각 95% 이상이면 `PASS`, 하나라도 미달하면 `FAIL`이다. 평가 가능한 Assertion이 없으면 `NOT_EVALUATED`와 null metrics를 저장한다.

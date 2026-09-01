@@ -32,6 +32,10 @@ class ExecutionContextQueryAdapter implements LoadExecutionContextPort {
             TestCaseSnapshotEntity snapshot,
             TestRunEntity testRun
     ) {
-        return new ExecutionContext(testRun.targetReferenceId, snapshot.input, testRun.id);
+        return new ExecutionContext(
+                testRun.targetReferenceId,
+                snapshot.input,
+                testRun.id,
+                testRun.evaluatorReferenceId);
     }
 }

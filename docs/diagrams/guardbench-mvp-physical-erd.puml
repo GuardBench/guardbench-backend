@@ -107,7 +107,9 @@ entity "test_execution" as execution {
   * snapshot_id : BIGINT <<PK, FK>>
   --
   * result_status : VARCHAR(16)
-    actual_action : VARCHAR(16)
+    application_response : TEXT
+    evaluator_verdict : VARCHAR(16)
+    error_stage : VARCHAR(32)
     error_code : TEXT
     error_message : TEXT
     started_at : TIMESTAMPTZ(6)

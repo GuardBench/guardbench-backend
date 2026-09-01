@@ -10,9 +10,9 @@
 
 이 문서는 ADR·ERD·Migration을 복사하거나 새 동작·DB 구조를 정하지 않는다. 구현은 항상 Primary contract를 근거로 하며, Primary와 보조 참조가 충돌하거나 필요한 계약 키가 없으면 Issue에 기록하고 중단한다.
 
-목표 Application Target → Evaluator 실행 계약은 [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)이 소유한다. 이 표의 각 행은 #106까지의 비동기 실행 골격을 가리키며, 그중 Bedrock Target 준비·실행 관련 서술은 #114·#115·#116 이전 상태의 기록이다. 현재 `dev`의 Application Target 실행은 OpenAI-compatible HTTP Adapter(#115·#125·#128)이고 Bedrock Guardrail은 Evaluator Adapter(#116)다. 현재 Quality Gate는 #118에서 정한 현재 Run의 Assertion·실행 성공률을 집계하며, Worker의 Evaluator 연결은 #117, Regression은 #119 범위에 남아 있다.
+Application Target → Evaluator 실행 계약은 [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)이 소유한다. #116~#117에서 Bedrock Evaluator Adapter와 Application response → Evaluator verdict → Assertion 실행 경계를 구현했으며, 이 맵의 retry·claim·Outbox 계약과 함께 적용한다. Quality Gate는 #118, Regression은 #119 범위다.
 
-각 행의 Primary contract는 #14·#15·#16·#17·#18의 실제 구현(Migration, JPA Entity, Worker Service, Application Service)과 대조 검증되었다(#49). #19의 `MvpEndToEndFlowIntegrationTest`는 실제 PostgreSQL에서 접수·멱등성·정상/부분 실패·materialization 실패의 Worker 체인을 검증한다. SQS 전송·DLQ처럼 이 통합 테스트가 직접 실행하지 않는 경계는 각 구현 작업의 단위·통합 테스트가 담당한다.
+각 행의 Primary contract는 현재 Migration, JPA Entity, Worker Service, Application Service와 대조해 확인한다. PostgreSQL 통합 테스트는 접수·멱등성·부분 실패·최종화와 영속성 경계를 검증하며, SQS 전송·DLQ처럼 직접 실행하지 않는 경계는 각 구현 작업의 단위·통합 테스트가 담당한다.
 
 ## 결정형 계약 맵
 
@@ -21,15 +21,15 @@
 | `postgresql-core-schema` | [ADR 0010: 단일 Target 모델](../decisions/0010-single-target-test-run-model.md) | [ADR 0002](../decisions/0002-postgresql-persistence-contract.md), [PlantUML ERD](../diagrams/guardbench-mvp-physical-erd.puml) | V3 Target reference·provider table, 단일 execution/claim PK, 기존 FK·시각 규칙 | #14, #106 |
 | `result-write-boundary` | [ADR 0003: 결과 Aggregate와 write-side Port](../decisions/0003-result-aggregate-and-write-port-boundaries.md) | [ADR 0006](../decisions/0006-independent-domain-contract-boundaries.md) | TestExecution·SnapshotEvaluation·QualityGateResult의 Aggregate·Repository 소유권 | #14 |
 | `testrun-finalization` | [ADR 0004: 최종화 원자성](../decisions/0004-testrun-finalization-atomicity.md) | [ADR 0003](../decisions/0003-result-aggregate-and-write-port-boundaries.md), [ADR 0006](../decisions/0006-independent-domain-contract-boundaries.md) | QualityGateResult 저장과 TestRun `FINISHED` 전환의 원자성·재호출 의미 | #14, #18, #19 |
-| `current-target-input` | [ADR 0010: 단일 Target 모델](../decisions/0010-single-target-test-run-model.md) | [TestRun Persistence current implementation](../architecture/testrun-persistence.md), [Bedrock Adapter current implementation](../integrations/bedrock-guardrails-adapter.md) | 현재 코드의 단일 target type·identifier·revision과 Bedrock DRAFT/numbered revision | #106 |
+| `current-target-input` | [ADR 0011: AI Application Target과 Guardrail Evaluator](../decisions/0011-ai-application-target-and-guardrail-evaluator.md) | [TestRun Persistence current implementation](../architecture/testrun-persistence.md), [HTTP Target Adapter](../integrations/http-endpoint-target.md) | 현재 코드의 단일 `HTTP_ENDPOINT` target·identifier·model·optional revision. `bedrock_guardrail_target`는 새 TestRun 등록 경로가 아닌 V3 legacy data | #115, #125, #128 |
 | `testrun-idempotency` | [ADR 0008: HTTP Idempotency](../decisions/0008-async-testrun-persistence-contract.md#http-idempotency) | [ADR 0010](../decisions/0010-single-target-test-run-model.md), [ADR 0002](../decisions/0002-postgresql-persistence-contract.md) | global key, normalized single-target intent SHA-256, 3시간 TTL, DB 논리 만료와 재사용 | #14, #16, #106 |
 | `async-message-contract` | [ADR 0010: v2 role-free 메시지](../decisions/0010-single-target-test-run-model.md) | [ADR 0005](../decisions/0005-async-test-run-execution-contract.md), [ADR 0008: Outbox](../decisions/0008-async-testrun-persistence-contract.md#outbox) | v2 JSON, targetType 제거, Queue routing, `{eventType}:{snapshotId}` deduplication | #106 |
 | `outbox-persistence` | [ADR 0008: Outbox](../decisions/0008-async-testrun-persistence-contract.md#outbox) | [ADR 0005: Outbox와 Publisher](../decisions/0005-async-test-run-execution-contract.md#outbox와-publisher), [ADR 0002](../decisions/0002-postgresql-persistence-contract.md) | `outbox_event` DDL, payload 저장, deduplication key, `PENDING/PUBLISHED`, `SKIP LOCKED` | #14, #16, #18 |
-| `resolution-flow` | [ADR 0010: 단일 Target 준비·fan-out](../decisions/0010-single-target-test-run-model.md) | [ADR 0008: Resolution claim](../decisions/0008-async-testrun-persistence-contract.md#resolution-claim), [Bedrock Adapter](../integrations/bedrock-guardrails-adapter.md) | Target preparation, Snapshot당 1개 fan-out, `idempotencyToken`, `QUEUED → PREPARING → RUNNING` | #106 |
+| `resolution-flow` | [ADR 0011: AI Application Target과 Guardrail Evaluator](../decisions/0011-ai-application-target-and-guardrail-evaluator.md) | [ADR 0008: Resolution claim](../decisions/0008-async-testrun-persistence-contract.md#resolution-claim), [HTTP Target Adapter](../integrations/http-endpoint-target.md) | HTTP Target reference 검증, Snapshot당 1개 fan-out, `QUEUED → PREPARING → RUNNING` | #115, #125, #128, #117 |
 | `resolution-claim-persistence` | [ADR 0008: Resolution claim](../decisions/0008-async-testrun-persistence-contract.md#resolution-claim) | [ADR 0005](../decisions/0005-async-test-run-execution-contract.md#작업-단위와-fan-out) | `test_run_resolution_claim` DDL, 45초 DB lease, 3회 제한, 실패 원자 종결 | #14, #18 |
 | `execution-claim-persistence` | [ADR 0008: Execution claim](../decisions/0008-async-testrun-persistence-contract.md#execution-claim) | [ADR 0005: TestExecution claim과 결과 저장](../decisions/0005-async-test-run-execution-contract.md#testexecution-claim과-결과-저장) | `test_execution_claim` DDL, DB lease, stale 결과 차단, terminal 결과·완료 Outbox 원자 저장 | #14, #18, #19 |
 | `provider-retry-and-dlq` | [ADR 0010: 단일 Target 실행 모델](../decisions/0010-single-target-test-run-model.md) | [ADR 0005: 재시도·timeout·visibility·DLQ](../decisions/0005-async-test-run-execution-contract.md#재시도-timeout-visibility와-dlq), [Bedrock Guardrail Adapter current implementation](../integrations/bedrock-guardrails-adapter.md) | Provider retry·timeout·visibility·DLQ와 안전한 TestExecution 오류 수렴 | #106 |
-| `execution-error-code` | [애플리케이션 오류 코드: TestExecution 실행 오류 Code](../conventions/application-errors.md#testexecution-실행-오류-code) | [ADR 0010](../decisions/0010-single-target-test-run-model.md), [Bedrock Guardrail Adapter current implementation](../integrations/bedrock-guardrails-adapter.md) | current implementation의 공개 가능한 6개 TestExecution 오류 code·terminal 상태·안전한 message 정책 | #106 |
+| `execution-error-code` | [애플리케이션 오류 코드: TestExecution 실행 오류 Code](../conventions/application-errors.md#testexecution-실행-오류-code) | [ADR 0010](../decisions/0010-single-target-test-run-model.md), [Bedrock Guardrail Adapter](../integrations/bedrock-guardrails-adapter.md) | Application Target/Evaluator 단계가 포함된 공개 가능한 TestExecution 오류 code·terminal 상태·안전한 message 정책 | #106, #117 |
 | `context-boundary` | [ADR 0006: 소비자 소유 Port와 값 기반 계약](../decisions/0006-independent-domain-contract-boundaries.md#소비자-소유-port와-값-기반-계약) | [ADR 0002](../decisions/0002-postgresql-persistence-contract.md), [ADR 0003](../decisions/0003-result-aggregate-and-write-port-boundaries.md) | Context 간 Java Domain 타입 격리와 Integration Adapter 변환 | #14, #17, #18 |
 
 ## 운영값 코드 매핑 (ADR 0005 초기값 ↔ 구현 위치)
@@ -63,11 +63,11 @@ ADR 0005의 재시도·timeout·lease 초기값이 실제 어떤 configuration k
 
 | 검색 표현 | 계약 키 |
 | --- | --- |
-| 현재 Target 요청, `DRAFT`, numbered revision | `current-target-input` |
+| 현재 Target 요청, `HTTP_ENDPOINT`, OpenAI-compatible model | `current-target-input` |
 | Idempotency-Key, fingerprint, TTL, key 재사용 | `testrun-idempotency` |
 | event JSON, schemaVersion, SQS, eventType | `async-message-contract` |
 | Outbox DDL, deduplication, Publisher, `SKIP LOCKED` | `outbox-persistence` |
-| materialization, fan-out, `clientRequestToken` | `resolution-flow` |
+| HTTP Target 검증, Snapshot fan-out | `resolution-flow` |
 | resolution lease, 45초, 3회, `NOT_STARTED` | `resolution-claim-persistence` |
 | execution lease, stale token, terminal 결과 | `execution-claim-persistence` |
 | retry, timeout, visibility, DLQ | `provider-retry-and-dlq` |

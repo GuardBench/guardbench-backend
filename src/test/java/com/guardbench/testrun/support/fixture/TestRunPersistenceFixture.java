@@ -13,7 +13,8 @@ public final class TestRunPersistenceFixture {
     }
 
     public void clearPersistenceTables() {
-        jdbcTemplate.execute("TRUNCATE TABLE outbox_event, test_suite, target_reference CASCADE");
+        jdbcTemplate.execute(
+                "TRUNCATE TABLE outbox_event, test_suite, target_reference, evaluator_reference CASCADE");
     }
 
     public void insertTestSuite(long testSuiteId, Instant createdAt) {
@@ -46,17 +47,21 @@ public final class TestRunPersistenceFixture {
 
     public void insertQueuedTestRun(long testRunId, long testSuiteId, int testCaseCount, Instant createdAt) {
         String targetReference = "target-ref-" + testRunId;
+        String evaluatorReference = "evaluator-ref-" + testRunId;
         insertTargetReference(targetReference);
+        insertEvaluatorReference(evaluatorReference);
         jdbcTemplate.update(
                 """
                 INSERT INTO test_run(id, test_suite_id, status, test_case_count, processed_test_case_count,
-                    target_reference_id, created_at, updated_at)
-                VALUES (?, ?, 'QUEUED', ?, 0, ?, ?, ?)
+                    target_reference_id, evaluation_checks, evaluation_strictness, evaluator_reference_id,
+                    created_at, updated_at)
+                VALUES (?, ?, 'QUEUED', ?, 0, ?, 'PII_LEAKAGE', 'STANDARD', ?, ?, ?)
                 """,
                 testRunId,
                 testSuiteId,
                 testCaseCount,
                 targetReference,
+                evaluatorReference,
                 Timestamp.from(createdAt),
                 Timestamp.from(createdAt)
         );
@@ -64,13 +69,25 @@ public final class TestRunPersistenceFixture {
 
     public void insertTargetReference(String referenceId) {
         jdbcTemplate.update(
-                "INSERT INTO target_reference(reference_id, target_type) VALUES (?, 'BEDROCK_GUARDRAIL')",
+                "INSERT INTO target_reference(reference_id, target_type) VALUES (?, 'HTTP_ENDPOINT')",
                 referenceId);
         jdbcTemplate.update(
                 """
-                INSERT INTO bedrock_guardrail_target(
-                    reference_id, guardrail_identifier, requested_revision, resolved_revision
-                ) VALUES (?, 'guardrail', 'DRAFT', NULL)
+                INSERT INTO http_endpoint_target(
+                    reference_id, endpoint_url, requested_revision, model
+                ) VALUES (?, 'https://example.com/v1/chat/completions', 'v1', 'test-model')
+                """,
+                referenceId);
+    }
+
+    public void insertEvaluatorReference(String referenceId) {
+        jdbcTemplate.update(
+                "INSERT INTO evaluator_reference(reference_id, evaluator_type) VALUES (?, 'BEDROCK_GUARDRAIL')",
+                referenceId);
+        jdbcTemplate.update(
+                """
+                INSERT INTO bedrock_guardrail_evaluator(reference_id, guardrail_identifier, guardrail_revision)
+                VALUES (?, 'guardrail', '1')
                 """,
                 referenceId);
     }

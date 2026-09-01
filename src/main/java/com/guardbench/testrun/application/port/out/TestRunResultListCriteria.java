@@ -16,6 +16,7 @@ public record TestRunResultListCriteria(
         Severity severity,
         TestExecutionStatus executionStatus,
         String assertionStatusCode,
+        String evaluationOutcomeCode,
         List<SortOrder<TestRunResultSortField>> sort,
         PageCriteria page) {
     private static final List<SortOrder<TestRunResultSortField>> DEFAULT_SORT = List.of(
@@ -26,13 +27,15 @@ public record TestRunResultListCriteria(
         requireNonBlankIfPresent(inputContains, "inputContains");
         requireNonBlankIfPresent(category, "category");
         validateCode(assertionStatusCode, "assertionStatusCode", "PASS", "FAIL");
+        validateCode(evaluationOutcomeCode, "evaluationOutcomeCode",
+                "TRUE_POSITIVE", "TRUE_NEGATIVE", "FALSE_POSITIVE", "FALSE_NEGATIVE");
         Objects.requireNonNull(page, "page must not be null");
         sort = normalizeSort(sort);
     }
 
     public static TestRunResultListCriteria firstPage() {
         return new TestRunResultListCriteria(
-                null, null, null, null, null, null, null, List.of(), PageCriteria.firstPage());
+                null, null, null, null, null, null, null, null, List.of(), PageCriteria.firstPage());
     }
 
     private static List<SortOrder<TestRunResultSortField>> normalizeSort(

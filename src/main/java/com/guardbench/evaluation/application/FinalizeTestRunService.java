@@ -127,14 +127,14 @@ public class FinalizeTestRunService {
         boolean snapshotsReady = facts.snapshotFacts().size() == facts.testCaseCount();
         boolean allExecutionsTerminal = facts.snapshotFacts().stream().allMatch(SnapshotExecutionFact::terminal);
         long terminalExecutionCount = facts.snapshotFacts().stream().filter(SnapshotExecutionFact::terminal).count();
-        log.info("TestRun finalization readiness checked. testRunId={} snapshots={} expected={} terminalPairs={} snapshotsReady={} allPairsTerminal={}",
+        log.info("TestRun finalization readiness checked. testRunId={} snapshots={} expected={} terminalExecutions={} snapshotsReady={} allExecutionsTerminal={}",
                 testRunId, facts.snapshotFacts().size(), facts.testCaseCount(), terminalExecutionCount,
                 snapshotsReady, allExecutionsTerminal);
         if (!snapshotsReady || !allExecutionsTerminal) {
             if (snapshotsReady) {
                 finalizeTestRunPort.updateProgress(testRunId);
             }
-            log.info("TestRun finalization not ready after readiness check. testRunId={} snapshots={} expected={} terminalPairs={} snapshotsReady={} allPairsTerminal={} elapsedMs={}",
+            log.info("TestRun finalization not ready after readiness check. testRunId={} snapshots={} expected={} terminalExecutions={} snapshotsReady={} allExecutionsTerminal={} elapsedMs={}",
                     testRunId, facts.snapshotFacts().size(), facts.testCaseCount(), terminalExecutionCount,
                     snapshotsReady, allExecutionsTerminal, elapsedMs(finalizationStartedNanos));
             return FinalizationOutcome.notReady();
@@ -145,7 +145,7 @@ public class FinalizeTestRunService {
         // Snapshot 평가
         List<SnapshotEvaluation> evaluations = evaluateSnapshots(facts, now);
 
-        // 절대 개수로 진행도와 실행 성공 수를 재계산한다.
+        // 절대 개수로 진행도와 성공 실행 수를 재계산한다.
         int processedTestCaseCount = (int) facts.snapshotFacts().stream()
                 .filter(SnapshotExecutionFact::terminal)
                 .count();
@@ -204,13 +204,13 @@ public class FinalizeTestRunService {
         }
 
         EvaluationAction expectedAction = toAction(fact.expectedActionCode());
-        EvaluationAction actualAction = fact.execution().actionCode() != null
-                ? toAction(fact.execution().actionCode()) : null;
+        EvaluationAction evaluatorVerdict = fact.execution().evaluatorVerdictCode() != null
+                ? toAction(fact.execution().evaluatorVerdictCode()) : null;
 
         Optional<SnapshotEvaluation> newEvaluation = snapshotEvaluator.evaluate(
                 reference,
                 expectedAction,
-                actualAction,
+                evaluatorVerdict,
                 now
         );
 

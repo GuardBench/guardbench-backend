@@ -12,13 +12,15 @@ public final class QualityGateEvaluator {
     /**
      * 현재 TestRun의 생성된 Assertion과 전체 실행 결과를 집계한다.
      *
-     * <p>실행 또는 평가 실패는 {@code evaluations}에 포함되지 않으므로 Assertion 통과율의
-     * 분모는 평가 가능한 Assertion 수다. 실행 성공률의 분모는 현재 Run의 전체 Snapshot 수다.
+     * <p>{@link SnapshotEvaluation}은 항상 non-null {@link AssertionResult}를 가지므로
+     * {@code evaluations.size()}를 평가 가능한 Assertion 수로 사용한다. 실행 또는 평가
+     * 실패는 {@code evaluations}에 포함되지 않으며, 실행 성공률의 분모는 현재 Run의 전체
+     * Snapshot 수다.
      *
      * @param reference 평가 대상 TestRun 참조
-     * @param evaluations 생성된 Assertion별 Snapshot 평가 결과
+     * @param evaluations 생성된 Snapshot Assertion별 평가 결과
      * @param totalTestCaseCount 전체 TestCase 수
-     * @param successfulExecutionCount 현재 Run에서 성공한 실행 수
+     * @param successfulExecutionCount 성공한 Snapshot 실행 수
      * @return 계산된 Quality Gate 결과
      */
     public QualityGateResult evaluate(
