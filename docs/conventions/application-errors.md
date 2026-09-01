@@ -216,4 +216,4 @@ TestRun 재전송은 Validation 후 Idempotency 기록을 먼저 확인한다.
 - HTTP Target 예외 → `TargetFailureCode` 매핑과 Bedrock Evaluator 예외 → `EvaluatorFailureCode` 매핑은 각각 해당 Adapter가 소유하고, Port 오류 → `TestExecutionErrorCode`·terminal 저장은 Worker Application Service가 소유한다.
 - 이 표에 없는 code를 추가하거나 기존 code의 terminal 상태·의미를 바꾸는 것은 공개 API 계약 변경이며 별도 ADR 또는 Issue 승인이 필요하다.
 
-목표 구조의 공개 shape은 `error.stage = APPLICATION_TARGET | EVALUATOR`로 실패 경계를 구분한다. 구체 code와 terminal 상태 매핑은 #115~#117이 확정하며, 이 current implementation의 6개 code 표를 미래 계약으로 확장 해석하지 않는다.
+목표 구조의 공개 shape은 `error.stage = APPLICATION_TARGET | EVALUATOR`로 실패 경계를 구분한다. 구체 code와 terminal 상태 매핑은 #117이 확정하며, 이 current implementation의 6개 code 표를 미래 계약으로 확장 해석하지 않는다.

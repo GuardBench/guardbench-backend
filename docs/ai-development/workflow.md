@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Team
-> Last reviewed: 2026-08-26
+> Last reviewed: 2026-09-01
 > Canonical source: GitHub
 > Origin: 현재 팀의 에이전트 운영 논의 및 PR #77 회귀 개선 사례
 
@@ -27,7 +27,7 @@ Feature, Bug 또는 Engineering Task 템플릿을 사용한다. 목적, 관련 �
 4. `DRAFT` GitHub 문서
 5. Notion 참고자료
 
-`DRAFT`에 따라 공개 동작이 달라지면 미결정을 Issue에 남기고 중단한다. GitHub와 Notion이 충돌하면 GitHub를 우선하고 차이를 보고한다.
+`DRAFT`에 따라 공개 동작이 달라지면 미결정을 Issue에 남기고 중단한다. GitHub와 Notion이 충돌하면 GitHub를 우선하고 차이를 보고한다. 현재 Issue가 기존 계약이나 API를 명시적으로 대체하면 `AGENTS.md`의 [계약 대체와 호환성](../../AGENTS.md#계약-대체와-호환성) 규칙을 따른다.
 
 ## 2. worktree와 branch 준비
 
@@ -140,7 +140,7 @@ git commit -m "feat(evaluation): SnapshotEvaluation Persistence Adapter 구현"
 - APPROVED API, DB, 도메인 또는 아키텍처 변경이 필요함
 - 새 production dependency가 필요함
 - 기존 변경과 안전하게 분리할 수 없음
-- 범위를 넘는 대규모 수정이 필요함
+- 범위를 넘는 대규모 수정이 필요함. 현재 Issue가 승인한 계약 대체에 따르는 호출부·테스트 수정은 범위 초과가 아니다.
 - secret, 운영 데이터 또는 파괴적인 Git 작업이 필요함
 - 범위 밖 원인으로 검증이 실패함
 

@@ -2,9 +2,10 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Last reviewed: 2026-08-31
+> Last reviewed: 2026-09-01
 > Canonical source: GitHub
 > Related: [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)
+> Related Issue: #116
 
 ## 목표 역할
 
@@ -27,7 +28,7 @@ EvaluationResult(ALLOW | BLOCK)
 | `GUARDRAIL_INTERVENED` | `BLOCK` |
 | `NONE` | `ALLOW` |
 
-null 또는 알 수 없는 action은 정상 EvaluationResult가 아니다. 오류 taxonomy, 자연어 응답 전달 방식, Evaluation Profile 해석 결과와 Guardrail version 고정의 구체 구현은 #114·#116·#117이 소유한다. Evaluation Profile CRUD, provider ensemble과 provider별 고급 설정 모델은 확정하지 않는다.
+null 또는 알 수 없는 action은 정상 EvaluationResult가 아니다. Evaluation Profile 해석과 Guardrail version 고정은 #114, 오류 taxonomy와 자연어 응답 전달 방식은 #116에서 구현되었다. Worker 실행 경로 연결은 #117이 소유한다. Evaluation Profile CRUD, provider ensemble과 provider별 고급 설정 모델은 확정하지 않는다.
 
 ## 보안 경계
 
@@ -61,6 +62,10 @@ Bedrock SDK timeout/retry는 `guardbench.bedrock.*` 설정을 사용하며 전�
 claim lease(45초)보다 짧게 유지한다. 오류는 `EVALUATOR_NOT_FOUND`,
 `EVALUATOR_ACCESS_DENIED`, `EVALUATOR_CONFIGURATION_INVALID`, `PROVIDER_UNAVAILABLE`,
 `PROVIDER_RESPONSE_INVALID`, `PROVIDER_TIMEOUT`으로 안전하게 수렴한다.
+
+현재 `dev`에서 이 Adapter는 `EvaluatorExecutionPort` 구현으로 존재하지만 Worker 실행 경로는 아직
+호출하지 않고 Application 실행 결과를 legacy `ActualResult`로 저장한다. Application 실행 →
+Evaluator → Assertion orchestration 연결은 #117 범위다.
 
 AWS 근거는 [ApplyGuardrail API](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ApplyGuardrail.html)와
 [독립 ApplyGuardrail 사용 가이드](https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails-use-independent-api.html)다.

@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Scope: GitHub Issues #14, #106, #110, #114, #125, #128
+> Scope: GitHub Issues #14, #106, #110, #114, #116, #125, #128
 > Last reviewed: 2026-09-01
 > Target architecture: [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)
 > Related broad documentation issue: [#49](https://github.com/GuardBench/guardbench-backend/issues/49)
@@ -34,14 +34,14 @@
 | Evaluator reference and Profile snapshot | `src/main/resources/db/migration/V6__evaluator_reference_and_profile.sql` | Evaluator provider/revision 고정, TestRun profile snapshot 및 HTTP Target revision |
 | ERD | [PlantUML ERD](../diagrams/guardbench-mvp-physical-erd.puml) | migration 적용 후 관계와 cardinality |
 | TestRun write adapters | `testrun/infrastructure/persistence` | TestRun, Snapshot, TestExecution, idempotency, Outbox, claim Adapter |
-| Target/Evaluator adapters | `target/infrastructure/persistence`, `testrun/infrastructure/evaluator` | HTTP Target 등록, operator catalog 해석과 immutable EvaluatorReference persistence |
+| Target/Evaluator adapters | `target/infrastructure/persistence`, `testrun/infrastructure/evaluator`, `evaluator/infrastructure/bedrock` | HTTP Target 등록, operator catalog 해석, immutable EvaluatorReference persistence와 `bedrock_guardrail_evaluator` 조회 |
 | Evaluation write adapters | `evaluation/infrastructure/persistence` | Assertion-only SnapshotEvaluation 및 NOT_EVALUATED QualityGateResult Adapter |
 | Evaluation write ports | `evaluation/domain/repository` | Evaluation 소유 local reference VO를 쓰는 write-side Port |
 | PostgreSQL integration tests | `src/test/java/com/guardbench/*Persistence*IntegrationTest.java`, `EvaluationPersistenceAdapterIntegrationTest.java` | Flyway schema와 Repository round-trip·제약 검증 |
 
 ## HTTP Target persistence 계약
 
-`http_endpoint_target.model`은 신규 MVP 데이터에서 필수다. `TargetReferenceReq.model`, Target 등록 값, DB column과 조회 응답이 모두 non-blank/non-null 의미로 정렬된다. Generic `{"input": ...}` / `{"response": ...}` Target 구분을 위해 nullable model을 사용하지 않는다.
+`http_endpoint_target.model`은 신규 MVP 데이터에서 필수다. `TargetReferenceReq.model`, Target 등록 값, DB column과 조회 응답이 모두 non-blank/non-null 의미로 정렬된다. MVP는 generic `{"input": ...}` / `{"response": ...}` Target 계약을 지원하지 않으므로 Target 종류를 구분하기 위한 nullable model을 두지 않는다.
 
 ## 시각 소유권
 
@@ -51,9 +51,9 @@
 
 ## 목표 구조와의 차이
 
-#114의 profile/evaluator snapshot과 #115/#125/#128의 OpenAI-compatible HTTP Application Target 경계까지 구현되어 있다. 결과 persistence는 아직 legacy `ActualResult` 경계를 사용하고 Evaluator 실행·Quality Gate는 후속 Issue 범위다. Regression 저장/API도 아직 없다.
+#114의 profile/evaluator snapshot과 #115/#125/#128의 OpenAI-compatible HTTP Application Target 경계까지 구현되어 있다. #116의 Bedrock Guardrail Evaluator Adapter도 구현되었으나 Worker 실행 경로에 연결되지 않았고, 결과 persistence는 아직 legacy `ActualResult` 경계를 사용한다. Quality Gate는 `NOT_EVALUATED`만 저장하며 Regression 저장/API는 없다.
 
-#116~#119가 Evaluator 실행, Worker orchestration, Quality Gate와 Regression을 완성한다.
+#117~#119가 Worker orchestration, Quality Gate와 Regression을 완성한다.
 
 ## 범위 제외
 

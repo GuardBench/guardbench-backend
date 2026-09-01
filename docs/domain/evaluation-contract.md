@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Last reviewed: 2026-08-31
+> Last reviewed: 2026-09-01
 > Canonical source: GitHub
 > Related: [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)
 
@@ -28,7 +28,7 @@ EvaluationResult가 있으면 ExpectedResult와 비교해 AssertionResult를 생
 | BLOCK | BLOCK | PASS |
 | BLOCK | ALLOW | FAIL |
 
-Application 실행 실패, timeout 또는 Evaluator 실패로 EvaluationResult가 없으면 AssertionResult를 생성하지 않는다. 실행과 평가 실패의 구체적인 저장·공개 오류 계약은 #115~#117에서 확정·구현한다.
+Application 실행 실패, timeout 또는 Evaluator 실패로 EvaluationResult가 없으면 AssertionResult를 생성하지 않는다. 실행과 평가 실패의 구체적인 저장·공개 오류 계약은 #117에서 확정·구현한다.
 
 ## Quality Gate
 
@@ -70,4 +70,4 @@ HTTP 오류 ≠ Application 실행 오류 ≠ Evaluator 오류 ≠ Assertion FAI
 
 ## 현재 구현
 
-현재 코드는 Bedrock Guardrail action을 Target `ActualResult`로 저장해 ExpectedResult와 Assertion하고, 단일 Target Quality Gate를 항상 `NOT_EVALUATED`로 저장한다. [OpenAPI](../api/openapi.yaml)는 합의된 목표 EvaluationResult·Quality Gate·Regression 계약을 먼저 정의하며, Java·DB와의 차이는 #114~#119에서 해소한다.
+현재 worker는 Application 자연어 응답을 Evaluator에 전달하지 않는다. 응답 문자열이 정확히 `ALLOW` 또는 `BLOCK`일 때만 `ActualResult`로 저장해 ExpectedResult와 Assertion하고, 그 밖의 자연어 응답은 `PROVIDER_RESPONSE_INVALID` 실패로 수렴한다. 단일 Target Quality Gate는 항상 `NOT_EVALUATED`로 저장한다. [OpenAPI](../api/openapi.yaml)는 합의된 목표 EvaluationResult·Quality Gate·Regression 계약을 먼저 정의하며, Java·DB와의 차이는 #117~#119에서 해소한다.
