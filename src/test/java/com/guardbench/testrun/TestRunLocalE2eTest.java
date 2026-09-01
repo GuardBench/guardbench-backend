@@ -7,21 +7,19 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
+import static org.mockserver.integration.ClientAndServer.startClientAndServer;
+import static org.mockserver.model.HttpRequest.request;
+import static org.mockserver.model.HttpResponse.response;
+import static org.mockserver.model.JsonBody.json;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -39,6 +37,10 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.localstack.LocalStackContainer;
 import org.testcontainers.utility.DockerImageName;
+
+import org.mockserver.integration.ClientAndServer;
+import org.mockserver.matchers.MatchType;
+import org.mockserver.verify.VerificationTimes;
 
 import com.guardbench.testrun.application.messaging.TestRunQueue;
 import com.guardbench.testrun.support.fixture.TestRunPersistenceFixture;
@@ -121,9 +123,6 @@ class TestRunLocalE2eTest {
     private int serverPort;
 
     @Autowired
-    private ObjectMapper objectMapper;
-
-    @Autowired
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
@@ -135,22 +134,20 @@ class TestRunLocalE2eTest {
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(HTTP_TIMEOUT)
             .build();
-    private final List<String> applicationRequests = new CopyOnWriteArrayList<>();
-    private HttpServer applicationServer;
+    private ClientAndServer applicationMockServer;
 
     @BeforeEach
     void resetFixture() {
         drainQueues();
         new TestRunPersistenceFixture(jdbcTemplate).clearPersistenceTables();
-        applicationRequests.clear();
         reset(bedrockRuntimeClient);
     }
 
     @AfterEach
     void stopApplicationServer() {
-        if (applicationServer != null) {
-            applicationServer.stop(0);
-            applicationServer = null;
+        if (applicationMockServer != null) {
+            applicationMockServer.stop();
+            applicationMockServer = null;
         }
     }
 
@@ -164,7 +161,8 @@ class TestRunLocalE2eTest {
     @Test
     @DisplayName("정상 TestRun은 실제 HTTP 왕복부터 Assertion과 PASS Quality Gate까지 완료된다")
     void completesSingleTestRunThroughEntirePipeline() throws Exception {
-        startApplicationServer(false);
+        startApplicationMockServer();
+        registerApplicationExpectation("safe input", safeApplicationResponse());
         stubAllowEvaluator();
 
         long suiteId = createSuite("""
@@ -189,15 +187,16 @@ class TestRunLocalE2eTest {
         assertThat(item.has("targetResponse")).isFalse();
         assertThat(item.has("naturalLanguageResponse")).isFalse();
 
-        assertThat(applicationRequests).hasSize(1);
-        assertApplicationRequest(applicationRequests.getFirst(), "safe input");
+        verifyApplicationRequest("safe input", 1);
         verify(bedrockRuntimeClient).applyGuardrail(any(ApplyGuardrailRequest.class));
     }
 
     @Test
     @DisplayName("여러 TestCase는 각각 HTTP 요청·Evaluator·Assertion으로 처리되고 Run을 함께 종료한다")
     void processesMultipleSnapshotsIndependently() throws Exception {
-        startApplicationServer(false);
+        startApplicationMockServer();
+        registerApplicationExpectation("block input", blockedApplicationResponse());
+        registerApplicationExpectation("allow input", safeApplicationResponse());
         stubEvaluatorByResponse();
 
         long suiteId = createSuite("""
@@ -215,16 +214,16 @@ class TestRunLocalE2eTest {
         assertThat(detail.path("data").path("qualityGate").path("status").asText()).isEqualTo("PASS");
         assertThat(result.path("data").path("page").path("totalElements").asInt()).isEqualTo(2);
         assertThat(result.path("data").path("items")).hasSize(2);
-        assertThat(applicationRequests).hasSize(2);
-        assertApplicationRequest(applicationRequests.get(0), "block input");
-        assertApplicationRequest(applicationRequests.get(1), "allow input");
+        verifyApplicationRequest("block input", 1);
+        verifyApplicationRequest("allow input", 1);
         verify(bedrockRuntimeClient, times(2)).applyGuardrail(any(ApplyGuardrailRequest.class));
     }
 
     @Test
     @DisplayName("malformed Application response는 PROVIDER_RESPONSE_INVALID로 종료되고 Evaluator를 호출하지 않는다")
     void finishesWhenApplicationResponseParsingFails() throws Exception {
-        startApplicationServer(true);
+        startApplicationMockServer();
+        registerApplicationExpectation("malformed input", malformedApplicationResponse());
 
         long suiteId = createSuite("""
                 [{"name":"잘못된 응답","input":"malformed input","expectedAction":"ALLOW","severity":"HIGH","category":"provider"}]
@@ -242,14 +241,15 @@ class TestRunLocalE2eTest {
         assertThat(item.path("error").path("stage").asText()).isEqualTo("APPLICATION_TARGET");
         assertThat(item.path("error").path("code").asText()).isEqualTo("PROVIDER_RESPONSE_INVALID");
         assertThat(item.path("evaluatorVerdict").isNull()).isTrue();
-        assertThat(applicationRequests).hasSize(1);
+        verifyApplicationRequest("malformed input", 1);
         verifyNoInteractions(bedrockRuntimeClient);
     }
 
     @Test
     @DisplayName("Evaluator 실패는 Application response를 내부 저장하고 EVALUATOR 오류로 종료한다")
     void finishesWhenEvaluatorFails() throws Exception {
-        startApplicationServer(false);
+        startApplicationMockServer();
+        registerApplicationExpectation("evaluator input", safeApplicationResponse());
         when(bedrockRuntimeClient.applyGuardrail(any(ApplyGuardrailRequest.class)))
                 .thenThrow(ResourceNotFoundException.builder().message("provider detail must not leak").build());
 
@@ -277,30 +277,48 @@ class TestRunLocalE2eTest {
         verify(bedrockRuntimeClient).applyGuardrail(any(ApplyGuardrailRequest.class));
     }
 
-    private void startApplicationServer(boolean malformedResponse) throws IOException {
-        applicationServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        applicationServer.createContext("/v1/chat/completions", exchange -> {
-            String requestBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-            applicationRequests.add(requestBody);
-            String responseBody = malformedResponse
-                    ? "{\"choices\":[{\"message\":{}}]}"
-                    : responseFor(requestBody);
-            byte[] responseBytes = responseBody.getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().set("Content-Type", "application/json");
-            exchange.sendResponseHeaders(200, responseBytes.length);
-            try {
-                exchange.getResponseBody().write(responseBytes);
-            } finally {
-                exchange.close();
-            }
-        });
-        applicationServer.start();
+    private void startApplicationMockServer() {
+        applicationMockServer = startClientAndServer(0);
     }
 
-    private String responseFor(String requestBody) {
-        return requestBody.contains("block input")
-                ? "{\"choices\":[{\"message\":{\"content\":\"blocked response\"}}]}"
-                : "{\"choices\":[{\"message\":{\"content\":\"safe response\"}}]}";
+    private void registerApplicationExpectation(String input, String responseBody) {
+        applicationMockServer.when(
+                        request()
+                                .withMethod("POST")
+                                .withPath("/v1/chat/completions")
+                                .withHeader("Content-Type", "application/json")
+                                .withBody(json(applicationRequestBody(input), MatchType.STRICT)))
+                .respond(response()
+                        .withStatusCode(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(responseBody));
+    }
+
+    private void verifyApplicationRequest(String input, int expectedCount) {
+        applicationMockServer.verify(
+                request()
+                        .withMethod("POST")
+                        .withPath("/v1/chat/completions")
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(json(applicationRequestBody(input), MatchType.STRICT)),
+                VerificationTimes.exactly(expectedCount));
+    }
+
+    private static String applicationRequestBody(String input) {
+        return "{\"model\":\"local-model\",\"messages\":[{\"role\":\"user\",\"content\":\"%s\"}]}"
+                .formatted(input);
+    }
+
+    private static String safeApplicationResponse() {
+        return "{\"choices\":[{\"message\":{\"content\":\"safe response\"}}]}";
+    }
+
+    private static String blockedApplicationResponse() {
+        return "{\"choices\":[{\"message\":{\"content\":\"blocked response\"}}]}";
+    }
+
+    private static String malformedApplicationResponse() {
+        return "{\"choices\":[{\"message\":{}}]}";
     }
 
     private void stubAllowEvaluator() {
@@ -387,14 +405,7 @@ class TestRunLocalE2eTest {
     }
 
     private String applicationServerUrl() {
-        return "http://127.0.0.1:" + applicationServer.getAddress().getPort();
-    }
-
-    private void assertApplicationRequest(String requestBody, String input) throws Exception {
-        JsonNode request = objectMapper.readTree(requestBody);
-        assertThat(request.path("model").asText()).isEqualTo("local-model");
-        assertThat(request.path("messages").get(0).path("role").asText()).isEqualTo("user");
-        assertThat(request.path("messages").get(0).path("content").asText()).isEqualTo(input);
+        return "http://127.0.0.1:" + applicationMockServer.getLocalPort();
     }
 
     private void drainQueues() {
