@@ -23,7 +23,7 @@
 | `QualityGateResult` | 한 TestRun의 Assertion 결과 집계 판정 |
 | `RegressionResult` | 비교 가능한 완료 TestRun 두 개의 저장 결과 비교 |
 
-`EvaluationProfile`은 MVP에서 독립 Aggregate나 CRUD 리소스가 아니다. 요청 profile과 실제 `EvaluatorReference`를 고정하는 구조와 catalog resolution은 #114에서 구현되었다. Regression 결과 모델은 #119에서 구체화한다.
+`EvaluationProfile`은 MVP에서 독립 Aggregate나 CRUD 리소스가 아니다. 요청 profile과 실제 `EvaluatorReference`를 고정하는 구조와 catalog resolution은 #114에서 구현되었다. 저장된 완료 Run의 Regression 비교 모델과 API는 #119에서 구현되었다.
 
 ## 핵심 불변식
 
@@ -79,10 +79,10 @@ Completed TestRun A + Completed TestRun B
              RegressionResult
 ```
 
-## 현재 구현과 목표 계약의 차이
+## 현재 구현
 
 #114를 통해 EvaluationProfile catalog resolution과 immutable EvaluatorReference 고정 구조가 구현되었다. #115와 #125를 통해 HTTP Application Target 실행과 OpenAI-compatible 응답 정규화가 구현되었고, #128에서 generic HTTP 경로를 제거해 OpenAI-compatible 전용 계약으로 단순화했다. #116을 통해 Bedrock Guardrail이 Evaluator Adapter로 전환되었다.
 
-#116과 #117을 통해 Bedrock Guardrail Evaluator와 Application 실행 → Evaluator → Assertion Worker orchestration이 구현되었다. #118과 #119가 각각 Quality Gate와 Regression을 완성한다.
+#117을 통해 Application 실행 → Evaluator → Assertion Worker orchestration이 구현되었다. #118을 통해 Quality Gate가 현재 TestRun의 Assertion 통과율과 실행 성공률을 기준으로 판정하도록 전환되었고, #119를 통해 저장된 완료 TestRun 결과만 사용하는 Regression 비교 API가 구현되었다.
 
-목표 OpenAPI를 배포 완료의 증거로 해석하지 않고, 아직 남은 #118~#119 구현 상태를 코드와 함께 확인한다.
+따라서 현재 MVP backend는 Application Target 실행, Evaluator 판정, Assertion, 현재 Run Quality Gate, comparable historical Run의 stored-result Regression까지 목표 도메인 흐름을 구현한다.
