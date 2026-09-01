@@ -103,7 +103,9 @@ class MvpEndToEndFlowIntegrationTest {
         TestRunDetail detail = getTestRunDetailService.getTestRun(created.id());
         assertThat(detail.status()).isEqualTo(TestRunStatus.FINISHED);
         assertThat(detail.progress().processedTestCaseCount()).isEqualTo(2);
-        assertThat(detail.qualityGate().statusCode()).isEqualTo("NOT_EVALUATED");
+        assertThat(detail.qualityGate().statusCode()).isEqualTo("PASS");
+        assertThat(detail.qualityGate().metrics().assertionPassRate()).isEqualTo(1.0);
+        assertThat(detail.qualityGate().metrics().executionSuccessRate()).isEqualTo(1.0);
 
         PageResult<TestRunResultItem> results = getTestRunResultListService.getResults(
                 created.id(), TestRunResultListCriteria.firstPage());
@@ -209,8 +211,8 @@ class MvpEndToEndFlowIntegrationTest {
         String qgStatus = jdbcTemplate.queryForObject(
                 "SELECT gate_status FROM quality_gate_result WHERE test_run_id = ?", String.class, created.id());
         assertThat(qgStatus)
-                .as("비교 없는 단일 Target run은 Quality Gate를 평가하지 않는다")
-                .isEqualTo("NOT_EVALUATED");
+                .as("실행 실패가 포함된 현재 Run은 execution success rate 때문에 FAIL이다")
+                .isEqualTo("FAIL");
     }
 
     @Test
@@ -269,7 +271,7 @@ class MvpEndToEndFlowIntegrationTest {
 
         TestRunDetail beforeDeletion = getTestRunDetailService.getTestRun(created.id());
         assertThat(beforeDeletion.status()).isEqualTo(TestRunStatus.FINISHED);
-        assertThat(beforeDeletion.qualityGate().statusCode()).isEqualTo("NOT_EVALUATED");
+        assertThat(beforeDeletion.qualityGate().statusCode()).isEqualTo("PASS");
 
         testCaseService.delete(testCaseId);
 
@@ -287,7 +289,7 @@ class MvpEndToEndFlowIntegrationTest {
         assertThat(afterDeletion.status()).isEqualTo(TestRunStatus.FINISHED);
         assertThat(afterDeletion.qualityGate().statusCode())
                 .as("과거 TestRun의 Quality Gate 결과는 원본 TestCase 삭제와 무관하게 유지돼야 한다")
-                .isEqualTo("NOT_EVALUATED");
+                .isEqualTo("PASS");
 
         PageResult<TestRunResultItem> resultsAfterDeletion = getTestRunResultListService.getResults(
                 created.id(), TestRunResultListCriteria.firstPage());
@@ -297,8 +299,8 @@ class MvpEndToEndFlowIntegrationTest {
     }
 
     @Test
-    @DisplayName("단일 Target이 BLOCK 기대를 ALLOW로 응답하면 assertion은 FAIL이고 QG는 NOT_EVALUATED다")
-    void assertionFailureDoesNotCreateComparisonQualityGate() {
+    @DisplayName("단일 Target이 BLOCK 기대를 ALLOW로 응답하면 assertion과 QG가 FAIL이다")
+    void assertionFailureMakesQualityGateFail() {
         Instant now = Instant.parse("2026-08-27T00:00:00Z");
         fixture.insertTestSuite(TEST_SUITE_ID, now);
         long testCaseId = 5061L;
@@ -326,8 +328,8 @@ class MvpEndToEndFlowIntegrationTest {
         String qgStatus = jdbcTemplate.queryForObject(
                 "SELECT gate_status FROM quality_gate_result WHERE test_run_id = ?", String.class, created.id());
         assertThat(qgStatus)
-                .as("비교 결과를 생성하지 않으므로 QG는 평가하지 않는다")
-                .isEqualTo("NOT_EVALUATED");
+                .as("Assertion FAIL은 현재 Run Quality Gate를 FAIL로 만든다")
+                .isEqualTo("FAIL");
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT assertion_status FROM assertion_result WHERE snapshot_id = ?",
                 String.class, snapshotIds.getFirst())).isEqualTo("FAIL");

@@ -65,12 +65,12 @@ class FinalizeTestRunServiceTest {
     }
 
     @Nested
-    @DisplayName("NOT_EVALUATED - 단일 Target 실행")
+    @DisplayName("현재 TestRun 기반 Quality Gate")
     class PassScenario {
 
         @Test
-        @DisplayName("모든 Target이 Expected와 같아도 비교가 없으면 NOT_EVALUATED다")
-        void allAssertionsPassWithoutComparison() {
+        @DisplayName("모든 Assertion이 통과하고 실행이 성공하면 PASS다")
+        void allAssertionsPass() {
             loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
                     succeededPair(10L, "BLOCK", "BLOCK", "BLOCK"),
                     succeededPair(20L, "BLOCK", "BLOCK", "BLOCK")
@@ -80,8 +80,9 @@ class FinalizeTestRunServiceTest {
 
             assertInstanceOf(FinalizationOutcome.Finalized.class, outcome);
             QualityGateResult result = ((FinalizationOutcome.Finalized) outcome).result();
-            assertEquals(QualityGateStatus.NOT_EVALUATED, result.status());
-            assertNull(result.metrics());
+            assertEquals(QualityGateStatus.PASS, result.status());
+            assertEquals(1.0, result.metrics().assertionPassRate());
+            assertEquals(1.0, result.metrics().executionSuccessRate());
 
             assertEquals(1, finalizeTestRunPort.callCount());
             assertEquals("COMPLETED", finalizeTestRunPort.lastOutcomeCode());
@@ -96,7 +97,7 @@ class FinalizeTestRunServiceTest {
     class IncompleteScenario {
 
         @Test
-        @DisplayName("일부 Candidate가 FAILED terminal이면 outcome=INCOMPLETE로 최종화한다")
+        @DisplayName("일부 실행이 FAILED terminal이면 outcome=INCOMPLETE로 최종화한다")
         void incompleteExecution() {
             loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
                     succeededPair(10L, "BLOCK", "BLOCK", "BLOCK"),
@@ -117,8 +118,8 @@ class FinalizeTestRunServiceTest {
     class NotEvaluatedScenario {
 
         @Test
-        @DisplayName("COMPARABLE ChangeResult가 없으면 NOT_EVALUATED다")
-        void notEvaluatedWhenNoComparableChanges() {
+        @DisplayName("ChangeResult가 없어도 Assertion으로 Quality Gate를 평가한다")
+        void evaluatesWithoutChangeResults() {
             loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
                     new SnapshotExecutionFact(10L, "BLOCK", terminal("SUCCEEDED", "BLOCK")),
                     new SnapshotExecutionFact(20L, "BLOCK", terminal("SUCCEEDED", "BLOCK"))
@@ -128,8 +129,9 @@ class FinalizeTestRunServiceTest {
 
             assertInstanceOf(FinalizationOutcome.Finalized.class, outcome);
             QualityGateResult result = ((FinalizationOutcome.Finalized) outcome).result();
-            assertEquals(QualityGateStatus.NOT_EVALUATED, result.status());
-            assertNull(result.metrics());
+            assertEquals(QualityGateStatus.PASS, result.status());
+            assertEquals(1.0, result.metrics().assertionPassRate());
+            assertEquals(1.0, result.metrics().executionSuccessRate());
         }
 
         @Test
@@ -153,8 +155,8 @@ class FinalizeTestRunServiceTest {
     class ReadinessScenario {
 
         @Test
-        @DisplayName("실행 결과가 아직 없는 pair가 있으면 최종화하지 않지만 진행도는 갱신한다")
-        void notReadyWhenPairHasNoExecutionYet() {
+        @DisplayName("실행 결과가 아직 없으면 최종화하지 않지만 진행도는 갱신한다")
+        void notReadyWhenExecutionIsMissing() {
             loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
                     succeededPair(10L, "BLOCK", "BLOCK", "BLOCK"),
                     new SnapshotExecutionFact(20L, "BLOCK", TargetExecutionFact.notExecuted())
@@ -185,8 +187,8 @@ class FinalizeTestRunServiceTest {
         }
 
         @Test
-        @DisplayName("마지막 완료로 모든 pair가 terminal이 되면 최종화한다")
-        void finalizesWhenLastPairBecomesTerminal() {
+        @DisplayName("마지막 완료로 모든 실행이 terminal이 되면 최종화한다")
+        void finalizesWhenLastExecutionBecomesTerminal() {
             loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(2, List.of(
                     succeededPair(10L, "BLOCK", "BLOCK", "BLOCK"),
                     new SnapshotExecutionFact(20L, "BLOCK", TargetExecutionFact.notExecuted())
@@ -216,8 +218,7 @@ class FinalizeTestRunServiceTest {
             QualityGateResult existing = new QualityGateResult(
                     new TestRunEvaluationReference(TEST_RUN_ID),
                     QualityGateStatus.PASS,
-                    new com.guardbench.evaluation.domain.QualityGateMetrics(
-                            1.0, 0, 0.0, 0.0, 1.0),
+                    new com.guardbench.evaluation.domain.QualityGateMetrics(1.0, 1.0),
                     FIXED_NOW.minusSeconds(60)
             );
             qualityGateResultRepo.preStore(existing);
