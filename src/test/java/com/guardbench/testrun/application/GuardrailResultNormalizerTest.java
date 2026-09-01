@@ -37,7 +37,7 @@ class TargetResultNormalizerTest {
     }
 
     @Test
-    @DisplayName("Application Target의 응답은 AWS raw action이어도 그대로 보존된다")
+    @DisplayName("Application Target의 응답은 provider raw action이어도 그대로 보존된다")
     void rejectsUnknownProviderAction() {
         TargetExecutionNormalization normalized = TargetResultNormalizer.normalize(
                 TargetExecutionResult.succeeded("GUARDRAIL_INTERVENED")
