@@ -32,6 +32,7 @@ GuardBench는 사람이 정의한 기대 동작으로 AI Application의 자연�
 5. Evaluator가 자연어 응답을 `EvaluationResult(ALLOW | BLOCK)`로 정규화한다.
 6. ExpectedResult와 EvaluationResult를 비교해 Assertion을 만든다.
 7. 현재 TestRun의 Assertion 결과를 집계해 Quality Gate를 판정한다.
+8. 필요하면 완료된 현재 Run과 비교 가능한 과거 Run의 저장 결과를 비교해 Regression을 조회한다.
 
 Application의 자연어 응답은 내부 Evaluator 입력으로만 사용하고 사용자-facing 결과에는 노출하지 않는다. 사용자는 TestCase input, Evaluator verdict, ExpectedResult, Assertion과 실행 오류를 확인한다.
 
@@ -67,22 +68,21 @@ Completed TestRun A + Completed TestRun B
              Regression Result
 ```
 
-## 현재 구현과 후속 전환
+## 현재 구현
 
-현재 코드는 OpenAI-compatible `HTTP_ENDPOINT` Application Target과 Bedrock Guardrail Evaluator를 분리하고, Application response를 Evaluator의 입력으로 사용해 `EvaluationResult`와 Assertion을 생성한다. Quality Gate와 Regression API는 각각 #118과 #119 범위다.
-
-Quality Gate는 현재 Run의 평가 가능한 Assertion 통과율과 전체 Snapshot 실행 성공률을 집계하며, 95% 기준을 적용한다. Regression API는 #119 범위다.
+현재 `dev`는 다음 MVP 흐름을 구현한다.
 
 - #114: EvaluatorReference 고정과 Guardrail Target 의존 제거
 - #115: HTTP Endpoint AI Application 실행과 자연어 응답 수집
 - #125·#128: OpenAI-compatible 전용 계약과 필수 `model`
 - #116: AWS Bedrock Guardrail Evaluator Adapter
-
-남은 전환:
-
 - #117: Application 실행 → Evaluator → Assertion Worker
-- #118: 현재 TestRun Assertion 기반 Quality Gate (완료)
-- #119: 저장 결과 기반 Regression API
+- #118: 현재 TestRun Assertion 기반 Quality Gate
+- #119: 저장된 완료 Run 결과 기반 Regression API
+
+OpenAI-compatible `HTTP_ENDPOINT` Application Target의 응답은 Bedrock Guardrail Evaluator의 입력으로 사용되며, 그 결과인 `EvaluationResult`와 `ExpectedResult`로 Assertion을 만든다. Quality Gate는 현재 Run의 평가 가능한 Assertion 통과율과 전체 Snapshot 실행 성공률을 집계해 두 비율이 각각 95% 이상이면 `PASS`, 평가 가능한 Assertion이 없으면 `NOT_EVALUATED`로 판정한다.
+
+Regression API는 완료된 TestRun의 저장된 Snapshot/Evaluator 설정과 EvaluationResult만 사용해 comparable historical Run을 찾고 결과 변화를 계산한다. Regression 과정에서는 Application Target이나 Evaluator를 다시 호출하지 않는다.
 
 ## Non-Goals
 
