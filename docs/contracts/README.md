@@ -10,7 +10,7 @@
 
 이 문서는 ADR·ERD·Migration을 복사하거나 새 동작·DB 구조를 정하지 않는다. 구현은 항상 Primary contract를 근거로 하며, Primary와 보조 참조가 충돌하거나 필요한 계약 키가 없으면 Issue에 기록하고 중단한다.
 
-목표 Application Target → Evaluator 실행 계약은 [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)이 소유한다. 이 표의 Bedrock Target 준비·실행, 기존 ActualResult와 Quality Gate 경로는 #114~#118 전까지의 current implementation 기록이며 목표 계약의 authoritative source가 아니다. Regression은 #119 범위로 이 맵에 아직 구현 경로가 없다.
+목표 Application Target → Evaluator 실행 계약은 [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)이 소유한다. 이 표의 각 행은 #106까지의 비동기 실행 골격을 가리키며, 그중 Bedrock Target 준비·실행 관련 서술은 #114·#115·#116 이전 상태의 기록이다. 현재 `dev`의 Application Target 실행은 OpenAI-compatible HTTP Adapter(#115·#125·#128)이고 Bedrock Guardrail은 Evaluator Adapter(#116)다. 기존 ActualResult와 Quality Gate 경로는 #117~#118 전까지의 current implementation 기록이며 목표 계약의 authoritative source가 아니다. Regression은 #119 범위로 이 맵에 아직 구현 경로가 없다.
 
 각 행의 Primary contract는 #14·#15·#16·#17·#18의 실제 구현(Migration, JPA Entity, Worker Service, Application Service)과 대조 검증되었다(#49). #19의 `MvpEndToEndFlowIntegrationTest`는 실제 PostgreSQL에서 접수·멱등성·정상/부분 실패·materialization 실패의 Worker 체인을 검증한다. SQS 전송·DLQ처럼 이 통합 테스트가 직접 실행하지 않는 경계는 각 구현 작업의 단위·통합 테스트가 담당한다.
 
