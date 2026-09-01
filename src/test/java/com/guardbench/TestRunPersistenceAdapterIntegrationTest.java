@@ -18,6 +18,8 @@ import com.guardbench.testrun.application.port.out.NextTestCaseSnapshotIdPort;
 import com.guardbench.testrun.application.port.out.NextTestRunIdPort;
 import com.guardbench.testrun.domain.Action;
 import com.guardbench.testrun.domain.ActualResult;
+import com.guardbench.testrun.domain.ApplicationResponse;
+import com.guardbench.testrun.domain.EvaluationResult;
 import com.guardbench.testrun.domain.ExpectedResult;
 import com.guardbench.testrun.domain.Severity;
 import com.guardbench.testrun.domain.SourceTestCaseId;
@@ -115,5 +117,36 @@ class TestRunPersistenceAdapterIntegrationTest {
         assertEquals(execution.actualResult(), restored.actualResult());
         assertEquals(execution.startedAt(), restored.startedAt());
         assertEquals(execution.completedAt(), restored.completedAt());
+    }
+
+    @Test
+    @DisplayName("Application response와 Evaluator verdict를 분리해 저장·복원한다")
+    void persistsSeparatedApplicationAndEvaluatorResults(
+            @Autowired NextTestRunIdPort nextTestRunIdPort,
+            @Autowired NextTestCaseSnapshotIdPort nextSnapshotIdPort,
+            @Autowired TestRunRepository testRunRepository,
+            @Autowired TestCaseSnapshotRepository snapshotRepository,
+            @Autowired TestExecutionRepository executionRepository) {
+        TestRunId runId = nextTestRunIdPort.nextId();
+        fixture.insertTargetReference("target-ref-3");
+        testRunRepository.save(TestRun.queue(
+                runId, new SourceTestSuiteId(500), new TargetReference("target-ref-3"), 1, CREATED_AT));
+        TestCaseSnapshot snapshot = TestCaseSnapshot.of(
+                nextSnapshotIdPort.nextId(), runId, new SourceTestCaseId(501), "case", "input",
+                new ExpectedResult(Action.BLOCK), Severity.HIGH, "category", CREATED_AT);
+        snapshotRepository.save(snapshot);
+
+        TestExecution execution = TestExecution.succeeded(
+                new TestExecutionId(snapshot.id()),
+                new ApplicationResponse("natural language response"),
+                new EvaluationResult(Action.BLOCK),
+                CREATED_AT.plusSeconds(1),
+                CREATED_AT.plusSeconds(2));
+        executionRepository.save(execution);
+
+        TestExecution restored = executionRepository.findById(execution.id()).orElseThrow();
+        assertEquals("natural language response", restored.applicationResponse().value());
+        assertEquals(new EvaluationResult(Action.BLOCK), restored.evaluationResult());
+        assertEquals(null, restored.error());
     }
 }

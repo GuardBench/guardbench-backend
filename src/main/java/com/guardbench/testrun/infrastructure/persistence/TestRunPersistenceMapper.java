@@ -2,7 +2,9 @@ package com.guardbench.testrun.infrastructure.persistence;
 
 import com.guardbench.testrun.domain.Action;
 import com.guardbench.testrun.domain.ActualResult;
+import com.guardbench.testrun.domain.ApplicationResponse;
 import com.guardbench.testrun.domain.EvaluationProfile;
+import com.guardbench.testrun.domain.EvaluationResult;
 import com.guardbench.testrun.domain.EvaluatorReference;
 import com.guardbench.testrun.domain.ExpectedResult;
 import com.guardbench.testrun.domain.Severity;
@@ -14,6 +16,7 @@ import com.guardbench.testrun.domain.TestCaseSnapshotId;
 import com.guardbench.testrun.domain.TestExecution;
 import com.guardbench.testrun.domain.TestExecutionError;
 import com.guardbench.testrun.domain.TestExecutionErrorCode;
+import com.guardbench.testrun.domain.TestExecutionErrorStage;
 import com.guardbench.testrun.domain.TestExecutionId;
 import com.guardbench.testrun.domain.TestExecutionStatus;
 import com.guardbench.testrun.domain.TestRun;
@@ -102,7 +105,11 @@ final class TestRunPersistenceMapper {
         return TestExecutionEntity.of(
                 source.id().snapshotId().value(),
                 source.status().name(),
-                source.actualResult() == null ? null : source.actualResult().action().name(),
+                source.applicationResponse() == null && source.evaluationResult() != null
+                        ? source.evaluationResult().action().name() : null,
+                source.applicationResponse() == null ? null : source.applicationResponse().value(),
+                source.evaluationResult() == null ? null : source.evaluationResult().action().name(),
+                source.error() == null ? null : source.error().stage().name(),
                 source.error() == null ? null : source.error().code().name(),
                 source.error() == null ? null : source.error().message(),
                 source.startedAt(),
@@ -113,20 +120,52 @@ final class TestRunPersistenceMapper {
     static TestExecution toDomain(TestExecutionEntity source) {
         TestExecutionId id = new TestExecutionId(new TestCaseSnapshotId(source.snapshotId));
         TestExecutionStatus status = TestExecutionStatus.valueOf(source.resultStatus);
+        String evaluatorVerdict = source.evaluatorVerdict != null
+                ? source.evaluatorVerdict : source.actualAction;
+        TestExecutionError error = source.errorCode == null ? null : new TestExecutionError(
+                source.errorStage == null
+                        ? TestExecutionErrorStage.APPLICATION_TARGET
+                        : TestExecutionErrorStage.valueOf(source.errorStage),
+                TestExecutionErrorCode.valueOf(source.errorCode),
+                source.errorMessage);
         return switch (status) {
-            case SUCCEEDED -> TestExecution.succeeded(
-                    id, new ActualResult(Action.valueOf(source.actualAction)), source.startedAt, source.completedAt);
-            case FAILED -> TestExecution.failed(
-                    id,
-                    new TestExecutionError(TestExecutionErrorCode.valueOf(source.errorCode), source.errorMessage),
-                    source.startedAt,
-                    source.completedAt);
-            case TIMED_OUT -> TestExecution.timedOut(
-                    id,
-                    new TestExecutionError(TestExecutionErrorCode.valueOf(source.errorCode), source.errorMessage),
-                    source.startedAt,
-                    source.completedAt);
+            case SUCCEEDED -> rehydrateSucceeded(source, id, evaluatorVerdict);
+            case FAILED -> source.applicationResponse != null && error.stage() == TestExecutionErrorStage.EVALUATOR
+                    ? TestExecution.failedAfterApplication(
+                            id,
+                            new ApplicationResponse(source.applicationResponse),
+                            error,
+                            source.startedAt,
+                            source.completedAt)
+                    : TestExecution.failed(id, error, source.startedAt, source.completedAt);
+            case TIMED_OUT -> source.applicationResponse != null && error.stage() == TestExecutionErrorStage.EVALUATOR
+                    ? TestExecution.timedOutAfterApplication(
+                            id,
+                            new ApplicationResponse(source.applicationResponse),
+                            error,
+                            source.startedAt,
+                            source.completedAt)
+                    : TestExecution.timedOut(id, error, source.startedAt, source.completedAt);
             case NOT_STARTED -> TestExecution.notStarted(id);
         };
+    }
+
+    private static TestExecution rehydrateSucceeded(
+            TestExecutionEntity source,
+            TestExecutionId id,
+            String evaluatorVerdict) {
+        if (source.applicationResponse == null) {
+            return TestExecution.succeeded(
+                    id,
+                    new ActualResult(Action.valueOf(evaluatorVerdict)),
+                    source.startedAt,
+                    source.completedAt);
+        }
+        return TestExecution.succeeded(
+                id,
+                new ApplicationResponse(source.applicationResponse),
+                new EvaluationResult(Action.valueOf(evaluatorVerdict)),
+                source.startedAt,
+                source.completedAt);
     }
 }

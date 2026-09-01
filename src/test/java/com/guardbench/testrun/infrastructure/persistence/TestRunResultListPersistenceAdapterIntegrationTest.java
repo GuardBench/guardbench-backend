@@ -95,6 +95,26 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
         assertEquals(List.of(90_022L, 90_021L), result.items().stream().map(TestRunResultItem::snapshotId).toList());
     }
 
+    @Test
+    @DisplayName("Evaluator verdict와 ExpectedResult로 evaluationOutcome을 계산하고 필터링한다")
+    void calculatesAndFiltersEvaluationOutcome() {
+        insertSuite(70_031L);
+        insertTestRun(80_031L, 70_031L);
+        insertSnapshot(90_031L, 80_031L, 1L, "blocked", "input", "BLOCK", "LOW", "PII");
+        insertModernExecution(90_031L, "BLOCK", "blocked response");
+        insertSnapshot(90_032L, 80_031L, 2L, "allowed", "input", "BLOCK", "LOW", "PII");
+        insertModernExecution(90_032L, "ALLOW", "allowed response");
+
+        PageResult<TestRunResultItem> result = port.load(80_031L, new TestRunResultListCriteria(
+                null, null, null, null, null, null, null, "TRUE_POSITIVE",
+                List.of(), com.guardbench.testrun.application.port.out.PageCriteria.firstPage()));
+
+        assertEquals(List.of(90_031L), result.items().stream().map(TestRunResultItem::snapshotId).toList());
+        TestRunResultItem item = result.items().getFirst();
+        assertEquals("BLOCK", item.execution().evaluatorVerdict().name());
+        assertEquals("TRUE_POSITIVE", item.evaluationOutcomeCode());
+    }
+
     private void insertSuite(long id) {
         jdbcTemplate.update("""
                 INSERT INTO test_suite (id, name, description, created_at, updated_at)
@@ -148,6 +168,16 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
                     error_message, started_at, completed_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, snapshotId, status, actualAction, errorCode, errorMessage,
+                Timestamp.from(T0), Timestamp.from(T0));
+    }
+
+    private void insertModernExecution(long snapshotId, String evaluatorVerdict, String applicationResponse) {
+        jdbcTemplate.update("""
+                INSERT INTO test_execution (
+                    snapshot_id, result_status, application_response, evaluator_verdict,
+                    started_at, completed_at)
+                VALUES (?, 'SUCCEEDED', ?, ?, ?, ?)
+                """, snapshotId, applicationResponse, evaluatorVerdict,
                 Timestamp.from(T0), Timestamp.from(T0));
     }
 

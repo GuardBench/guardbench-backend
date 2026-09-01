@@ -6,5 +6,9 @@ package com.guardbench.testrun.presentation.dto;
  *
  * @see <a href="../../../../../../../../docs/api/openapi.yaml">GuardBench API V1 - ExecutionErrorDetailRes</a>
  */
-public record ExecutionErrorDetailRes(String code, String message) {
+public record ExecutionErrorDetailRes(String stage, String code, String message) {
+
+    public ExecutionErrorDetailRes(String code, String message) {
+        this("APPLICATION_TARGET", code, message);
+    }
 }

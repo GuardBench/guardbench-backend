@@ -12,6 +12,9 @@ class TestExecutionEntity {
     @Id Long snapshotId;
     String resultStatus;
     String actualAction;
+    String applicationResponse;
+    String evaluatorVerdict;
+    String errorStage;
     String errorCode;
     String errorMessage;
     Instant startedAt;
@@ -24,6 +27,9 @@ class TestExecutionEntity {
             Long snapshotId,
             String resultStatus,
             String actualAction,
+            String applicationResponse,
+            String evaluatorVerdict,
+            String errorStage,
             String errorCode,
             String errorMessage,
             Instant startedAt,
@@ -32,6 +38,9 @@ class TestExecutionEntity {
         this.snapshotId = snapshotId;
         this.resultStatus = resultStatus;
         this.actualAction = actualAction;
+        this.applicationResponse = applicationResponse;
+        this.evaluatorVerdict = evaluatorVerdict;
+        this.errorStage = errorStage;
         this.errorCode = errorCode;
         this.errorMessage = errorMessage;
         this.startedAt = startedAt;
@@ -42,11 +51,15 @@ class TestExecutionEntity {
             Long snapshotId,
             String resultStatus,
             String actualAction,
+            String applicationResponse,
+            String evaluatorVerdict,
+            String errorStage,
             String errorCode,
             String errorMessage,
             Instant startedAt,
             Instant completedAt
     ) {
-        return new TestExecutionEntity(snapshotId, resultStatus, actualAction, errorCode, errorMessage, startedAt, completedAt);
+        return new TestExecutionEntity(snapshotId, resultStatus, actualAction, applicationResponse,
+                evaluatorVerdict, errorStage, errorCode, errorMessage, startedAt, completedAt);
     }
 }
