@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Last reviewed: 2026-08-31
+> Last reviewed: 2026-09-01
 > Canonical source: GitHub
 > Origin: [GitHub Issue #113](https://github.com/GuardBench/guardbench-backend/issues/113)
 
@@ -50,7 +50,7 @@ Assertion
 
 ### Quality Gate와 Regression
 
-Quality Gate는 하나의 현재 TestRun에 저장된 Assertion 결과를 집계해 `PASS`, `FAIL` 또는 `NOT_EVALUATED`를 판정한다. 다른 Run이나 복수 Target 실행 결과는 Quality Gate 입력이 아니다. 구체적인 집계 정책과 저장/API 전환은 [#118](https://github.com/GuardBench/guardbench-backend/issues/118)에서 구현한다.
+Quality Gate는 하나의 현재 TestRun에 저장된 Assertion 결과를 집계해 `PASS`, `FAIL` 또는 `NOT_EVALUATED`를 판정한다. 다른 Run이나 복수 Target 실행 결과는 Quality Gate 입력이 아니다. 구체적인 집계 정책과 저장/API 전환은 [#118](https://github.com/GuardBench/guardbench-backend/issues/118)에서 구현되었다.
 
 Regression은 Quality Gate와 별도 유스케이스다. 이미 완료된 두 TestRun의 저장 결과만 비교하며, 비교 시 과거 Application Target이나 Evaluator를 다시 호출하지 않는다.
 
@@ -64,23 +64,26 @@ Completed TestRun A + Completed TestRun B
              Regression Result
 ```
 
-최소 비교 가능 조건은 동일한 테스트 정의와 동일한 Evaluator 설정이다. 구체적인 동일성 식별자, 추가 조건, 결과 모델과 API는 [#119](https://github.com/GuardBench/guardbench-backend/issues/119)에서 결정·구현한다. 한 TestRun 안에서 Baseline/Candidate를 동시에 실행하거나 Guardrail Version A/B를 제품의 비교 단위로 삼지 않는다.
+최소 비교 가능 조건은 동일한 테스트 정의와 동일한 Evaluator 설정이다. 구체적인 동일성 식별자, 추가 조건, 결과 모델과 API는 [#119](https://github.com/GuardBench/guardbench-backend/issues/119)에서 구현되었다. 한 TestRun 안에서 Baseline/Candidate를 동시에 실행하거나 Guardrail Version A/B를 제품의 비교 단위로 삼지 않는다.
 
-### 현재 구현과 전환
+### 현재 구현
 
-이 ADR과 [OpenAPI](../api/openapi.yaml)는 합의된 계약이다. ADR 승인 당시의 구현 차이는 후속 Issue에서 해소되었으며, 현재 구현은 새 TestRun에 `HTTP_ENDPOINT` Application Target과 immutable EvaluatorReference를 고정하고 Bedrock Guardrail을 Evaluator로 호출한다. Worker는 Application response → `EvaluationResult` → Assertion 흐름으로 결과를 저장한다. `bedrock_guardrail_target`은 기존 V3 데이터 조회를 위해 남아 있지만 새 TestRun 등록에는 사용하지 않는다.
-Quality Gate는 현재 Run의 평가 가능한 Assertion 통과율과 전체 실행 성공률을 집계하며, 두 비율이 각각 95% 이상일 때 PASS, 평가 가능한 Assertion이 없으면 NOT_EVALUATED가 된다. Regression은 #119 범위다.
+이 ADR과 [OpenAPI](../api/openapi.yaml)는 합의된 계약이며, ADR 승인 당시의 구현 차이는 #114~#119 후속 Issue에서 해소되었다.
 
-이 계약을 구현한 후속 Issue와 남은 범위는 다음과 같다.
+현재 구현은 새 TestRun에 `HTTP_ENDPOINT` Application Target과 immutable EvaluatorReference를 고정하고 Bedrock Guardrail을 Evaluator로 호출한다. Worker는 Application response → `EvaluationResult` → Assertion 흐름으로 결과를 저장한다. `bedrock_guardrail_target`은 기존 V3 데이터 조회를 위해 남아 있지만 새 TestRun 등록에는 사용하지 않는다.
+
+Quality Gate는 현재 Run의 평가 가능한 Assertion 통과율과 전체 실행 성공률을 집계하며, 두 비율이 각각 95% 이상일 때 `PASS`, 평가 가능한 Assertion이 없으면 `NOT_EVALUATED`가 된다. Regression API는 비교 가능한 완료 Run의 저장된 Snapshot/Evaluator 설정과 EvaluationResult만 사용해 변화 결과를 계산하며 Application Target과 Evaluator를 재호출하지 않는다.
+
+이 계약을 구현한 후속 Issue는 다음과 같다.
 
 - [#114](https://github.com/GuardBench/guardbench-backend/issues/114): TestRun의 EvaluatorReference 고정과 Guardrail Target 의존 제거 (완료)
 - [#115](https://github.com/GuardBench/guardbench-backend/issues/115): HTTP Endpoint AI Application 실행과 자연어 응답 수집 (완료)
 - [#116](https://github.com/GuardBench/guardbench-backend/issues/116): AWS Bedrock Guardrail Evaluator Adapter 전환 (완료)
 - [#117](https://github.com/GuardBench/guardbench-backend/issues/117): Worker를 Application 실행 → Evaluator → Assertion 흐름으로 전환 (완료)
-- [#118](https://github.com/GuardBench/guardbench-backend/issues/118): 현재 TestRun Assertion 기반 Quality Gate
-- [#119](https://github.com/GuardBench/guardbench-backend/issues/119): 저장된 완료 Run 결과 기반 Regression API
+- [#118](https://github.com/GuardBench/guardbench-backend/issues/118): 현재 TestRun Assertion 기반 Quality Gate (완료)
+- [#119](https://github.com/GuardBench/guardbench-backend/issues/119): 저장된 완료 Run 결과 기반 Regression API (완료)
 
-inline Evaluation Profile의 공개 입력 계약은 #113에서 확정한다. Profile을 독립 영속·재사용 리소스로 만드는 설계, provider별 고급 설정과 provider ensemble은 Research 또는 후속 구현 범위이며 이 ADR에서 확정하지 않는다.
+inline Evaluation Profile의 공개 입력 계약은 #113에서 확정했다. Profile을 독립 영속·재사용 리소스로 만드는 설계, provider별 고급 설정과 provider ensemble은 Research 또는 후속 구현 범위이며 이 ADR에서 확정하지 않는다.
 
 ## Alternatives
 
@@ -95,7 +98,7 @@ inline Evaluation Profile의 공개 입력 계약은 #113에서 확정한다. Pr
 - Application 실행 실패, Evaluator 실패, Assertion FAIL과 Quality Gate 판정을 서로 구분할 수 있다.
 - 기존 ExpectedResult와 `ALLOW/BLOCK` Assertion 자산을 유지하면서 SUT를 AI Application으로 일반화한다.
 - Quality Gate는 현재 Run의 상태를, Regression은 완료된 두 Run의 저장 결과 비교를 각각 설명한다.
-- Java·DB의 기존 Target/Execution/Quality Gate 모델은 후속 구현이 끝날 때까지 목표 OpenAPI와 어긋난다. current implementation 문서는 이 차이를 명시해야 하며, 미래 물리 구조를 추측해 설명해서는 안 된다.
+- 현재 Java·DB·API 구현은 이 ADR의 Application Target, Evaluator, Assertion, Quality Gate와 stored-result Regression 책임 분리를 반영한다.
 - 변경을 되돌리려면 새 ADR로 SUT, Evaluator와 비교 책임을 대체한다. 이전 Guardrail Target 또는 Baseline/Candidate 계약을 active 문서에 다시 도입하지 않는다.
 
 ## Validation
@@ -104,7 +107,7 @@ inline Evaluation Profile의 공개 입력 계약은 #113에서 확정한다. Pr
 2. Quality Gate가 현재 TestRun만 집계하고 Regression은 완료된 두 Run의 저장 결과만 비교하는지 확인한다.
 3. Regression 설명에 Application 또는 Evaluator 재호출이 없는지 확인한다.
 4. 이전 ADR의 충돌 부분이 이 ADR로 부분 supersede되었음이 문서 지도와 각 ADR 경고에서 추적되는지 확인한다.
-5. current implementation과 target architecture가 구분되고 #114~#119가 각 구현 차이를 소유하는지 확인한다.
+5. #114~#119가 완료된 구현으로 현재 코드와 일치하는지 확인한다.
 6. OpenAPI가 inline Evaluation Profile만 요청으로 받고 Evaluator/provider 설정을 요청 필드로 노출하지 않는지 확인한다.
 7. OpenAPI public 결과에 ApplicationResponse 계열 필드가 없는지 확인한다.
 8. Java, Migration과 PlantUML/PNG ERD가 변경되지 않았는지 확인하고 OpenAPI syntax와 `$ref` 무결성을 검증한다.
