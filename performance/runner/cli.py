@@ -1,0 +1,312 @@
+"""CLI entrypoint for repeatable GuardBench performance experiments."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from .acceptance import evaluate
+from .api import ApiClient, ApiError
+from .aws import CloudWatchMetricCollector, QueueInspector, queue_urls_from_environment
+from .config import ConfigurationError, load_dataset, load_profile
+from .dataset import load_seed_payload
+from .safety import validate_reset_safety
+
+
+class RunnerError(RuntimeError):
+    pass
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _iso(value: datetime) -> str:
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def _run(command: list[str], *, cwd: Path | None = None) -> None:
+    try:
+        subprocess.run(command, cwd=cwd, check=True)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        executable = command[0] if command else "command"
+        raise RunnerError(f"{executable} 실행에 실패했습니다.") from exc
+
+
+def reset_database(environment: dict[str, str]) -> None:
+    validate_reset_safety(environment)
+    database_url = environment.get("PERFORMANCE_DATABASE_URL")
+    if not database_url:
+        raise ConfigurationError("DB reset에는 PERFORMANCE_DATABASE_URL이 필요합니다.")
+    _run(["psql", "--dbname", database_url, "--set", "ON_ERROR_STOP=1", "--command",
+          "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"])
+
+
+def apply_migrations(environment: dict[str, str], migration_dir: Path) -> None:
+    database_url = environment.get("PERFORMANCE_DATABASE_URL")
+    if not database_url:
+        raise ConfigurationError("migration에는 PERFORMANCE_DATABASE_URL이 필요합니다.")
+    if not migration_dir.is_dir():
+        raise ConfigurationError(f"migration 디렉터리를 찾을 수 없습니다: {migration_dir}")
+    command_text = environment.get("PERFORMANCE_MIGRATION_COMMAND_JSON")
+    if command_text:
+        try:
+            command = json.loads(command_text)
+        except json.JSONDecodeError as exc:
+            raise ConfigurationError("PERFORMANCE_MIGRATION_COMMAND_JSON은 JSON 배열이어야 합니다.") from exc
+        if not isinstance(command, list) or not command or not all(isinstance(item, str) for item in command):
+            raise ConfigurationError("PERFORMANCE_MIGRATION_COMMAND_JSON은 문자열 배열이어야 합니다.")
+    else:
+        # The application owns Flyway history/checksums. A non-web Boot run applies
+        # the same migrations and exits, rather than replaying SQL outside Flyway.
+        command = ["./gradlew", "bootRun", "--args=--spring.main.web-application-type=none"]
+    migration_environment = dict(environment)
+    migration_environment.update({
+        "SPRING_DATASOURCE_URL": environment.get("PERFORMANCE_DATABASE_JDBC_URL", database_url),
+        "SPRING_DOCKER_COMPOSE_ENABLED": "false",
+        "SQS_ENABLED": "false",
+        "WORKER_ENABLED": "false",
+    })
+    username = environment.get("PERFORMANCE_DB_USERNAME")
+    password = environment.get("PERFORMANCE_DB_PASSWORD")
+    if username:
+        migration_environment["SPRING_DATASOURCE_USERNAME"] = username
+    if password:
+        migration_environment["SPRING_DATASOURCE_PASSWORD"] = password
+    try:
+        subprocess.run(command, cwd=_repo_root(), env=migration_environment, check=True)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise RunnerError("Flyway migration command 실행에 실패했습니다.") from exc
+
+
+def _queue_state(inspector: QueueInspector, source_urls: list[str], dlq_urls: list[str]) -> dict[str, Any]:
+    return {"source": inspector.snapshot(source_urls), "dlq": inspector.snapshot(dlq_urls)}
+
+
+def _assert_preflight(api: ApiClient, inspector: QueueInspector, source_urls: list[str], dlq_urls: list[str]) -> dict[str, Any]:
+    api.health_check()
+    active = api.list_runs(statuses=["QUEUED", "PREPARING", "RUNNING"])
+    if active:
+        raise RunnerError(f"이전 TestRun workload가 처리 중입니다: {len(active)}건")
+    queues = _queue_state(inspector, source_urls, dlq_urls)
+    if not inspector.is_empty(queues["source"]) or not inspector.is_empty(queues["dlq"]):
+        raise RunnerError("이전 테스트의 SQS source queue 또는 DLQ가 비어 있지 않습니다.")
+    return {"activeRuns": 0, "queues": queues}
+
+
+def _wait_for_drain(api: ApiClient, inspector: QueueInspector, source_urls: list[str],
+                    started_at: datetime, timeout_seconds: float, polling_seconds: float) -> dict[str, Any]:
+    drain_started = time.monotonic()
+    last_queues: dict[str, Any] = {}
+    while time.monotonic() - drain_started <= timeout_seconds:
+        active = api.list_runs(statuses=["QUEUED", "PREPARING", "RUNNING"], created_from=started_at, created_to=_now())
+        last_queues = {"source": inspector.snapshot(source_urls)}
+        if not active and inspector.is_empty(last_queues["source"]):
+            return {"passed": True, "duration_seconds": round(time.monotonic() - drain_started, 3),
+                    "active_runs": 0, "queues": last_queues}
+        time.sleep(polling_seconds)
+    active = api.list_runs(statuses=["QUEUED", "PREPARING", "RUNNING"], created_from=started_at, created_to=_now())
+    return {"passed": False, "duration_seconds": round(time.monotonic() - drain_started, 3),
+            "active_runs": len(active), "queues": last_queues}
+
+
+def _k6_environment(profile: dict[str, Any], run_id: str, suite_id: int, base_url: str) -> dict[str, str]:
+    workload = profile["workload"]
+    target = profile["target"]
+    evaluation = target["evaluation_profile"]
+    api = profile["acceptance"]["api"]
+    completion = profile["acceptance"]["completion"]
+    return {
+        "PERF_BASE_URL": base_url,
+        "PERF_SUITE_ID": str(suite_id),
+        "PERF_TARGET_URL": target["identifier"],
+        "PERF_TARGET_MODEL": target["model"],
+        "PERF_TARGET_REVISION": target.get("revision", ""),
+        "PERF_EVALUATION_CHECKS": ",".join(evaluation["checks"]),
+        "PERF_EVALUATION_STRICTNESS": evaluation["strictness"],
+        "PERF_RUN_ID": run_id,
+        "PERF_CONCURRENT_TEST_RUNS": str(workload["concurrent_test_runs"]),
+        "PERF_RAMP_UP_SECONDS": str(workload["ramp_up_seconds"]),
+        "PERF_DURATION_SECONDS": str(workload["duration_seconds"]),
+        "PERF_MAX_ITERATIONS_PER_VU": str(workload.get("max_iterations_per_vu", 0)),
+        "PERF_COMPLETION_TIMEOUT_SECONDS": str(workload["completion_timeout_seconds"]),
+        "PERF_POLLING_INTERVAL_SECONDS": str(workload["polling_interval_seconds"]),
+        "PERF_API_P50_MS": str(api["create_latency_ms"]["p50"]),
+        "PERF_API_P95_MS": str(api["create_latency_ms"]["p95"]),
+        "PERF_API_P99_MS": str(api["create_latency_ms"]["p99"]),
+        "PERF_API_ERROR_RATE": str(api["error_rate"]),
+        "PERF_COMPLETION_MAX_SECONDS": str(completion["max_seconds"]),
+        "PERF_COMPLETION_FAILURE_RATE": str(completion["failure_rate"]),
+    }
+
+
+def run_k6(profile: dict[str, Any], run_id: str, suite_id: int, base_url: str,
+           summary_path: Path, repo_root: Path) -> None:
+    environment = os.environ.copy()
+    environment.update(_k6_environment(profile, run_id, suite_id, base_url))
+    try:
+        subprocess.run([
+            os.environ.get("K6_BIN", "k6"), "run", "--summary-export", str(summary_path),
+            str(repo_root / "performance/k6/test-run.js"),
+        ], cwd=repo_root, env=environment, check=True)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise RunnerError("k6 workload 실행에 실패했습니다.") from exc
+
+
+def _read_json(path: Path) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RunnerError(f"JSON 결과를 읽을 수 없습니다: {path}") from exc
+    if not isinstance(value, dict):
+        raise RunnerError(f"JSON 결과 최상위는 object여야 합니다: {path}")
+    return value
+
+
+def _report(result: dict[str, Any]) -> str:
+    profile = result["profile"]
+    workload = profile["workload"]
+    acceptance = profile["acceptance"]
+    decision = result.get("acceptance", {}).get("status", "FAIL")
+    lines = [
+        f"# {profile['test']['id']} performance report",
+        "",
+        f"- 실행 시각: {result['started_at']} ~ {result['finished_at']}",
+        f"- Application revision: {result['revisions']['application']}",
+        f"- Infrastructure revision: {result['revisions']['infrastructure']}",
+        f"- Dataset: {result['dataset']['id']} ({result['dataset']['test_case_count']} TestCases)",
+        f"- Workload: {workload['concurrent_test_runs']} concurrent TestRuns, ramp-up {workload['ramp_up_seconds']}s, duration {workload['duration_seconds']}s",
+        "",
+        "## Acceptance Criteria",
+        "",
+        f"- API latency: p50 < {acceptance['api']['create_latency_ms']['p50']}ms, p95 < {acceptance['api']['create_latency_ms']['p95']}ms, p99 < {acceptance['api']['create_latency_ms']['p99']}ms",
+        f"- API error rate: <= {acceptance['api']['error_rate']}",
+        f"- TestRun completion: <= {acceptance['completion']['max_seconds']}s, failure rate <= {acceptance['completion']['failure_rate']}",
+        f"- Queue drain: <= {acceptance['completion']['queue_drain_seconds']}s, DLQ messages <= {acceptance['completion']['dlq_messages']}",
+        "",
+        "## Results",
+        "",
+        f"- k6 summary: `k6-summary.json`",
+        f"- Queue drain: {result['drain']}",
+        f"- AWS metrics: `aws-metrics.json` ({result['aws_metrics'].get('status')})",
+        f"- Decision: **{decision}**",
+        "",
+        "## Bottleneck observations",
+        "",
+        "- 자동 병목 판정은 하지 않는다. k6 summary와 AWS metric 시계열을 함께 확인해 관찰을 기록한다.",
+        "",
+        "## Next experiment",
+        "",
+        "- 동일 Dataset과 Profile을 유지한 채 Capacity Target과 인프라 설정 변경 전후를 비교한다.",
+        "- 목표값을 바꾸어 결과를 맞추지 말고 실행 전에 Profile을 확정한다.",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def execute(args: argparse.Namespace) -> int:
+    repo_root = _repo_root()
+    profile_path = Path(args.profile).resolve()
+    dataset_path = Path(args.dataset).resolve()
+    profile = load_profile(profile_path)
+    payload, test_case_count = load_seed_payload(dataset_path)
+    run_id = f"{profile['test']['id']}-{_now().strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:8]}"
+    result_dir = Path(args.result_dir).resolve() if args.result_dir else repo_root / "performance/results" / run_id
+    result_dir.mkdir(parents=True, exist_ok=False)
+    shutil.copyfile(profile_path, result_dir / "profile.yaml")
+    shutil.copyfile(dataset_path, result_dir / "dataset.yaml")
+
+    if args.dry_run:
+        plan = {"run_id": run_id, "profile": str(profile_path), "dataset": str(dataset_path),
+                "test_case_count": test_case_count, "k6_script": str(repo_root / "performance/k6/test-run.js")}
+        (result_dir / "dry-run.json").write_text(json.dumps(plan, indent=2) + "\n", encoding="utf-8")
+        print(json.dumps(plan, indent=2))
+        return 0
+
+    base_url = os.environ.get("PERF_BASE_URL", "http://localhost:8080")
+    api = ApiClient(base_url)
+    source_urls, dlq_urls = queue_urls_from_environment()
+    inspector = QueueInspector()
+    preflight = _assert_preflight(api, inspector, source_urls, dlq_urls)
+    if args.reset:
+        environment = dict(os.environ)
+        reset_database(environment)
+        apply_migrations(environment, repo_root / "src/main/resources/db/migration")
+
+    suite_id = args.suite_id
+    if not args.no_seed:
+        api.health_check()
+        suite_id = api.create_suite(payload)
+        if suite_id <= 0:
+            raise RunnerError("seed 결과의 TestSuite id가 양수가 아닙니다.")
+    if suite_id is None:
+        raise ConfigurationError("seed를 생략하면 --suite-id 또는 PERF_SUITE_ID가 필요합니다.")
+
+    started_at = _now()
+    summary_path = result_dir / "k6-summary.json"
+    run_k6(profile, run_id, suite_id, base_url, summary_path, repo_root)
+    summary = _read_json(summary_path)
+    workload = profile["workload"]
+    drain = _wait_for_drain(api, inspector, source_urls, started_at,
+                            workload["completion_timeout_seconds"], workload["polling_interval_seconds"])
+    finished_at = _now()
+    final_queues = inspector.snapshot(dlq_urls)
+    metrics = CloudWatchMetricCollector(repo_root / "performance/metrics/aws.yaml").collect(started_at, finished_at)
+    (result_dir / "aws-metrics.json").write_text(json.dumps(metrics, indent=2, default=str) + "\n", encoding="utf-8")
+    acceptance = evaluate(profile, summary, drain, final_queues, metrics)
+    result = {
+        "run_id": run_id,
+        "started_at": _iso(started_at),
+        "finished_at": _iso(finished_at),
+        "revisions": {"application": os.environ.get("APP_REVISION", "unknown"),
+                       "infrastructure": os.environ.get("INFRA_REVISION", "unknown")},
+        "dataset": {"id": load_dataset(dataset_path).get("id", dataset_path.stem), "test_case_count": test_case_count,
+                    "suite_id": suite_id},
+        "profile": profile,
+        "preflight": preflight,
+        "drain": drain,
+        "final_dlq": final_queues,
+        "aws_metrics": metrics,
+        "acceptance": acceptance,
+    }
+    (result_dir / "result.json").write_text(json.dumps(result, indent=2, default=str) + "\n", encoding="utf-8")
+    (result_dir / "report.md").write_text(_report(result), encoding="utf-8")
+    print(f"{acceptance['status']}: {result_dir}")
+    return 0 if acceptance["status"] == "PASS" else 1
+
+
+def parser() -> argparse.ArgumentParser:
+    root = _repo_root()
+    command = argparse.ArgumentParser(description="Run a repeatable GuardBench performance profile.")
+    command.add_argument("--profile", default=str(root / "performance/profiles/small.yaml"))
+    command.add_argument("--dataset", default=str(root / "performance/datasets/baseline-v1.yaml"))
+    command.add_argument("--suite-id", type=int, default=int(os.environ["PERF_SUITE_ID"]) if os.environ.get("PERF_SUITE_ID") else None)
+    command.add_argument("--result-dir")
+    command.add_argument("--reset", action="store_true", help="Reset and migrate only a guarded performance DB.")
+    command.add_argument("--no-seed", action="store_true", help="Use --suite-id instead of seeding the Dataset.")
+    command.add_argument("--dry-run", action="store_true", help="Validate inputs and print the execution plan.")
+    return command
+
+
+def main() -> int:
+    try:
+        return execute(parser().parse_args())
+    except (ConfigurationError, RunnerError, ApiError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

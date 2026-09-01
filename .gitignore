@@ -10,6 +10,7 @@ build/
 !gradle/wrapper/gradle-wrapper.jar
 *.war
 *.log
+__pycache__/
 hs_err_pid*
 
 # Environment / Secrets
