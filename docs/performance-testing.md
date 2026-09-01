@@ -124,6 +124,7 @@ export PERFORMANCE_ENVIRONMENT=performance
 export PERFORMANCE_DB_NAME=guardbench_perf
 export PERFORMANCE_RESET_CONFIRM=RESET_GUARDBENCH_PERF
 export PERFORMANCE_DATABASE_URL=postgresql://<performance-rds>:5432/guardbench_perf
+# Optional: JDBC 옵션이 필요할 때만 지정한다. host/port/database는 위 URL과 동일해야 한다.
 export PERFORMANCE_DATABASE_JDBC_URL=jdbc:postgresql://<performance-rds>:5432/guardbench_perf?sslmode=require
 export PERFORMANCE_DB_USERNAME=guardbench
 export PERFORMANCE_DB_PASSWORD=<secret>
@@ -135,6 +136,10 @@ command와 같은 PostgreSQL connection에서 `SELECT current_database()` 결과
 `guardbench_perf`인지 확인한 뒤에만 schema를 삭제한다. `PERFORMANCE_DB_NAME`은 이 실제 URL
 database name과 함께 검증된다. RDS instance identifier를 별도 문자열로 신뢰하지 않는다.
 AWS RDS를 사용할 때는 운영자가 URL host와 RDS endpoint를 별도로 대조해야 한다.
+
+Flyway는 기본적으로 `PERFORMANCE_DATABASE_URL`에서 JDBC URL을 파생해 같은 DB에만 실행한다.
+`PERFORMANCE_DATABASE_JDBC_URL`을 명시할 때도 `jdbc:postgresql` 형식이며 URL의 host, port,
+database가 reset URL과 정확히 같아야 한다. 하나라도 다르면 migration 시작 전에 중단한다.
 
 `PERFORMANCE_MIGRATION_COMMAND_JSON`을 설정하면 기본 non-web Boot migration 명령을 명시적인
 문자열 배열로 대체할 수 있다. reset은 운영/개발 공용 DB, database name이 다른 DB, 확인 token이
@@ -165,6 +170,11 @@ CloudWatch는 실행 시작~완료 구간으로 ECS `CPUUtilization`, `MemoryUti
 HTTP threshold나 시스템 assertion을 위반하면 결과는 `FAIL`로 저장된다. Profile 목표값을
 실행 후 바꾸어 결과를 PASS로 만들지 않는다. `report.md`의 metric 시계열과 workload를 함께
 보고 병목 관찰을 기록하며, 결과가 0건이면 `totalPages`를 추정하지 않는다.
+
+k6 threshold breach의 exit code `99`는 실행 오류가 아니라 측정 결과로 처리한다. Runner는
+summary를 읽고 drain·CloudWatch 수집·acceptance 판정까지 마친 뒤 `result.json`과 `report.md`에
+threshold `FAIL` 및 exit code를 남긴다. script 오류나 실행 불가처럼 다른 non-zero exit code는
+Runner 오류로 중단한다.
 
 ## Baseline 비교와 비용
 

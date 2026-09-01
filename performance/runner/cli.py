@@ -19,11 +19,14 @@ from .api import ApiClient, ApiError
 from .aws import CloudWatchMetricCollector, QueueInspector, queue_urls_from_environment
 from .config import ConfigurationError, load_dataset, load_profile
 from .dataset import load_seed_payload
-from .safety import EXPECTED_DATABASE_NAME, validate_reset_safety
+from .safety import EXPECTED_DATABASE_NAME, migration_jdbc_url, validate_reset_safety
 
 
 class RunnerError(RuntimeError):
     pass
+
+
+K6_THRESHOLD_FAILURE_EXIT_CODE = 99
 
 
 def _now() -> datetime:
@@ -66,6 +69,7 @@ def apply_migrations(environment: dict[str, str], migration_dir: Path) -> None:
         raise ConfigurationError("migration에는 PERFORMANCE_DATABASE_URL이 필요합니다.")
     if not migration_dir.is_dir():
         raise ConfigurationError(f"migration 디렉터리를 찾을 수 없습니다: {migration_dir}")
+    jdbc_url = migration_jdbc_url(environment)
     command_text = environment.get("PERFORMANCE_MIGRATION_COMMAND_JSON")
     if command_text:
         try:
@@ -80,7 +84,7 @@ def apply_migrations(environment: dict[str, str], migration_dir: Path) -> None:
         command = ["./gradlew", "bootRun", "--args=--spring.main.web-application-type=none"]
     migration_environment = dict(environment)
     migration_environment.update({
-        "SPRING_DATASOURCE_URL": environment.get("PERFORMANCE_DATABASE_JDBC_URL", database_url),
+        "SPRING_DATASOURCE_URL": jdbc_url,
         "SPRING_DOCKER_COMPOSE_ENABLED": "false",
         "SQS_ENABLED": "false",
         "WORKER_ENABLED": "false",
@@ -159,16 +163,23 @@ def _k6_environment(profile: dict[str, Any], run_id: str, suite_id: int, base_ur
 
 
 def run_k6(profile: dict[str, Any], run_id: str, suite_id: int, base_url: str,
-           summary_path: Path, repo_root: Path) -> None:
+           summary_path: Path, repo_root: Path) -> int:
     environment = os.environ.copy()
     environment.update(_k6_environment(profile, run_id, suite_id, base_url))
     try:
-        subprocess.run([
+        result = subprocess.run([
             os.environ.get("K6_BIN", "k6"), "run", "--summary-export", str(summary_path),
             str(repo_root / "performance/k6/test-run.js"),
-        ], cwd=repo_root, env=environment, check=True)
-    except (OSError, subprocess.CalledProcessError) as exc:
+        ], cwd=repo_root, env=environment, check=False)
+    except OSError as exc:
         raise RunnerError("k6 workload 실행에 실패했습니다.") from exc
+    # k6 reserves exit 99 for a completed run whose thresholds failed. It is a
+    # performance result, so preserve the summary and complete the runner flow.
+    if result.returncode not in {0, K6_THRESHOLD_FAILURE_EXIT_CODE}:
+        raise RunnerError(f"k6 script 또는 실행 환경 오류로 종료되었습니다 (exit {result.returncode}).")
+    if not summary_path.is_file():
+        raise RunnerError("k6가 summary export를 만들지 않았습니다.")
+    return result.returncode
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -205,6 +216,7 @@ def _report(result: dict[str, Any]) -> str:
         "## Results",
         "",
         f"- k6 summary: `k6-summary.json`",
+        f"- k6 thresholds: {result['k6']['thresholds']} (exit {result['k6']['exit_code']})",
         f"- Queue drain: {result['drain']}",
         f"- AWS metrics: `aws-metrics.json` ({result['aws_metrics'].get('status')})",
         f"- Decision: **{decision}**",
@@ -261,7 +273,7 @@ def execute(args: argparse.Namespace) -> int:
 
     started_at = _now()
     summary_path = result_dir / "k6-summary.json"
-    run_k6(profile, run_id, suite_id, base_url, summary_path, repo_root)
+    k6_exit_code = run_k6(profile, run_id, suite_id, base_url, summary_path, repo_root)
     summary = _read_json(summary_path)
     workload = profile["workload"]
     drain = _wait_for_drain(api, inspector, source_urls, started_at,
@@ -270,7 +282,10 @@ def execute(args: argparse.Namespace) -> int:
     final_queues = inspector.snapshot(dlq_urls)
     metrics = CloudWatchMetricCollector(repo_root / "performance/metrics/aws.yaml").collect(started_at, finished_at)
     (result_dir / "aws-metrics.json").write_text(json.dumps(metrics, indent=2, default=str) + "\n", encoding="utf-8")
-    acceptance = evaluate(profile, summary, drain, final_queues, metrics)
+    acceptance = evaluate(
+        profile, summary, drain, final_queues, metrics,
+        k6_exit_code == K6_THRESHOLD_FAILURE_EXIT_CODE,
+    )
     result = {
         "run_id": run_id,
         "started_at": _iso(started_at),
@@ -280,6 +295,10 @@ def execute(args: argparse.Namespace) -> int:
         "dataset": {"id": load_dataset(dataset_path).get("id", dataset_path.stem), "test_case_count": test_case_count,
                     "suite_id": suite_id},
         "profile": profile,
+        "k6": {
+            "exit_code": k6_exit_code,
+            "thresholds": "FAIL" if k6_exit_code == K6_THRESHOLD_FAILURE_EXIT_CODE else "PASS",
+        },
         "preflight": preflight,
         "drain": drain,
         "final_dlq": final_queues,

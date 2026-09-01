@@ -16,7 +16,7 @@ def _value(values: dict[str, Any], key: str) -> float | None:
 
 def evaluate(profile: dict[str, Any], summary: dict[str, Any],
              drain: dict[str, Any], final_queues: list[dict[str, Any]],
-             aws_metrics: dict[str, Any]) -> dict[str, Any]:
+             aws_metrics: dict[str, Any], k6_threshold_failed: bool = False) -> dict[str, Any]:
     api = profile["acceptance"]["api"]
     completion = profile["acceptance"]["completion"]
     checks: list[dict[str, Any]] = []
@@ -58,4 +58,6 @@ def evaluate(profile: dict[str, Any], summary: dict[str, Any],
                    "expected": "COLLECTED with ECS/SQS/RDS datapoints",
                    "passed": aws_metrics.get("status") == "COLLECTED"
                    and has_datapoint("ecs_") and has_datapoint("sqs_") and has_datapoint("rds_")})
+    checks.append({"name": "k6.thresholds", "actual": "FAIL" if k6_threshold_failed else "PASS",
+                   "expected": "PASS", "passed": not k6_threshold_failed})
     return {"status": "PASS" if all(check["passed"] for check in checks) else "FAIL", "checks": checks}
