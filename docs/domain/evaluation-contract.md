@@ -28,7 +28,7 @@ EvaluationResult가 있으면 ExpectedResult와 비교해 AssertionResult를 생
 | BLOCK | BLOCK | PASS |
 | BLOCK | ALLOW | FAIL |
 
-Application 실행 실패, timeout 또는 Evaluator 실패로 EvaluationResult가 없으면 AssertionResult를 생성하지 않는다. 실행과 평가 실패의 구체적인 저장·공개 오류 계약은 #117에서 확정·구현한다.
+Application 실행 실패, timeout 또는 Evaluator 실패로 EvaluationResult가 없으면 AssertionResult를 생성하지 않는다. 실행과 평가 실패의 구체적인 저장·공개 오류 계약은 #117에서 확정·구현되었다.
 
 ## Quality Gate
 
@@ -63,7 +63,7 @@ Completed TestRun A + Completed TestRun B
 
 ## 판정 제외 항목
 
-- `severity`와 `category`는 조회·필터 또는 후속 Quality Gate 정책 입력 후보이며, #118의 승인 없이 판정 공식을 임의로 정하지 않는다.
+- `severity`와 `category`는 현재 Quality Gate 공식에 사용하지 않는다. 후속 정책 변경 승인 없이 판정 공식을 임의로 확장하지 않는다.
 - Provider 원문 오류, 내부 예외 메시지와 stack trace는 공개 결과에 노출하지 않는다.
 - Evaluation Profile CRUD, provider별 고급 설정과 provider ensemble은 현재 구현 계약이 아니다.
 
@@ -73,5 +73,6 @@ HTTP 오류 ≠ Application 실행 오류 ≠ Evaluator 오류 ≠ Assertion FAI
 
 ## 현재 구현
 
-현재 코드는 Application response를 내부 execution에 저장하고 Bedrock Guardrail Evaluator가 만든 `EvaluationResult`를 ExpectedResult와 Assertion에 사용한다. 단일 TestRun Quality Gate와 Regression은 각각 #118과 #119 범위다.
-Quality Gate는 현재 Run의 평가 가능한 Assertion 통과율과 전체 Snapshot 실행 성공률을 집계하고, 두 비율이 각각 95% 이상이면 `PASS`, 하나라도 미달하면 `FAIL`이다. 평가 가능한 Assertion이 없으면 `NOT_EVALUATED`와 null metrics를 저장한다.
+현재 코드는 Application response를 내부 execution에 저장하고 Bedrock Guardrail Evaluator가 만든 `EvaluationResult`를 ExpectedResult와 Assertion에 사용한다. #118을 통해 현재 Run Quality Gate가 구현되었고 #119를 통해 저장된 완료 Run 기반 Regression API가 구현되었다.
+
+Quality Gate는 현재 Run의 평가 가능한 Assertion 통과율과 전체 Snapshot 실행 성공률을 집계하고, 두 비율이 각각 95% 이상이면 `PASS`, 하나라도 미달하면 `FAIL`이다. 평가 가능한 Assertion이 없으면 `NOT_EVALUATED`와 null metrics를 저장한다. Regression은 comparable historical Run의 저장된 EvaluationResult만 비교하며 외부 Application Target이나 Evaluator를 재호출하지 않는다.
