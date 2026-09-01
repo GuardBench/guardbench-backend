@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: KOSA AWS 3팀
-> Last reviewed: 2026-08-31
+> Last reviewed: 2026-09-01
 > Canonical source: GitHub
 > Origin: [Notion 최신 PRD](https://app.notion.com/p/3c0eeed6b62d80759d77f0ab0d5bcbd3)
 > Related: [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)
@@ -69,11 +69,19 @@ Completed TestRun A + Completed TestRun B
 
 ## 현재 구현과 후속 전환
 
-현재 코드는 `BEDROCK_GUARDRAIL`과 `HTTP_ENDPOINT`를 같은 Target abstraction으로 다루고, Bedrock Guardrail action을 Target `ActualResult`로 정규화한다. inline Evaluation Profile 해석은 없고, Quality Gate는 단일 Target 실행에서 `NOT_EVALUATED`이며 Regression API는 없다. 이는 목표 계약의 구현 완료 상태가 아니다.
+공개 Application Target type은 OpenAI-compatible `HTTP_ENDPOINT` 하나이며 `model`이 필수다. 접수 시 inline Evaluation Profile을 운영자 catalog로 해석해 immutable `EvaluatorReference`를 고정하고, Bedrock Guardrail은 Evaluator Adapter로 존재한다.
+
+아직 Worker는 Evaluator를 호출하지 않는다. Application 자연어 응답이 정확히 `ALLOW` 또는 `BLOCK`일 때만 `ActualResult`로 저장하고 그 밖의 응답은 실패로 수렴하며, Quality Gate는 `NOT_EVALUATED`이고 Regression API는 없다. 이는 목표 계약의 구현 완료 상태가 아니다.
+
+완료된 전환:
 
 - #114: EvaluatorReference 고정과 Guardrail Target 의존 제거
 - #115: HTTP Endpoint AI Application 실행과 자연어 응답 수집
+- #125·#128: OpenAI-compatible 전용 계약과 필수 `model`
 - #116: AWS Bedrock Guardrail Evaluator Adapter
+
+남은 전환:
+
 - #117: Application 실행 → Evaluator → Assertion Worker
 - #118: 현재 TestRun Assertion 기반 Quality Gate
 - #119: 저장 결과 기반 Regression API
