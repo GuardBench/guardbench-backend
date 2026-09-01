@@ -15,10 +15,6 @@ public record ExecutionContext(
         String evaluatorReference
 ) {
 
-    public ExecutionContext(String targetReference, String input, long testRunId) {
-        this(targetReference, input, testRunId, null);
-    }
-
     public ExecutionContext {
         if (targetReference == null || targetReference.isBlank()) {
             throw new IllegalArgumentException("target reference must not be blank");

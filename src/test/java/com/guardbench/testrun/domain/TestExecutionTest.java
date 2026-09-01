@@ -37,6 +37,7 @@ class TestExecutionTest {
     @DisplayName("FAILED 실행은 허용된 오류 code와 외부 공개용으로 가공된 detail만 가진다")
     void failedExecutionContainsOnlySafeError() {
         TestExecutionError error = new TestExecutionError(
+                TestExecutionErrorStage.APPLICATION_TARGET,
                 TestExecutionErrorCode.PROVIDER_UNAVAILABLE,
                 "Provider is temporarily unavailable."
         );
@@ -59,6 +60,7 @@ class TestExecutionTest {
     @DisplayName("TIMED_OUT 실행은 PROVIDER_TIMEOUT 오류를 요구한다")
     void timedOutExecutionRequiresProviderTimeoutError() {
         TestExecutionError wrongError = new TestExecutionError(
+                TestExecutionErrorStage.APPLICATION_TARGET,
                 TestExecutionErrorCode.PROVIDER_UNAVAILABLE,
                 "Provider is temporarily unavailable."
         );
@@ -96,7 +98,8 @@ class TestExecutionTest {
                 IllegalArgumentException.class,
                 () -> TestExecution.failed(
                         executionId(),
-                        new TestExecutionError(TestExecutionErrorCode.PROVIDER_UNAVAILABLE, "Provider is unavailable."),
+                        new TestExecutionError(TestExecutionErrorStage.APPLICATION_TARGET,
+                                TestExecutionErrorCode.PROVIDER_UNAVAILABLE, "Provider is unavailable."),
                         COMPLETED_AT,
                         STARTED_AT
                 )

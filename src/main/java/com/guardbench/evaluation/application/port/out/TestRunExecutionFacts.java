@@ -8,8 +8,8 @@ import java.util.Objects;
  *
  * <p>TestRun Domain 타입을 직접 사용하지 않고 스칼라 값 기반으로 표현한다.
  *
- * <p>ADR 0005: 최종화는 모든 pair가 terminal일 때만 가능하므로
-     * Snapshot별 terminal 여부와 상태 code 및 Evaluator verdict를 보존한다.
+ * <p>ADR 0005: 최종화는 모든 Snapshot 실행이 terminal일 때만 가능하므로
+ * Snapshot별 terminal 여부와 상태 code 및 Evaluator verdict를 보존한다.
  */
 public record TestRunExecutionFacts(
         long testRunId,
@@ -27,12 +27,11 @@ public record TestRunExecutionFacts(
     }
 
     /**
-     * 개별 Snapshot의 Baseline/Candidate 실행 사실이다.
+     * 개별 Snapshot의 단일 실행 사실이다.
      *
      * @param snapshotId TestCaseSnapshot scalar ID
      * @param expectedActionCode expected action code (e.g. "ALLOW", "BLOCK")
-     * @param baseline baseline 실행 사실
-     * @param candidate candidate 실행 사실
+     * @param execution 단일 실행 사실
      */
     public record SnapshotExecutionFact(
             long snapshotId,

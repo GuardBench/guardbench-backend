@@ -55,7 +55,8 @@ import org.springframework.test.web.servlet.MockMvc;
 class TestRunQueryControllerTest {
 
     private static final String BASE = "/api/v1/test-runs";
-    private static final TargetReferenceView TARGET = new TargetReferenceView("target-ref", "BEDROCK_GUARDRAIL", "guardrail-123", "DRAFT");
+    private static final TargetReferenceView TARGET = new TargetReferenceView(
+            "target-ref", "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", "test-model");
 
     @Autowired
     private MockMvc mockMvc;
@@ -134,7 +135,7 @@ class TestRunQueryControllerTest {
         void returnsOkWithTestRunDetail() throws Exception {
             TestRunDetail detail = new TestRunDetail(
                     901L, 1L, TestRunStatus.RUNNING, 253,
-                    new TestRunProgress(120, 47.43), TARGET, null, null,
+                    new TestRunProgress(120, 47.43), TARGET, null, null, null,
                     Instant.parse("2026-08-24T14:30:00Z"), Instant.parse("2026-08-24T14:30:03Z"),
                     null, Instant.parse("2026-08-24T14:31:20Z"));
             when(getTestRunDetailService.getTestRun(901L)).thenReturn(detail);

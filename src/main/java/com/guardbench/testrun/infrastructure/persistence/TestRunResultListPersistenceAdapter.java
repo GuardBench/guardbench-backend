@@ -155,12 +155,12 @@ class TestRunResultListPersistenceAdapter implements LoadTestRunResultListPort {
     }
 
     private TestExecutionView mapExecution(
-            ResultSet resultSet, String statusColumn, String actionColumn, String stageColumn,
+            ResultSet resultSet, String statusColumn, String verdictColumn, String stageColumn,
             String errorCodeColumn, String errorMessageColumn) throws SQLException {
-        String actualAction = resultSet.getString(actionColumn);
+        String evaluatorVerdict = resultSet.getString(verdictColumn);
         return new TestExecutionView(
                 TestExecutionStatus.valueOf(resultSet.getString(statusColumn)),
-                actualAction == null ? null : Action.valueOf(actualAction),
+                evaluatorVerdict == null ? null : Action.valueOf(evaluatorVerdict),
                 resultSet.getString(stageColumn),
                 resultSet.getString(errorCodeColumn),
                 resultSet.getString(errorMessageColumn));

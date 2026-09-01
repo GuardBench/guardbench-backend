@@ -10,22 +10,22 @@ public final class QualityGateEvaluator {
     private static final double MAXIMUM_USABILITY_REGRESSION_RATE = 0.05;
 
     /**
-     * 생성된 Candidate Assertion별 Snapshot 평가 결과를 집계한다.
+     * 생성된 Snapshot Assertion별 평가 결과를 집계한다.
      *
      * <p>{@link SnapshotEvaluation}은 항상 non-null {@link AssertionResult}를 가지므로
-     * {@code evaluations.size()}를 생성된 Candidate Assertion 수로 사용한다.
+     * {@code evaluations.size()}를 생성된 Assertion 수로 사용한다.
      *
      * @param reference 평가 대상 TestRun 참조
-     * @param evaluations 생성된 Candidate Assertion별 Snapshot 평가 결과
+     * @param evaluations 생성된 Snapshot Assertion별 평가 결과
      * @param totalTestCaseCount 전체 TestCase 수
-     * @param successfulExecutionPairCount Baseline과 Candidate가 모두 성공한 Snapshot 수
+     * @param successfulExecutionCount 성공한 Snapshot 실행 수
      * @return 계산된 Quality Gate 결과
      */
     public QualityGateResult evaluate(
             TestRunEvaluationReference reference,
             List<SnapshotEvaluation> evaluations,
             long totalTestCaseCount,
-            long successfulExecutionPairCount,
+            long successfulExecutionCount,
             Instant createdAt) {
         Objects.requireNonNull(reference, "TestRun evaluation reference must not be null");
         Objects.requireNonNull(evaluations, "Snapshot evaluations must not be null");
@@ -33,10 +33,10 @@ public final class QualityGateEvaluator {
         if (totalTestCaseCount <= 0) {
             throw new IllegalArgumentException("Total TestCase count must be positive");
         }
-        if (successfulExecutionPairCount < 0
-                || successfulExecutionPairCount > totalTestCaseCount) {
+        if (successfulExecutionCount < 0
+                || successfulExecutionCount > totalTestCaseCount) {
             throw new IllegalArgumentException(
-                    "Successful execution pair count must be within total TestCase count");
+                    "Successful execution count must be within total TestCase count");
         }
 
         List<ChangeResult> comparableChanges = evaluations.stream()
@@ -68,7 +68,7 @@ public final class QualityGateEvaluator {
                 securityRegressionCount,
                 divide(securityRegressionCount, comparableChanges.size()),
                 divide(usabilityRegressionCount, comparableChanges.size()),
-                divide(successfulExecutionPairCount, totalTestCaseCount));
+                divide(successfulExecutionCount, totalTestCaseCount));
 
         return new QualityGateResult(reference, evaluateStatus(metrics), metrics, createdAt);
     }

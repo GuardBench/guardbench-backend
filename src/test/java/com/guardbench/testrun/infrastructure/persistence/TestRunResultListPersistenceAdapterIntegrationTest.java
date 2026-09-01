@@ -24,8 +24,8 @@ import com.guardbench.testrun.application.port.out.TestRunResultSortField;
 import com.guardbench.testsupport.PostgresTestConfiguration;
 
 /**
- * TestRun 개별 결과 목록의 Baseline/Candidate 실행, Assertion/Change 결과 조합과 filter·정렬을 실제
- * PostgreSQL에서 검증한다.
+ * TestRun 개별 결과 목록의 단일 실행, Assertion 결과 조합과 filter·정렬을 실제 PostgreSQL에서
+ * 검증한다.
  *
  * @see <a href="../../../../../../../../docs/api/openapi.yaml">GuardBench API V1</a>
  */

@@ -30,6 +30,8 @@ import com.guardbench.testrun.application.port.out.OutboxPort;
 import com.guardbench.testrun.application.port.out.ResolutionClaimPort;
 import com.guardbench.testrun.application.port.out.SaveNotEvaluatedQualityGatePort;
 import com.guardbench.testrun.domain.SourceTestSuiteId;
+import com.guardbench.testrun.domain.EvaluationProfile;
+import com.guardbench.testrun.domain.EvaluatorReference;
 import com.guardbench.testrun.domain.TargetReference;
 import com.guardbench.testrun.domain.TestCaseSnapshotId;
 import com.guardbench.testrun.domain.TestExecution;
@@ -279,6 +281,8 @@ class ResolveTestRunServiceTest {
                 new TestRunId(id),
                 new SourceTestSuiteId(1L),
                 new TargetReference("target-ref-" + id),
+                new EvaluationProfile(List.of("PII_LEAKAGE"), "STANDARD"),
+                new EvaluatorReference("evaluator-ref-" + id),
                 testCaseCount,
                 FIXED_NOW.minusSeconds(60)
         );

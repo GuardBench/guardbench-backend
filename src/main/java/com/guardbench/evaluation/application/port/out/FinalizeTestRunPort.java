@@ -20,8 +20,8 @@ public interface FinalizeTestRunPort {
     /**
      * TestRun이 아직 RUNNING인 부분 완료 시점에 절대 진행도를 갱신한다.
      *
-     * <p>ADR 0005 4단계: 모든 pair가 terminal이 아니어도 목록·상세 조회의
-     * 진행률 계약을 만족시키기 위해 처리 완료된 pair 수를 갱신해야 한다.
+     * <p>ADR 0005 4단계: 모든 실행이 terminal이 아니어도 목록·상세 조회의
+     * 진행률 계약을 만족시키기 위해 처리 완료된 실행 수를 갱신해야 한다.
      * 호출자의 최종화 직렬화 트랜잭션 범위에서 실행되어야 한다.
      *
      * @param testRunId TestRun scalar ID

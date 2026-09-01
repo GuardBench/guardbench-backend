@@ -36,9 +36,9 @@ final class TestRunPersistenceMapper {
                 source.testCaseCount(),
                 source.processedTestCaseCount(),
                 source.targetReference().value(),
-                source.evaluationProfile() == null ? null : String.join(",", source.evaluationProfile().checks()),
-                source.evaluationProfile() == null ? null : source.evaluationProfile().strictness(),
-                source.evaluatorReference() == null ? null : source.evaluatorReference().value(),
+                String.join(",", source.evaluationProfile().checks()),
+                source.evaluationProfile().strictness(),
+                source.evaluatorReference().value(),
                 source.executionOutcome() == null ? null : source.executionOutcome().name(),
                 source.timeline().createdAt(),
                 source.timeline().startedAt(),
@@ -53,7 +53,7 @@ final class TestRunPersistenceMapper {
                 new SourceTestSuiteId(source.testSuiteId),
                 new TargetReference(source.targetReferenceId),
                 profileOf(source),
-                source.evaluatorReferenceId == null ? null : new EvaluatorReference(source.evaluatorReferenceId),
+                evaluatorReferenceOf(source),
                 source.testCaseCount,
                 source.processedTestCaseCount,
                 TestRunStatus.valueOf(source.status),
@@ -63,13 +63,18 @@ final class TestRunPersistenceMapper {
     }
 
     private static EvaluationProfile profileOf(TestRunEntity source) {
-        if (source.evaluationChecks == null && source.evaluationStrictness == null && source.evaluatorReferenceId == null) {
-            return null;
-        }
-        if (source.evaluationChecks == null || source.evaluationStrictness == null || source.evaluatorReferenceId == null) {
+        if (source.evaluationChecks == null || source.evaluationStrictness == null
+                || source.evaluatorReferenceId == null) {
             throw new IllegalStateException("incomplete TestRun evaluation snapshot");
         }
         return new EvaluationProfile(java.util.List.of(source.evaluationChecks.split(",")), source.evaluationStrictness);
+    }
+
+    private static EvaluatorReference evaluatorReferenceOf(TestRunEntity source) {
+        if (source.evaluatorReferenceId == null) {
+            throw new IllegalStateException("missing TestRun evaluator reference");
+        }
+        return new EvaluatorReference(source.evaluatorReferenceId);
     }
 
     static TestCaseSnapshotEntity toEntity(TestCaseSnapshot source) {
@@ -118,9 +123,7 @@ final class TestRunPersistenceMapper {
         TestExecutionId id = new TestExecutionId(new TestCaseSnapshotId(source.snapshotId));
         TestExecutionStatus status = TestExecutionStatus.valueOf(source.resultStatus);
         TestExecutionError error = source.errorCode == null ? null : new TestExecutionError(
-                source.errorStage == null
-                        ? TestExecutionErrorStage.APPLICATION_TARGET
-                        : TestExecutionErrorStage.valueOf(source.errorStage),
+                TestExecutionErrorStage.valueOf(source.errorStage),
                 TestExecutionErrorCode.valueOf(source.errorCode),
                 source.errorMessage);
         return switch (status) {

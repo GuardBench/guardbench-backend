@@ -7,10 +7,6 @@ public record TestExecutionError(
         TestExecutionErrorCode code,
         String message) {
 
-    public TestExecutionError(TestExecutionErrorCode code, String message) {
-        this(TestExecutionErrorStage.APPLICATION_TARGET, code, message);
-    }
-
     public TestExecutionError {
         Objects.requireNonNull(stage, "error stage must not be null");
         Objects.requireNonNull(code, "error code must not be null");

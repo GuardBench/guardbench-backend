@@ -140,7 +140,7 @@ class ExecuteTestRunServiceTest {
 
         @Test
         @DisplayName("ALLOW 결과의 Target 실행을 SUCCEEDED로 저장하고 Outbox를 생성한다")
-        void executesBaselineAllow() {
+        void executesAllow() {
             claimPort.willAcquire(SNAPSHOT_ID);
             contextPort.setContext(SNAPSHOT_ID, defaultContext());
             guardrailPort.willReturn(TargetExecutionResult.succeeded("ALLOW"));
@@ -169,7 +169,7 @@ class ExecuteTestRunServiceTest {
 
         @Test
         @DisplayName("BLOCK 결과의 Target 실행을 SUCCEEDED로 저장한다")
-        void executesCandidateBlock() {
+        void executesBlock() {
             claimPort.willAcquire(SNAPSHOT_ID);
             contextPort.setContext(SNAPSHOT_ID, defaultContext());
             guardrailPort.willReturn(TargetExecutionResult.succeeded("BLOCK"));
@@ -232,6 +232,7 @@ class ExecuteTestRunServiceTest {
                     TestExecution.failed(
                             id,
                             new com.guardbench.testrun.domain.TestExecutionError(
+                                    TestExecutionErrorStage.APPLICATION_TARGET,
                                     TestExecutionErrorCode.TARGET_NOT_FOUND,
                                     "Guardrail target was not found."
                             ),

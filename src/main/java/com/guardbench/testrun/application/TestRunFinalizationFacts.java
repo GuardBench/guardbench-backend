@@ -10,8 +10,8 @@ import java.util.Objects;
  * Integration Adapter에 노출하는 공개 API 반환 타입이다.
  * Domain 타입을 직접 노출하지 않고 스칼라/code 기반으로 표현한다.
  *
- * <p>ADR 0005: 소비 Context가 모든 pair의 terminal 여부를 판단해야 조기 최종화를 막을 수 있으므로
-     * Snapshot별 terminal 여부와 상태 code 및 Evaluator verdict를 유실 없이 전달한다.
+ * <p>ADR 0005: 소비 Context가 모든 Snapshot 실행의 terminal 여부를 판단해야 조기 최종화를 막을 수 있으므로
+ * Snapshot별 terminal 여부와 상태 code 및 Evaluator verdict를 유실 없이 전달한다.
  */
 public record TestRunFinalizationFacts(
         long testRunId,

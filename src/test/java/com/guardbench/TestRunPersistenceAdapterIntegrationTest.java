@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
+import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,6 +20,8 @@ import com.guardbench.testrun.application.port.out.NextTestRunIdPort;
 import com.guardbench.testrun.domain.Action;
 import com.guardbench.testrun.domain.ApplicationResponse;
 import com.guardbench.testrun.domain.EvaluationResult;
+import com.guardbench.testrun.domain.EvaluationProfile;
+import com.guardbench.testrun.domain.EvaluatorReference;
 import com.guardbench.testrun.domain.ExpectedResult;
 import com.guardbench.testrun.domain.Severity;
 import com.guardbench.testrun.domain.SourceTestCaseId;
@@ -64,10 +67,13 @@ class TestRunPersistenceAdapterIntegrationTest {
             @Autowired TestCaseSnapshotRepository snapshotRepository) {
         TestRunId runId = nextTestRunIdPort.nextId();
         fixture.insertTargetReference("target-ref-1");
+        fixture.insertEvaluatorReference("evaluator-ref-1");
         TestRun testRun = TestRun.queue(
                 runId,
                 new SourceTestSuiteId(500),
                 new TargetReference("target-ref-1"),
+                new EvaluationProfile(List.of("PII_LEAKAGE"), "STANDARD"),
+                new EvaluatorReference("evaluator-ref-1"),
                 1,
                 CREATED_AT
         );
@@ -97,8 +103,11 @@ class TestRunPersistenceAdapterIntegrationTest {
             @Autowired TestExecutionRepository executionRepository) {
         TestRunId runId = nextTestRunIdPort.nextId();
         fixture.insertTargetReference("target-ref-2");
+        fixture.insertEvaluatorReference("evaluator-ref-2");
         testRunRepository.save(TestRun.queue(
-                runId, new SourceTestSuiteId(500), new TargetReference("target-ref-2"), 1, CREATED_AT));
+                runId, new SourceTestSuiteId(500), new TargetReference("target-ref-2"),
+                new EvaluationProfile(List.of("PII_LEAKAGE"), "STANDARD"),
+                new EvaluatorReference("evaluator-ref-2"), 1, CREATED_AT));
         TestCaseSnapshot snapshot = TestCaseSnapshot.of(
                 nextSnapshotIdPort.nextId(), runId, new SourceTestCaseId(501), "case", "input",
                 new ExpectedResult(Action.ALLOW), Severity.HIGH, "category", CREATED_AT);
@@ -130,8 +139,11 @@ class TestRunPersistenceAdapterIntegrationTest {
             @Autowired TestExecutionRepository executionRepository) {
         TestRunId runId = nextTestRunIdPort.nextId();
         fixture.insertTargetReference("target-ref-3");
+        fixture.insertEvaluatorReference("evaluator-ref-3");
         testRunRepository.save(TestRun.queue(
-                runId, new SourceTestSuiteId(500), new TargetReference("target-ref-3"), 1, CREATED_AT));
+                runId, new SourceTestSuiteId(500), new TargetReference("target-ref-3"),
+                new EvaluationProfile(List.of("PII_LEAKAGE"), "STANDARD"),
+                new EvaluatorReference("evaluator-ref-3"), 1, CREATED_AT));
         TestCaseSnapshot snapshot = TestCaseSnapshot.of(
                 nextSnapshotIdPort.nextId(), runId, new SourceTestCaseId(501), "case", "input",
                 new ExpectedResult(Action.BLOCK), Severity.HIGH, "category", CREATED_AT);
