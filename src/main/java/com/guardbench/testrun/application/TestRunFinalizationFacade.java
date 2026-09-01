@@ -111,7 +111,7 @@ public class TestRunFinalizationFacade {
         return new TestRunFinalizationFacts.TargetExecutionFact(
                 execution.status().isTerminal(),
                 execution.status().name(),
-                succeeded ? execution.actualResult().action().name() : null
+                succeeded ? execution.evaluationResult().action().name() : null
         );
     }
 
@@ -142,7 +142,7 @@ public class TestRunFinalizationFacade {
     /**
      * TestRun이 아직 RUNNING인 부분 완료 시점에 절대 진행도를 갱신한다.
      *
-     * <p>ADR 0005 4단계: 모든 pair가 terminal이 아니어도 처리 완료된 pair 수만큼
+     * <p>ADR 0005 4단계: 모든 실행이 terminal이 아니어도 처리 완료된 실행 수만큼
      * {@code processed_test_case_count}를 갱신해 목록·상세 조회의 진행률 계약을 만족시킨다.
      * {@link #lockAndLoadFinalizationFacts}가 획득한 같은 행 잠금 트랜잭션에서 호출해야 한다.
      *

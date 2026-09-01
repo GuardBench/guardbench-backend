@@ -10,8 +10,8 @@ import java.util.Objects;
  * Integration Adapter에 노출하는 공개 API 반환 타입이다.
  * Domain 타입을 직접 노출하지 않고 스칼라/code 기반으로 표현한다.
  *
- * <p>ADR 0005: 소비 Context가 모든 pair의 terminal 여부를 판단해야 조기 최종화를 막을 수 있으므로
- * target별 terminal 여부와 상태 code를 유실 없이 전달한다.
+ * <p>ADR 0005: 소비 Context가 모든 Snapshot 실행의 terminal 여부를 판단해야 조기 최종화를 막을 수 있으므로
+ * Snapshot별 terminal 여부와 상태 code 및 Evaluator verdict를 유실 없이 전달한다.
  */
 public record TestRunFinalizationFacts(
         long testRunId,
@@ -47,11 +47,11 @@ public record TestRunFinalizationFacts(
     }
 
     /**
-     * 하나의 Target 실행 사실이다.
+     * 하나의 Snapshot pipeline 실행 사실이다.
      *
      * @param terminal 실행 결과가 terminal 상태로 확정되었는지
      * @param statusCode 실행 상태 code(SUCCEEDED, FAILED, TIMED_OUT, NOT_STARTED), 실행 결과가 아직 없으면 null
-     * @param actionCode 성공 실행에서 관측된 action code, 그 외에는 null
+     * @param actionCode 성공 실행에서 Evaluator가 만든 verdict code, 그 외에는 null
      */
     public record TargetExecutionFact(
             boolean terminal,
@@ -70,6 +70,10 @@ public record TestRunFinalizationFacts(
         /** 실행 결과가 아직 저장되지 않은 target이다. */
         public static TargetExecutionFact notExecuted() {
             return new TargetExecutionFact(false, null, null);
+        }
+
+        public String evaluatorVerdictCode() {
+            return actionCode;
         }
     }
 }

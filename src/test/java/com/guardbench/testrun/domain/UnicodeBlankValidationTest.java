@@ -22,7 +22,8 @@ class UnicodeBlankValidationTest {
         assertThrows(IllegalArgumentException.class,
                 () -> new TargetReference(whitespace));
         assertThrows(IllegalArgumentException.class,
-                () -> new TestExecutionError(TestExecutionErrorCode.PROVIDER_TIMEOUT, whitespace));
+                () -> new TestExecutionError(TestExecutionErrorStage.APPLICATION_TARGET,
+                        TestExecutionErrorCode.PROVIDER_TIMEOUT, whitespace));
         assertThrows(IllegalArgumentException.class,
                 () -> snapshot(whitespace, "input", "category"));
         assertThrows(IllegalArgumentException.class,
@@ -37,7 +38,8 @@ class UnicodeBlankValidationTest {
     @DisplayName("정상 문자 사이에 Unicode 공백이 있는 TestRun 문자열은 허용한다")
     void acceptsUnicodeWhitespaceBetweenNonWhitespaceCharacters(String value) {
         assertDoesNotThrow(() -> new TargetReference(value));
-        assertDoesNotThrow(() -> new TestExecutionError(TestExecutionErrorCode.PROVIDER_TIMEOUT, value));
+        assertDoesNotThrow(() -> new TestExecutionError(TestExecutionErrorStage.APPLICATION_TARGET,
+                TestExecutionErrorCode.PROVIDER_TIMEOUT, value));
         assertDoesNotThrow(() -> snapshot(value, value, value));
         assertDoesNotThrow(() -> source(value, value, value, value, value));
     }

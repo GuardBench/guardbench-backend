@@ -32,6 +32,7 @@
 | HTTP Endpoint Target schema | `src/main/resources/db/migration/V4__http_endpoint_target.sql`, `V7__openai_compatible_http_target.sql`, `V8__require_http_target_model.sql` | `HTTP_ENDPOINT` provider table, OpenAI-compatible `model` 저장 및 `NOT NULL` 제약 |
 | HTTP Endpoint URL constraint | `src/main/resources/db/migration/V5__strengthen_http_endpoint_url_constraint.sql` | `endpoint_url`의 HTTP/HTTPS scheme과 host 형태 DB 제약 강화 |
 | Evaluator reference and Profile snapshot | `src/main/resources/db/migration/V6__evaluator_reference_and_profile.sql` | Evaluator provider/revision 고정, TestRun profile snapshot 및 HTTP Target revision |
+| Application/Evaluator execution result | `src/main/resources/db/migration/V9__separate_application_and_evaluator_results.sql`, `V10__remove_legacy_actual_action.sql` | Application response, Evaluator verdict, 실패 단계와 legacy action column 제거 및 execution shape CHECK 제약 |
 | ERD | [PlantUML ERD](../diagrams/guardbench-mvp-physical-erd.puml) | migration 적용 후 관계와 cardinality |
 | TestRun write adapters | `testrun/infrastructure/persistence` | TestRun, Snapshot, TestExecution, idempotency, Outbox, claim Adapter |
 | Target/Evaluator adapters | `target/infrastructure/persistence`, `testrun/infrastructure/evaluator`, `evaluator/infrastructure/bedrock` | HTTP Target 등록, operator catalog 해석, immutable EvaluatorReference persistence와 `bedrock_guardrail_evaluator` 조회 |
@@ -51,9 +52,9 @@
 
 ## 목표 구조와의 차이
 
-#114의 profile/evaluator snapshot과 #115/#125/#128의 OpenAI-compatible HTTP Application Target 경계까지 구현되어 있다. #116의 Bedrock Guardrail Evaluator Adapter도 구현되었으나 Worker 실행 경로에 연결되지 않았고, 결과 persistence는 아직 legacy `ActualResult` 경계를 사용한다. Quality Gate는 `NOT_EVALUATED`만 저장하며 Regression 저장/API는 없다.
+#114의 profile/evaluator snapshot과 #115/#125/#128의 OpenAI-compatible HTTP Application Target 경계가 구현되어 있다. #116에서 Bedrock Guardrail Evaluator Adapter가 추가되었고, #117에서 Worker가 Application response → Evaluator verdict → Assertion 경계를 사용해 결과를 저장·조회한다. Application response는 내부 저장 값이며 public 결과에는 노출하지 않는다.
 
-#117~#119가 Worker orchestration, Quality Gate와 Regression을 완성한다.
+Quality Gate와 Regression 저장/API는 각각 #118과 #119의 범위다.
 
 ## 범위 제외
 
