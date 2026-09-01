@@ -38,14 +38,18 @@ class TestRunRegressionPersistenceAdapterIntegrationTest {
         insertRun(80_001L, 70_001L, "evaluator-current", "same", "2026-08-27T10:00:00Z");
         insertRun(80_002L, 70_001L, "evaluator-history", "same", "2026-08-26T10:00:00Z");
         insertRun(80_003L, 70_001L, "evaluator-other", "other", "2026-08-25T10:00:00Z");
+        insertRun(80_000L, 70_001L, "evaluator-tied", "same", "2026-08-27T10:00:00Z");
+        insertRun(80_004L, 70_001L, "evaluator-future", "same", "2026-08-28T10:00:00Z");
         insertSnapshot(90_001L, 80_001L, "same case", "input", "BLOCK");
         insertSnapshot(90_002L, 80_002L, "same case", "input", "BLOCK");
         insertSnapshot(90_003L, 80_003L, "different case", "input", "BLOCK");
+        insertSnapshot(90_000L, 80_000L, "same case", "input", "BLOCK");
+        insertSnapshot(90_004L, 80_004L, "same case", "input", "BLOCK");
 
         var result = port.loadComparableRuns(80_001L, new PageCriteria(1, 20));
 
-        assertEquals(List.of(80_002L), result.items().stream().map(item -> item.id()).toList());
-        assertEquals(1L, result.totalElements());
+        assertEquals(List.of(80_000L, 80_002L), result.items().stream().map(item -> item.id()).toList());
+        assertEquals(2L, result.totalElements());
     }
 
     @Test

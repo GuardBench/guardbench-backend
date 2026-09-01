@@ -38,6 +38,9 @@ public class CompareTestRunsService {
         }
         requireFinished(current);
         requireFinished(comparison);
+        if (!isHistorical(comparison, current)) {
+            throw new ApplicationException(ApplicationErrorCode.TEST_RUNS_NOT_COMPARABLE);
+        }
 
         List<TestRunRegressionSnapshot> currentSnapshots = regressionPort.loadSnapshots(currentRunId);
         List<TestRunRegressionSnapshot> comparisonSnapshots = regressionPort.loadSnapshots(comparisonRunId);
@@ -90,6 +93,15 @@ public class CompareTestRunsService {
         if (run.status() != TestRunStatus.FINISHED) {
             throw new ApplicationException(ApplicationErrorCode.TEST_RUN_NOT_FINISHED);
         }
+    }
+
+    private boolean isHistorical(TestRunRegressionView comparison, TestRunRegressionView current) {
+        if (comparison.completedAt() == null || current.completedAt() == null) {
+            return false;
+        }
+        int completedAtOrder = comparison.completedAt().compareTo(current.completedAt());
+        return completedAtOrder < 0
+                || completedAtOrder == 0 && comparison.id() < current.id();
     }
 
     private boolean sameDefinitions(

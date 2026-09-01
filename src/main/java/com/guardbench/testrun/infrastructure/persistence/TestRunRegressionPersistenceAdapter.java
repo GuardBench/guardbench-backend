@@ -79,6 +79,11 @@ class TestRunRegressionPersistenceAdapter implements LoadTestRunRegressionPort {
                   JOIN bedrock_guardrail_evaluator be0 ON be0.reference_id = r0.evaluator_reference_id
                   WHERE r0.id = ?
               )
+              AND (r.completed_at, r.id) < (
+                  SELECT r0.completed_at, r0.id
+                  FROM test_run r0
+                  WHERE r0.id = ?
+              )
               AND NOT EXISTS (
                   SELECT 1
                   FROM test_case_snapshot current_snapshot
@@ -146,14 +151,14 @@ class TestRunRegressionPersistenceAdapter implements LoadTestRunRegressionPort {
                 COMPARABLE_SELECT,
                 this::mapRun,
                 testRunId, testRunId, testRunId, testRunId, testRunId,
-                testRunId, testRunId, page.size(), page.offset());
+                testRunId, testRunId, testRunId, page.size(), page.offset());
         String countSql = "SELECT COUNT(*) FROM (" + COMPARABLE_SELECT
                 .replace("LIMIT ? OFFSET ?", "") + ") candidates";
         long totalElements = jdbcTemplate.queryForObject(
                 countSql,
                 Long.class,
                 testRunId, testRunId, testRunId, testRunId, testRunId,
-                testRunId, testRunId);
+                testRunId, testRunId, testRunId);
         return PageResult.of(items, page, totalElements);
     }
 
