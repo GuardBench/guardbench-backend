@@ -461,11 +461,8 @@ CREATE TABLE change_result (
 CREATE TABLE quality_gate_result (
     test_run_id                      BIGINT PRIMARY KEY,
     gate_status                      VARCHAR(32) NOT NULL,
-    candidate_assertion_pass_rate    DOUBLE PRECISION,
-    security_regression_count        INTEGER,
-    security_regression_rate         DOUBLE PRECISION,
-    usability_regression_rate        DOUBLE PRECISION,
-    test_execution_success_rate      DOUBLE PRECISION,
+    assertion_pass_rate              DOUBLE PRECISION,
+    execution_success_rate           DOUBLE PRECISION,
     created_at                       TIMESTAMPTZ(6) NOT NULL,
 
     CONSTRAINT fk_quality_gate_test_run
@@ -474,33 +471,22 @@ CREATE TABLE quality_gate_result (
         CHECK (gate_status IN ('PASS', 'FAIL', 'NOT_EVALUATED')),
     CONSTRAINT ck_quality_gate_metric_ranges
         CHECK (
-            (candidate_assertion_pass_rate IS NULL
-                OR candidate_assertion_pass_rate BETWEEN 0.0 AND 1.0)
-            AND (security_regression_count IS NULL OR security_regression_count >= 0)
-            AND (security_regression_rate IS NULL
-                OR security_regression_rate BETWEEN 0.0 AND 1.0)
-            AND (usability_regression_rate IS NULL
-                OR usability_regression_rate BETWEEN 0.0 AND 1.0)
-            AND (test_execution_success_rate IS NULL
-                OR test_execution_success_rate BETWEEN 0.0 AND 1.0)
+            (assertion_pass_rate IS NULL
+                OR assertion_pass_rate BETWEEN 0.0 AND 1.0)
+            AND (execution_success_rate IS NULL
+                OR execution_success_rate BETWEEN 0.0 AND 1.0)
         ),
     CONSTRAINT ck_quality_gate_result_shape
         CHECK (
             (
                 gate_status = 'NOT_EVALUATED'
-                AND candidate_assertion_pass_rate IS NULL
-                AND security_regression_count IS NULL
-                AND security_regression_rate IS NULL
-                AND usability_regression_rate IS NULL
-                AND test_execution_success_rate IS NULL
+                AND assertion_pass_rate IS NULL
+                AND execution_success_rate IS NULL
             )
             OR (
                 gate_status IN ('PASS', 'FAIL')
-                AND candidate_assertion_pass_rate IS NOT NULL
-                AND security_regression_count IS NOT NULL
-                AND security_regression_rate IS NOT NULL
-                AND usability_regression_rate IS NOT NULL
-                AND test_execution_success_rate IS NOT NULL
+                AND assertion_pass_rate IS NOT NULL
+                AND execution_success_rate IS NOT NULL
             )
         )
 );

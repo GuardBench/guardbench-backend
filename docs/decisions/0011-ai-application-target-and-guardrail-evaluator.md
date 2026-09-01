@@ -68,7 +68,7 @@ Completed TestRun A + Completed TestRun B
 
 ### 현재 구현과 전환
 
-이 ADR과 [OpenAPI](../api/openapi.yaml)는 합의된 목표 계약이다. #113에서는 Java 코드, Migration과 물리 ERD를 변경하지 않는다. 현재 구현은 `BEDROCK_GUARDRAIL`과 `HTTP_ENDPOINT`를 같은 Target abstraction으로 저장하고, Bedrock Guardrail을 실행해 `ActualResult`를 만들며, 단일 Target Quality Gate를 `NOT_EVALUATED`로 저장한다.
+이 ADR과 [OpenAPI](../api/openapi.yaml)는 합의된 목표 계약이다. #113에서는 Java 코드, Migration과 물리 ERD를 변경하지 않는다. 현재 구현은 `BEDROCK_GUARDRAIL`과 `HTTP_ENDPOINT`를 같은 Target abstraction으로 저장하고, Bedrock Guardrail을 실행해 `ActualResult`를 만든다. Quality Gate는 #118 정책에 따라 현재 Run의 Assertion과 실행 성공률을 집계한다.
 
 목표 계약과 구현의 차이는 다음 후속 Issue에서 해소한다.
 

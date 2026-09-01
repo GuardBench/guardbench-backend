@@ -51,7 +51,7 @@ ADR 0006  0001·0002·0003·0004·0005의 경계 간 Java 타입 공유와 직�
           Aggregate·Persistence·최종화·비동기 실행 결정은 유지
 ```
 
-ADR 0010이 명시적으로 대체한 Baseline/Candidate·role 메시지·복합 key 부분은 이전 ADR을 현재 계약으로 사용하지 않는다. ADR 0011은 ADR 0010의 단일 Target 결정을 유지하면서 Guardrail Target/SUT와 항상 `NOT_EVALUATED`인 Quality Gate 의미를 대체한다. Target/Evaluator 역할과 Regression은 ADR 0011을 사용한다. 그 외 ADR 0003의 결과 저장 경계, ADR 0004의 최종화 원자성, ADR 0008의 claim·Outbox·HTTP Idempotency 기술 보장, ADR 0006의 Context 간 타입 격리는 후속 구현에서 재검토될 때까지 유지한다.
+ADR 0010이 명시적으로 대체한 Baseline/Candidate·role 메시지·복합 key 부분은 이전 ADR을 현재 계약으로 사용하지 않는다. ADR 0011은 ADR 0010의 단일 Target 결정을 유지하면서 Guardrail Target/SUT와 Quality Gate 의미를 대체한다. Target/Evaluator 역할과 Regression은 ADR 0011을 사용하고, 현재 Run Quality Gate 집계 정책은 #118 구현과 평가 계약을 사용한다. 그 외 ADR 0003의 결과 저장 경계, ADR 0004의 최종화 원자성, ADR 0008의 claim·Outbox·HTTP Idempotency 기술 보장, ADR 0006의 Context 간 타입 격리는 후속 구현에서 재검토될 때까지 유지한다.
 
 ## 상태와 작성
 

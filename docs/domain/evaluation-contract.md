@@ -34,9 +34,10 @@ Application 실행 실패, timeout 또는 Evaluator 실패로 EvaluationResult�
 
 Quality Gate는 하나의 현재 TestRun의 Assertion 결과를 집계한다. 다른 TestRun, 복수 Target 실행 결과와 Regression 결과를 입력으로 사용하지 않는다.
 
-- 집계 가능한 현재 Run 결과가 있으면 정책에 따라 `PASS` 또는 `FAIL`이다.
-- 집계 가능한 결과가 없으면 `NOT_EVALUATED`다.
-- 구체적인 metric, 임계값, nullable 규칙과 API 전환은 #118이 소유한다.
+- `assertionPassRate`는 평가 가능한 Assertion 중 `PASS` 비율이며, `executionSuccessRate`는 전체 Snapshot 중 성공한 실행 비율이다. 실행 또는 평가 실패로 Assertion이 생성되지 않은 Snapshot은 첫 번째 분모에서 제외하지만 두 번째 분모에는 포함한다.
+- 두 metric이 모두 0.95 이상이면 `PASS`, 하나라도 0.95 미만이면 `FAIL`이다. 반올림하지 않고 실제 비율로 경계를 비교한다.
+- 평가 가능한 Assertion이 하나도 없으면 `NOT_EVALUATED`이고 `metrics`는 `null`이다. 이 경우 실행 성공률만으로 `FAIL`을 만들지 않는다.
+- `metrics`는 `assertionPassRate`와 `executionSuccessRate`만 제공한다. Regression 지표와 과거 Run 비교 지표는 포함하지 않는다.
 - Quality Gate와 TestRun `FINISHED`의 원자 저장 및 이미 완료된 결과를 덮어쓰지 않는 원칙은 ADR 0004의 대체되지 않은 부분을 유지한다.
 
 ## Regression
@@ -70,4 +71,4 @@ HTTP 오류 ≠ Application 실행 오류 ≠ Evaluator 오류 ≠ Assertion FAI
 
 ## 현재 구현
 
-현재 worker는 Application 자연어 응답을 Evaluator에 전달하지 않는다. 응답 문자열이 정확히 `ALLOW` 또는 `BLOCK`일 때만 `ActualResult`로 저장해 ExpectedResult와 Assertion하고, 그 밖의 자연어 응답은 `PROVIDER_RESPONSE_INVALID` 실패로 수렴한다. 단일 Target Quality Gate는 항상 `NOT_EVALUATED`로 저장한다. [OpenAPI](../api/openapi.yaml)는 합의된 목표 EvaluationResult·Quality Gate·Regression 계약을 먼저 정의하며, Java·DB와의 차이는 #117~#119에서 해소한다.
+현재 worker는 Application 자연어 응답을 Evaluator에 전달하지 않는다. 응답 문자열이 정확히 `ALLOW` 또는 `BLOCK`일 때만 `ActualResult`로 저장해 ExpectedResult와 Assertion하고, 그 밖의 자연어 응답은 `PROVIDER_RESPONSE_INVALID` 실패로 수렴한다. 현재 Quality Gate는 저장된 Assertion과 실행 결과를 집계하고, 평가 가능한 Assertion이 없을 때만 `NOT_EVALUATED`로 저장한다. Worker의 Evaluator 연결은 #117, Regression API는 #119에서 해소한다.
