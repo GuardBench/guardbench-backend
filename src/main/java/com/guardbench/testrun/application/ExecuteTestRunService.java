@@ -9,44 +9,39 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.guardbench.testrun.application.port.out.ClaimResult;
+import com.guardbench.testrun.application.port.out.EvaluatorExecutionPort;
+import com.guardbench.testrun.application.port.out.EvaluatorExecutionRequest;
+import com.guardbench.testrun.application.port.out.EvaluatorExecutionResult;
+import com.guardbench.testrun.application.port.out.EvaluatorFailureCode;
 import com.guardbench.testrun.application.port.out.ExecutionClaimPort;
 import com.guardbench.testrun.application.port.out.ExecutionContext;
 import com.guardbench.testrun.application.port.out.LoadExecutionContextPort;
 import com.guardbench.testrun.application.port.out.OutboxEventRecord;
 import com.guardbench.testrun.application.port.out.OutboxPort;
-import com.guardbench.testrun.application.port.out.TransactionalPhasePort;
 import com.guardbench.testrun.application.port.out.TargetExecutionPort;
 import com.guardbench.testrun.application.port.out.TargetExecutionRequest;
 import com.guardbench.testrun.application.port.out.TargetExecutionResult;
+import com.guardbench.testrun.application.port.out.TargetFailureCode;
 import com.guardbench.testrun.application.port.out.TargetProviderException;
-import com.guardbench.testrun.domain.ActualResult;
-import com.guardbench.testrun.domain.TargetReference;
+import com.guardbench.testrun.application.port.out.TransactionalPhasePort;
+import com.guardbench.testrun.domain.ApplicationResponse;
+import com.guardbench.testrun.domain.EvaluatorReference;
 import com.guardbench.testrun.domain.TestCaseSnapshotId;
 import com.guardbench.testrun.domain.TestExecution;
 import com.guardbench.testrun.domain.TestExecutionError;
 import com.guardbench.testrun.domain.TestExecutionErrorCode;
+import com.guardbench.testrun.domain.TestExecutionErrorStage;
 import com.guardbench.testrun.domain.TestExecutionId;
+import com.guardbench.testrun.domain.TargetReference;
 import com.guardbench.testrun.domain.repository.TestExecutionRepository;
 
 /**
- * Execution Worker Application Service다.
+ * Application Target → Evaluator 실행을 담당하는 TestRun Execution Worker다.
  *
- * <p>ADR 0005에 따라 {@code TestExecutionRequested} 메시지를 소비하여 하나의
- * {@code (snapshotId, targetType)} 단위로 Bedrock Guardrail 실행을 수행하고
- * terminal {@code TestExecution}과 {@code TestExecutionCompleted} Outbox를 저장한다.
- *
- * <p>처리 순서:
- * <ol>
- *   <li>이미 terminal TestExecution이 있으면 멱등 성공(ack)</li>
- *   <li>execution claim 선점</li>
- *   <li>실행 컨텍스트(Snapshot input + guardrail version) 로드</li>
- *   <li>Guardrail Provider 호출 (DB 트랜잭션 밖)</li>
- *   <li>claim 소유 재검증</li>
- *   <li>terminal TestExecution + TestExecutionCompleted Outbox 원자적 저장 (persistence phase 트랜잭션)</li>
- * </ol>
- *
- * <p>Provider 호출은 트랜잭션 밖에서 수행해야 하므로 메서드 전체를 감싸지 않고
- * {@link TransactionalPhasePort}로 마지막 저장 phase만 트랜잭션 경계로 선언한다.
+ * <p>외부 호출은 트랜잭션 밖에서 수행하고, claim 재검증 이후 terminal 실행 결과와
+ * 완료 Outbox만 persistence phase에서 원자적으로 저장한다. Target이 실패하면 Evaluator를
+ * 호출하지 않으며, Evaluator 실패 시 Target의 Application response는 보존하지만 verdict와
+ * Assertion은 생성하지 않는다.
  */
 public class ExecuteTestRunService {
 
@@ -57,10 +52,61 @@ public class ExecuteTestRunService {
     private final TestExecutionRepository testExecutionRepository;
     private final LoadExecutionContextPort loadExecutionContextPort;
     private final TargetExecutionPort targetExecutionPort;
+    private final EvaluatorExecutionPort evaluatorExecutionPort;
     private final OutboxPort outboxPort;
     private final TransactionalPhasePort transactionalPhasePort;
     private final Clock clock;
+    private final boolean legacyCompatibility;
 
+    public ExecuteTestRunService(
+            ExecutionClaimPort executionClaimPort,
+            TestExecutionRepository testExecutionRepository,
+            LoadExecutionContextPort loadExecutionContextPort,
+            TargetExecutionPort targetExecutionPort,
+            EvaluatorExecutionPort evaluatorExecutionPort,
+            OutboxPort outboxPort,
+            TransactionalPhasePort transactionalPhasePort,
+            Clock clock
+    ) {
+        this(
+                executionClaimPort,
+                testExecutionRepository,
+                loadExecutionContextPort,
+                targetExecutionPort,
+                evaluatorExecutionPort,
+                outboxPort,
+                transactionalPhasePort,
+                clock,
+                false);
+    }
+
+    private ExecuteTestRunService(
+            ExecutionClaimPort executionClaimPort,
+            TestExecutionRepository testExecutionRepository,
+            LoadExecutionContextPort loadExecutionContextPort,
+            TargetExecutionPort targetExecutionPort,
+            EvaluatorExecutionPort evaluatorExecutionPort,
+            OutboxPort outboxPort,
+            TransactionalPhasePort transactionalPhasePort,
+            Clock clock,
+            boolean legacyCompatibility
+    ) {
+        this.executionClaimPort = Objects.requireNonNull(executionClaimPort);
+        this.testExecutionRepository = Objects.requireNonNull(testExecutionRepository);
+        this.loadExecutionContextPort = Objects.requireNonNull(loadExecutionContextPort);
+        this.targetExecutionPort = Objects.requireNonNull(targetExecutionPort);
+        this.evaluatorExecutionPort = Objects.requireNonNull(evaluatorExecutionPort);
+        this.outboxPort = Objects.requireNonNull(outboxPort);
+        this.transactionalPhasePort = Objects.requireNonNull(transactionalPhasePort);
+        this.clock = Objects.requireNonNull(clock);
+        this.legacyCompatibility = legacyCompatibility;
+    }
+
+    /**
+     * Legacy constructor retained for callers that predate the Evaluator Port. New worker
+     * wiring must provide an explicit EvaluatorExecutionPort.
+     */
+    @Deprecated
     public ExecuteTestRunService(
             ExecutionClaimPort executionClaimPort,
             TestExecutionRepository testExecutionRepository,
@@ -70,33 +116,35 @@ public class ExecuteTestRunService {
             TransactionalPhasePort transactionalPhasePort,
             Clock clock
     ) {
-        this.executionClaimPort = Objects.requireNonNull(executionClaimPort);
-        this.testExecutionRepository = Objects.requireNonNull(testExecutionRepository);
-        this.loadExecutionContextPort = Objects.requireNonNull(loadExecutionContextPort);
-        this.targetExecutionPort = Objects.requireNonNull(targetExecutionPort);
-        this.outboxPort = Objects.requireNonNull(outboxPort);
-        this.transactionalPhasePort = Objects.requireNonNull(transactionalPhasePort);
-        this.clock = Objects.requireNonNull(clock);
+        this(
+                executionClaimPort,
+                testExecutionRepository,
+                loadExecutionContextPort,
+                targetExecutionPort,
+                request -> legacyEvaluatorResult(request.applicationResponse()),
+                outboxPort,
+                transactionalPhasePort,
+                clock,
+                true);
     }
 
-    /**
-     * TestExecutionRequested 메시지를 처리한다.
-     *
-     * @return SQS ack/nack 판정에 사용하는 처리 결과
-     */
+    private static EvaluatorExecutionResult legacyEvaluatorResult(String applicationResponse) {
+        if ("ALLOW".equals(applicationResponse) || "BLOCK".equals(applicationResponse)) {
+            return EvaluatorExecutionResult.succeeded(applicationResponse);
+        }
+        return EvaluatorExecutionResult.failed(EvaluatorFailureCode.PROVIDER_RESPONSE_INVALID);
+    }
+
     public ExecutionOutcome execute(long snapshotId) {
         long executionStartedNanos = System.nanoTime();
-
         TestExecutionId executionId = new TestExecutionId(new TestCaseSnapshotId(snapshotId));
 
-        // 이미 terminal 결과가 있으면 멱등 ack
         if (testExecutionRepository.findById(executionId).isPresent()) {
             log.info("TestExecution already terminal. snapshotId={} elapsedMs={}",
                     snapshotId, elapsedMs(executionStartedNanos));
             return ExecutionOutcome.ALREADY_TERMINAL;
         }
 
-        // claim 선점
         ClaimResult claimResult = executionClaimPort.tryAcquire(snapshotId);
         if (claimResult instanceof ClaimResult.AlreadyHeld) {
             log.warn("TestExecution claim held by another worker. snapshotId={} elapsedMs={}",
@@ -107,142 +155,158 @@ public class ExecuteTestRunService {
         ClaimResult.Acquired acquired = (ClaimResult.Acquired) claimResult;
         UUID claimToken = acquired.claimToken();
         int attemptCount = acquired.attemptCount();
-        log.info("TestExecution claim acquired. snapshotId={} attemptCount={}", snapshotId, attemptCount);
-
-        // 실행 컨텍스트 로드
-        ExecutionContext context = loadExecutionContextPort.load(snapshotId)
-                .orElse(null);
+        ExecutionContext context = loadExecutionContextPort.load(snapshotId).orElse(null);
         if (context == null) {
             log.warn("TestExecution context not found. snapshotId={} attemptCount={} elapsedMs={}",
                     snapshotId, attemptCount, elapsedMs(executionStartedNanos));
             return ExecutionOutcome.CONTEXT_NOT_FOUND;
         }
 
-        // Provider 호출 (DB 트랜잭션 밖)
         Instant startedAt = clock.instant();
-        long providerStartedNanos = System.nanoTime();
-        log.info("Target execution started. testRunId={} snapshotId={} attemptCount={}",
-                context.testRunId(), snapshotId, attemptCount);
-        TargetExecutionNormalization normalization = callProvider(context);
-        Instant completedAt = clock.instant();
-        log.info("Target execution completed. testRunId={} snapshotId={} attemptCount={} succeeded={} elapsedMs={}",
-                context.testRunId(), snapshotId, attemptCount, normalization.isSuccess(),
-                elapsedMs(providerStartedNanos));
-
-        // Provider 실패 시 재시도 가능 여부 판단
-        if (!normalization.isSuccess()) {
-            TestExecutionError error = normalization.error();
+        TargetExecutionNormalization targetNormalization = callTarget(context);
+        if (!targetNormalization.isSuccess()) {
+            TestExecutionError error = targetNormalization.error();
             if (isRetryable(error.code()) && attemptCount < MAX_EXECUTION_ATTEMPTS) {
-                log.warn("TestExecution provider failure will be retried. testRunId={} snapshotId={} attemptCount={} failureCode={} elapsedMs={}",
+                log.warn("Application target failure will be retried. testRunId={} snapshotId={} attemptCount={} failureCode={} elapsedMs={}",
                         context.testRunId(), snapshotId, attemptCount, error.code(),
                         elapsedMs(executionStartedNanos));
                 return ExecutionOutcome.PROVIDER_FAILED_RETRYABLE;
             }
-            // 영구 실패 또는 재시도 소진: terminal 결과 저장으로 진행
         }
 
-        // claim 소유 재검증
+        EvaluatorExecutionNormalization evaluatorNormalization = null;
+        if (targetNormalization.isSuccess()) {
+            ApplicationResponse response = targetNormalization.applicationResponse();
+            evaluatorNormalization = callEvaluator(context, response);
+            if (!evaluatorNormalization.isSuccess()) {
+                TestExecutionError error = evaluatorNormalization.error();
+                if (isRetryable(error.code()) && attemptCount < MAX_EXECUTION_ATTEMPTS) {
+                    log.warn("Evaluator failure will be retried. testRunId={} snapshotId={} attemptCount={} failureCode={} elapsedMs={}",
+                            context.testRunId(), snapshotId, attemptCount, error.code(),
+                            elapsedMs(executionStartedNanos));
+                    return ExecutionOutcome.PROVIDER_FAILED_RETRYABLE;
+                }
+            }
+        }
+
         if (!executionClaimPort.isHeldBy(snapshotId, claimToken)) {
-            log.warn("TestExecution claim lost after provider call. testRunId={} snapshotId={} attemptCount={} elapsedMs={}",
+            log.warn("TestExecution claim lost after provider calls. testRunId={} snapshotId={} attemptCount={} elapsedMs={}",
                     context.testRunId(), snapshotId, attemptCount, elapsedMs(executionStartedNanos));
             return ExecutionOutcome.CLAIM_LOST_AFTER_EXECUTION;
         }
 
-        // Terminal TestExecution + Outbox 원자 저장 (persistence phase 트랜잭션)
+        Instant completedAt = clock.instant();
         TestExecution terminalExecution = buildTerminalExecution(
-                executionId, normalization, startedAt, completedAt
-        );
+                executionId, targetNormalization, evaluatorNormalization, startedAt, completedAt);
         OutboxEventRecord completedEvent = completedEvent(context.testRunId(), snapshotId, completedAt);
         transactionalPhasePort.runInTransaction(() -> {
             testExecutionRepository.save(terminalExecution);
             outboxPort.save(completedEvent);
         });
 
-        log.info("TestExecution terminal result saved. testRunId={} snapshotId={} attemptCount={} status={} eventId={} eventType={} elapsedMs={}",
+        log.info("TestExecution terminal result saved. testRunId={} snapshotId={} attemptCount={} status={} eventId={} elapsedMs={}",
                 context.testRunId(), snapshotId, attemptCount, terminalExecution.status(),
-                completedEvent.eventId(), completedEvent.eventType(), elapsedMs(executionStartedNanos));
-
+                completedEvent.eventId(), elapsedMs(executionStartedNanos));
         return ExecutionOutcome.EXECUTED;
     }
 
-    private static long elapsedMs(long startedNanos) {
-        return (System.nanoTime() - startedNanos) / 1_000_000;
-    }
-
-    private TargetExecutionNormalization callProvider(ExecutionContext context) {
+    private TargetExecutionNormalization callTarget(ExecutionContext context) {
         try {
-            TargetExecutionRequest request = new TargetExecutionRequest(
-                    new TargetReference(context.targetReference()),
-                    context.input()
-            );
-            TargetExecutionResult result = targetExecutionPort.execute(request);
+            TargetExecutionResult result = targetExecutionPort.execute(new TargetExecutionRequest(
+                    new TargetReference(context.targetReference()), context.input()));
             return TargetResultNormalizer.normalize(result);
         } catch (TargetProviderException exception) {
-            TargetExecutionResult failedResult = TargetExecutionResult.failed(exception.failureCode());
-            return TargetResultNormalizer.normalize(failedResult);
+            return TargetResultNormalizer.normalize(TargetExecutionResult.failed(exception.failureCode()));
+        } catch (RuntimeException exception) {
+            return TargetResultNormalizer.normalize(TargetExecutionResult.failed(TargetFailureCode.PROVIDER_UNAVAILABLE));
+        }
+    }
+
+    private EvaluatorExecutionNormalization callEvaluator(
+            ExecutionContext context,
+            ApplicationResponse applicationResponse) {
+        if (!legacyCompatibility && (context.evaluatorReference() == null || context.evaluatorReference().isBlank())) {
+            return EvaluatorResultNormalizer.normalize(
+                    EvaluatorExecutionResult.failed(EvaluatorFailureCode.EVALUATOR_NOT_FOUND));
+        }
+
+        try {
+            String reference = context.evaluatorReference() == null
+                    ? "legacy-evaluator" : context.evaluatorReference();
+            EvaluatorExecutionResult result = evaluatorExecutionPort.evaluate(new EvaluatorExecutionRequest(
+                    new EvaluatorReference(reference), applicationResponse.value()));
+            return EvaluatorResultNormalizer.normalize(result);
+        } catch (RuntimeException exception) {
+            return EvaluatorResultNormalizer.normalize(
+                    EvaluatorExecutionResult.failed(EvaluatorFailureCode.PROVIDER_UNAVAILABLE));
         }
     }
 
     private static boolean isRetryable(TestExecutionErrorCode errorCode) {
         return switch (errorCode) {
             case PROVIDER_UNAVAILABLE, PROVIDER_TIMEOUT -> true;
-            case TARGET_NOT_FOUND, TARGET_ACCESS_DENIED,
-                 TARGET_CONFIGURATION_INVALID, PROVIDER_RESPONSE_INVALID -> false;
+            case TARGET_NOT_FOUND, TARGET_ACCESS_DENIED, TARGET_CONFIGURATION_INVALID,
+                 EVALUATOR_NOT_FOUND, EVALUATOR_ACCESS_DENIED, EVALUATOR_CONFIGURATION_INVALID,
+                 PROVIDER_RESPONSE_INVALID -> false;
         };
     }
 
     private static TestExecution buildTerminalExecution(
             TestExecutionId executionId,
-            TargetExecutionNormalization normalization,
+            TargetExecutionNormalization targetNormalization,
+            EvaluatorExecutionNormalization evaluatorNormalization,
             Instant startedAt,
             Instant completedAt
     ) {
-        if (normalization.isSuccess()) {
-            return TestExecution.succeeded(executionId, normalization.actualResult(), startedAt, completedAt);
+        if (targetNormalization.isSuccess() && evaluatorNormalization.isSuccess()) {
+            return TestExecution.succeeded(
+                    executionId,
+                    targetNormalization.applicationResponse(),
+                    evaluatorNormalization.evaluationResult(),
+                    startedAt,
+                    completedAt);
         }
 
-        TestExecutionError error = normalization.error();
+        TestExecutionError error = targetNormalization.isSuccess()
+                ? evaluatorNormalization.error()
+                : targetNormalization.error();
         if (error.code() == TestExecutionErrorCode.PROVIDER_TIMEOUT) {
+            if (targetNormalization.isSuccess()) {
+                return TestExecution.timedOutAfterApplication(
+                        executionId, targetNormalization.applicationResponse(), error, startedAt, completedAt);
+            }
             return TestExecution.timedOut(executionId, error, startedAt, completedAt);
+        }
+        if (targetNormalization.isSuccess()
+                && error.stage() == TestExecutionErrorStage.EVALUATOR) {
+            return TestExecution.failedAfterApplication(
+                    executionId, targetNormalization.applicationResponse(), error, startedAt, completedAt);
         }
         return TestExecution.failed(executionId, error, startedAt, completedAt);
     }
 
-    private OutboxEventRecord completedEvent(
-            long testRunId,
-            long snapshotId,
-            Instant occurredAt
-    ) {
+    private static long elapsedMs(long startedNanos) {
+        return (System.nanoTime() - startedNanos) / 1_000_000;
+    }
+
+    private OutboxEventRecord completedEvent(long testRunId, long snapshotId, Instant occurredAt) {
         UUID eventId = UUID.randomUUID();
         String payload = """
                 {"eventId":"%s","eventType":"TestExecutionCompleted","schemaVersion":2,"testRunId":%d,"snapshotId":%d,"occurredAt":"%s"}
                 """.formatted(eventId, testRunId, snapshotId, occurredAt).strip();
-        String deduplicationKey = "TestExecutionCompleted:" + snapshotId;
-        return OutboxEventRecord.pending(eventId, "TestExecutionCompleted", payload, deduplicationKey, occurredAt);
+        return OutboxEventRecord.pending(
+                eventId, "TestExecutionCompleted", payload,
+                "TestExecutionCompleted:" + snapshotId, occurredAt);
     }
 
-    /**
-     * Execution Worker 처리 결과를 나타낸다. SQS ack/nack 판정에 사용한다.
-     */
     public enum ExecutionOutcome {
-        /** 정상적으로 Provider 실행과 terminal 저장이 완료되었다. ack한다. */
         EXECUTED,
-        /** 이미 terminal TestExecution이 존재한다. 멱등 ack한다. */
         ALREADY_TERMINAL,
-        /** Snapshot 또는 TestRun 컨텍스트가 없다. ack한다. */
         CONTEXT_NOT_FOUND,
-        /** 다른 Worker가 유효한 claim을 보유하고 있다. nack한다. */
         CLAIM_HELD_BY_OTHER,
-        /** Provider 호출 후 claim 소유권이 상실되었다. nack한다. */
         CLAIM_LOST_AFTER_EXECUTION,
-        /** Provider 일시 실패, 재시도 가능 (attempt 한도 미초과). nack한다. */
-        PROVIDER_FAILED_RETRYABLE,
-        ;
+        PROVIDER_FAILED_RETRYABLE;
 
-        /**
-         * SQS 원본 메시지를 삭제해야 하는지 반환한다.
-         * ack 결과는 삭제, nack 결과는 visibility timeout 후 재전달된다.
-         */
         public boolean shouldAcknowledge() {
             return switch (this) {
                 case EXECUTED, ALREADY_TERMINAL, CONTEXT_NOT_FOUND -> true;

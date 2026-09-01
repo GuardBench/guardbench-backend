@@ -9,7 +9,7 @@ import java.util.Objects;
  * <p>TestRun Domain 타입을 직접 사용하지 않고 스칼라 값 기반으로 표현한다.
  *
  * <p>ADR 0005: 최종화는 모든 pair가 terminal일 때만 가능하므로
- * target별 terminal 여부와 상태 code를 보존한다.
+     * Snapshot별 terminal 여부와 상태 code 및 Evaluator verdict를 보존한다.
  */
 public record TestRunExecutionFacts(
         long testRunId,
@@ -54,11 +54,11 @@ public record TestRunExecutionFacts(
     }
 
     /**
-     * 하나의 target 실행 사실이다.
+     * 하나의 Snapshot pipeline 실행 사실이다.
      *
      * @param terminal 실행 결과가 terminal 상태로 확정되었는지
      * @param statusCode 실행 상태 code(SUCCEEDED, FAILED, TIMED_OUT, NOT_STARTED), 실행 결과가 아직 없으면 null
-     * @param actionCode 성공 실행에서 관측된 action code, 그 외에는 null
+     * @param actionCode 성공 실행에서 Evaluator가 만든 verdict code, 그 외에는 null
      */
     public record TargetExecutionFact(
             boolean terminal,
@@ -79,6 +79,10 @@ public record TestRunExecutionFacts(
         /** 실행이 성공으로 확정되었는지 여부다. */
         public boolean succeeded() {
             return terminal && SUCCEEDED.equals(statusCode);
+        }
+
+        public String evaluatorVerdictCode() {
+            return actionCode;
         }
 
         /** 실행 결과가 아직 저장되지 않은 target이다. */

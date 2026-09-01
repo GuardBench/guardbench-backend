@@ -19,6 +19,8 @@ import com.guardbench.evaluation.domain.repository.SnapshotEvaluationRepository;
 import com.guardbench.testrun.application.ExecuteTestRunService;
 import com.guardbench.testrun.application.ResolveTestRunService;
 import com.guardbench.testrun.application.port.out.ExecutionClaimPort;
+import com.guardbench.testrun.application.port.out.EvaluatorExecutionRequest;
+import com.guardbench.testrun.application.port.out.EvaluatorExecutionResult;
 import com.guardbench.testrun.application.port.out.TargetExecutionPort;
 import com.guardbench.testrun.application.port.out.TargetExecutionRequest;
 import com.guardbench.testrun.application.port.out.TargetExecutionResult;
@@ -128,6 +130,7 @@ public class WorkerChainTestSupport {
 
         private Consumer<TargetPreparationRequest> preparationBehavior;
         private Function<TargetExecutionRequest, TargetExecutionResult> executionBehavior;
+        private Function<EvaluatorExecutionRequest, EvaluatorExecutionResult> evaluatorBehavior;
 
         @Autowired
         WorkerChain(
@@ -161,6 +164,7 @@ public class WorkerChainTestSupport {
         public void reset() {
             preparationBehavior = request -> { };
             executionBehavior = request -> TargetExecutionResult.succeeded("ALLOW");
+            evaluatorBehavior = request -> EvaluatorExecutionResult.succeeded("ALLOW");
         }
 
         /** Target 준비 동작을 시나리오별로 재정의한다. */
@@ -171,6 +175,11 @@ public class WorkerChainTestSupport {
         /** Guardrail 실행 결과를 시나리오별로 재정의한다. */
         public void execute(Function<TargetExecutionRequest, TargetExecutionResult> behavior) {
             this.executionBehavior = behavior;
+        }
+
+        /** Evaluator 동작을 시나리오별로 재정의한다. */
+        public void evaluate(Function<EvaluatorExecutionRequest, EvaluatorExecutionResult> behavior) {
+            this.evaluatorBehavior = behavior;
         }
 
         public ResolveTestRunService resolveService() {
@@ -193,6 +202,7 @@ public class WorkerChainTestSupport {
                     testExecutionRepository,
                     loadExecutionContextPort,
                     request -> executionBehavior.apply(request),
+                    request -> evaluatorBehavior.apply(request),
                     outboxPort,
                     transactionalPhasePort,
                     clock

@@ -204,13 +204,13 @@ public class FinalizeTestRunService {
         }
 
         EvaluationAction expectedAction = toAction(fact.expectedActionCode());
-        EvaluationAction actualAction = fact.execution().actionCode() != null
-                ? toAction(fact.execution().actionCode()) : null;
+        EvaluationAction evaluatorVerdict = fact.execution().evaluatorVerdictCode() != null
+                ? toAction(fact.execution().evaluatorVerdictCode()) : null;
 
         Optional<SnapshotEvaluation> newEvaluation = snapshotEvaluator.evaluate(
                 reference,
                 expectedAction,
-                actualAction,
+                evaluatorVerdict,
                 now
         );
 

@@ -6,12 +6,18 @@ package com.guardbench.testrun.application.port.out;
  * @param targetReference     TestRun이 고정한 불투명 Target reference
  * @param input               TestCaseSnapshot의 input 텍스트
  * @param testRunId           TestRun ID (완료 이벤트 발행에 필요)
+ * @param evaluatorReference  TestRun이 고정한 불투명 Evaluator reference
  */
 public record ExecutionContext(
         String targetReference,
         String input,
-        long testRunId
+        long testRunId,
+        String evaluatorReference
 ) {
+
+    public ExecutionContext(String targetReference, String input, long testRunId) {
+        this(targetReference, input, testRunId, null);
+    }
 
     public ExecutionContext {
         if (targetReference == null || targetReference.isBlank()) {

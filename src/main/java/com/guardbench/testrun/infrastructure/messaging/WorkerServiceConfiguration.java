@@ -11,6 +11,7 @@ import com.guardbench.testrun.application.ResolveTestRunService;
 import com.guardbench.testrun.application.port.out.ExecutionClaimPort;
 import com.guardbench.testrun.application.port.out.LoadExecutionContextPort;
 import com.guardbench.testrun.application.port.out.LoadSnapshotIdsByTestRunPort;
+import com.guardbench.testrun.application.port.out.EvaluatorExecutionPort;
 import com.guardbench.testrun.application.port.out.OutboxPort;
 import com.guardbench.testrun.application.port.out.ResolutionClaimPort;
 import com.guardbench.testrun.application.port.out.SaveNotEvaluatedQualityGatePort;
@@ -67,6 +68,7 @@ class WorkerServiceConfiguration {
             TestExecutionRepository testExecutionRepository,
             LoadExecutionContextPort loadExecutionContextPort,
             TargetExecutionPort targetExecutionPort,
+            EvaluatorExecutionPort evaluatorExecutionPort,
             OutboxPort outboxPort,
             TransactionalPhasePort transactionalPhasePort,
             Clock clock
@@ -76,6 +78,7 @@ class WorkerServiceConfiguration {
                 testExecutionRepository,
                 loadExecutionContextPort,
                 targetExecutionPort,
+                evaluatorExecutionPort,
                 outboxPort,
                 transactionalPhasePort,
                 clock

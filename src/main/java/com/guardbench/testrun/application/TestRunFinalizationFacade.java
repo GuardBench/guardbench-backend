@@ -111,7 +111,7 @@ public class TestRunFinalizationFacade {
         return new TestRunFinalizationFacts.TargetExecutionFact(
                 execution.status().isTerminal(),
                 execution.status().name(),
-                succeeded ? execution.actualResult().action().name() : null
+                succeeded ? execution.evaluationResult().action().name() : null
         );
     }
 

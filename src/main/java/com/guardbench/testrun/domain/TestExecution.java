@@ -7,7 +7,8 @@ public final class TestExecution {
 
     private final TestExecutionId id;
     private final TestExecutionStatus status;
-    private final ActualResult actualResult;
+    private final ApplicationResponse applicationResponse;
+    private final EvaluationResult evaluationResult;
     private final TestExecutionError error;
     private final Instant startedAt;
     private final Instant completedAt;
@@ -15,14 +16,16 @@ public final class TestExecution {
     private TestExecution(
             TestExecutionId id,
             TestExecutionStatus status,
-            ActualResult actualResult,
+            ApplicationResponse applicationResponse,
+            EvaluationResult evaluationResult,
             TestExecutionError error,
             Instant startedAt,
             Instant completedAt
     ) {
         this.id = Objects.requireNonNull(id, "execution ID must not be null");
         this.status = Objects.requireNonNull(status, "execution status must not be null");
-        this.actualResult = actualResult;
+        this.applicationResponse = applicationResponse;
+        this.evaluationResult = evaluationResult;
         this.error = error;
         this.startedAt = startedAt;
         this.completedAt = completedAt;
@@ -32,11 +35,28 @@ public final class TestExecution {
 
     public static TestExecution succeeded(
             TestExecutionId id,
+            ApplicationResponse applicationResponse,
+            EvaluationResult evaluationResult,
+            Instant startedAt,
+            Instant completedAt
+    ) {
+        Objects.requireNonNull(applicationResponse, "successful execution requires application response");
+        Objects.requireNonNull(evaluationResult, "successful execution requires evaluation result");
+        return new TestExecution(id, TestExecutionStatus.SUCCEEDED, applicationResponse, evaluationResult,
+                null, startedAt, completedAt);
+    }
+
+    /**
+     * Legacy completion factory retained for already persisted pre-evaluator history and old callers.
+     */
+    public static TestExecution succeeded(
+            TestExecutionId id,
             ActualResult actualResult,
             Instant startedAt,
             Instant completedAt
     ) {
-        return new TestExecution(id, TestExecutionStatus.SUCCEEDED, actualResult, null, startedAt, completedAt);
+        return new TestExecution(id, TestExecutionStatus.SUCCEEDED, null,
+                new EvaluationResult(actualResult.action()), null, startedAt, completedAt);
     }
 
     public static TestExecution failed(
@@ -45,7 +65,23 @@ public final class TestExecution {
             Instant startedAt,
             Instant completedAt
     ) {
-        return new TestExecution(id, TestExecutionStatus.FAILED, null, error, startedAt, completedAt);
+        return new TestExecution(id, TestExecutionStatus.FAILED, null, null, error, startedAt, completedAt);
+    }
+
+    /** Evaluator 실패처럼 Target response는 저장할 수 있는 terminal 오류다. */
+    public static TestExecution failedAfterApplication(
+            TestExecutionId id,
+            ApplicationResponse applicationResponse,
+            TestExecutionError error,
+            Instant startedAt,
+            Instant completedAt
+    ) {
+        Objects.requireNonNull(applicationResponse, "application response must not be null");
+        if (error.stage() != TestExecutionErrorStage.EVALUATOR) {
+            throw new IllegalArgumentException("application response may only accompany evaluator failure");
+        }
+        return new TestExecution(id, TestExecutionStatus.FAILED, applicationResponse, null,
+                error, startedAt, completedAt);
     }
 
     public static TestExecution timedOut(
@@ -57,11 +93,28 @@ public final class TestExecution {
         if (error == null || error.code() != TestExecutionErrorCode.PROVIDER_TIMEOUT) {
             throw new IllegalArgumentException("TIMED_OUT execution requires PROVIDER_TIMEOUT error");
         }
-        return new TestExecution(id, TestExecutionStatus.TIMED_OUT, null, error, startedAt, completedAt);
+        return new TestExecution(id, TestExecutionStatus.TIMED_OUT, null, null, error, startedAt, completedAt);
+    }
+
+    /** Evaluator timeout처럼 Target response는 저장할 수 있는 terminal timeout이다. */
+    public static TestExecution timedOutAfterApplication(
+            TestExecutionId id,
+            ApplicationResponse applicationResponse,
+            TestExecutionError error,
+            Instant startedAt,
+            Instant completedAt
+    ) {
+        if (error == null || error.stage() != TestExecutionErrorStage.EVALUATOR
+                || error.code() != TestExecutionErrorCode.PROVIDER_TIMEOUT) {
+            throw new IllegalArgumentException("evaluator timeout requires evaluator PROVIDER_TIMEOUT error");
+        }
+        Objects.requireNonNull(applicationResponse, "application response must not be null");
+        return new TestExecution(id, TestExecutionStatus.TIMED_OUT, applicationResponse, null,
+                error, startedAt, completedAt);
     }
 
     public static TestExecution notStarted(TestExecutionId id) {
-        return new TestExecution(id, TestExecutionStatus.NOT_STARTED, null, null, null, null);
+        return new TestExecution(id, TestExecutionStatus.NOT_STARTED, null, null, null, null, null);
     }
 
     public TestExecutionId id() {
@@ -72,8 +125,18 @@ public final class TestExecution {
         return status;
     }
 
+    public ApplicationResponse applicationResponse() {
+        return applicationResponse;
+    }
+
+    public EvaluationResult evaluationResult() {
+        return evaluationResult;
+    }
+
+    /** @deprecated use {@link #evaluationResult()} for the evaluator verdict. */
+    @Deprecated
     public ActualResult actualResult() {
-        return actualResult;
+        return evaluationResult == null ? null : new ActualResult(evaluationResult.action());
     }
 
     public TestExecutionError error() {
@@ -89,23 +152,24 @@ public final class TestExecution {
     }
 
     private void validateResultShape() {
-        boolean hasActualResult = actualResult != null;
+        boolean hasApplicationResponse = applicationResponse != null;
+        boolean hasEvaluationResult = evaluationResult != null;
         boolean hasError = error != null;
 
         switch (status) {
             case SUCCEEDED -> {
-                if (!hasActualResult || hasError) {
-                    throw new IllegalArgumentException("SUCCEEDED execution requires only an actual result");
+                if (!hasEvaluationResult || hasError) {
+                    throw new IllegalArgumentException("SUCCEEDED execution requires only an evaluation result");
                 }
             }
             case FAILED, TIMED_OUT -> {
-                if (hasActualResult || !hasError) {
+                if (hasEvaluationResult || !hasError) {
                     throw new IllegalArgumentException(status + " execution requires only an error");
                 }
             }
             case NOT_STARTED -> {
-                if (hasActualResult || hasError) {
-                    throw new IllegalArgumentException("NOT_STARTED execution must not have a result or error");
+                if (hasApplicationResponse || hasEvaluationResult || hasError) {
+                    throw new IllegalArgumentException("NOT_STARTED execution must not have response, result or error");
                 }
             }
         }
