@@ -10,7 +10,7 @@ API의 단일 명세는 [openapi.yaml](openapi.yaml)이다. Endpoint, 필드, En
 
 ## 계약 층위
 
-OpenAPI는 [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)을 HTTP로 구체화한 **합의된 API 계약**이다. #114의 Evaluation Profile → EvaluatorReference 고정, #115/#125/#128의 OpenAI-compatible HTTP Application Target 경계, #116의 Bedrock Guardrail Evaluator Adapter, #117의 Worker orchestration과 #118의 현재 Run Quality Gate 집계가 구현되었다. #119가 Regression의 남은 차이를 해소한다.
+OpenAPI는 [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)을 HTTP로 구체화한 **합의된 API 계약**이다. #114의 Evaluation Profile → EvaluatorReference 고정, #115/#125/#128의 OpenAI-compatible HTTP Application Target 경계, #116의 Bedrock Guardrail Evaluator Adapter, #117의 Worker orchestration, #118의 현재 Run Quality Gate 집계와 #119의 stored-result Regression API가 구현되었다.
 
 ```text
 TestCaseSnapshot → OpenAI-compatible AI Application Target → Natural Language Response
@@ -108,7 +108,7 @@ Target 실행 Adapter는 호출 내부 retry를 수행하지 않는다. 기존 W
 
 Target URL은 HTTP/HTTPS absolute URL, host 필수, userinfo·fragment 금지다. Worker 기본 egress 정책은 loopback/private/link-local/multicast 주소를 차단하며, 내부 SUT가 필요한 배포만 `guardbench.http-endpoint.allow-private-addresses=true`를 명시적으로 설정한다. 응답 본문은 1 MiB를 넘을 수 없다.
 
-HTTP Application Target 실행, OpenAI-compatible response 정규화, inline Evaluation Profile 접수와 EvaluatorReference 고정, Bedrock Guardrail Evaluator와 Application response → Evaluator verdict → Assertion Worker orchestration 및 결과 API shape는 구현되었다. Quality Gate는 #118 범위다.
+HTTP Application Target 실행, OpenAI-compatible response 정규화, inline Evaluation Profile 접수와 EvaluatorReference 고정, Bedrock Guardrail Evaluator와 Application response → Evaluator verdict → Assertion Worker orchestration, 현재 Run Quality Gate 및 stored-result Regression 결과 API는 구현되었다.
 
 ### TestRun 조회와 평가 결과 — agreed contract
 
@@ -129,7 +129,7 @@ HTTP Application Target 실행, OpenAI-compatible response 정규화, inline Eva
 | ALLOW | BLOCK | FALSE_POSITIVE |
 | ALLOW | ALLOW | TRUE_NEGATIVE |
 
-현재 구현은 Application response를 내부에만 보존하고 Evaluator verdict와 Assertion을 public 결과에서 분리한다. Quality Gate 계산은 #118 범위다.
+현재 구현은 Application response를 내부에만 보존하고 Evaluator verdict와 Assertion을 public 결과에서 분리하며, 같은 TestRun의 Assertion과 실행 성공률로 Quality Gate를 계산한다.
 
 `QualityGateRes`는 `status`와 nullable `metrics`를 제공한다. `metrics`는 평가 가능한 Assertion의 `assertionPassRate`와 전체 Snapshot 실행의 `executionSuccessRate`를 포함한다. 두 비율이 각각 95% 이상이면 `PASS`, 하나라도 기준 미만이면 `FAIL`이다. 평가 가능한 Assertion이 하나도 없으면 `NOT_EVALUATED`와 `metrics: null`이다. Assertion 실패와 실행 실패는 서로 다른 분모로 집계하며, Regression 또는 과거 Run 결과를 Quality Gate에 넣지 않는다.
 
@@ -141,7 +141,7 @@ HTTP Application Target 실행, OpenAI-compatible response 정규화, inline Eva
 - 비교 불가능한 두 Run의 직접 비교 요청은 `409 TEST_RUNS_NOT_COMPARABLE`이다.
 - #113은 endpoint와 Run 식별자까지 고정하며 구체 comparability key와 Regression 상세 response DTO는 #119가 최종 소유한다.
 
-Regression API는 #119에서 구현한다. 비교 가능성은 TestCaseSnapshot의 전체 정의
+Regression API는 #119에서 구현되었다. 비교 가능성은 TestCaseSnapshot의 전체 정의
 `sourceTestCaseId/name/input/expectedAction/severity/category`와 Evaluator provider 설정
 `type/identifier/fixed revision`이 모두 같은지로 판단한다. EvaluatorReference의 생성별 UUID 자체는
 비교 키로 사용하지 않는다.
@@ -158,7 +158,7 @@ Regression API는 #119에서 구현한다. 비교 가능성은 TestCaseSnapshot�
 | #27 TestRun 생성 | `POST /api/v1/test-runs`, `TestRunCreateReq`, `TargetReferenceReq`, `EvaluationProfileReq`, `EvaluationCheck`, `EvaluationStrictness` | OpenAI-compatible HTTP Application endpoint와 필수 model, inline profile만 제출하며 provider/Guardrail 입력은 없다. |
 | #28 실행 상세·결과 | `GET /api/v1/test-runs/{testRunId}`, `TestRunDetailRes`, `GET .../results`, `TestRunResultItemRes`, `QualityGateRes` | 요청 profile, Evaluator verdict, ExpectedResult, Assertion, 실행 상태와 안전한 오류를 표시한다. ApplicationResponse는 표시하지 않는다. |
 | #29 FN/FP 분석 | 결과의 `evaluationOutcome`과 `GET .../evaluator-metrics`의 `EvaluatorMetricsRes` | backend 분류를 source of truth로 사용하고 TestRun 상세의 Evaluation Profile을 분석 맥락으로 표시한다. |
-| #30 Regression | `GET .../comparable-runs`, `GET .../comparisons/{comparisonRunId}` | backend가 반환한 comparable Run만 사용한다. provider 선택 UI나 재실행 흐름을 만들지 않으며 상세 DTO는 #119를 기다린다. |
+| #30 Regression | `GET .../comparable-runs`, `GET .../comparisons/{comparisonRunId}` | backend가 반환한 comparable Run만 사용한다. provider 선택 UI나 재실행 흐름을 만들지 않고 저장된 비교 결과 DTO를 사용한다. |
 
 ## 구현 경계
 
