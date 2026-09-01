@@ -261,6 +261,7 @@ class SqsWorkerEndToEndTest {
                     },
                     snapshotId -> java.util.Optional.empty(),
                     request -> null,
+                    request -> com.guardbench.testrun.application.port.out.EvaluatorExecutionResult.succeeded("ALLOW"),
                     new com.guardbench.testrun.application.port.out.OutboxPort() {
                         @Override public void save(com.guardbench.testrun.application.port.out.OutboxEventRecord event) {}
                         @Override public java.util.List<com.guardbench.testrun.application.port.out.OutboxEventRecord> findPendingBatch(int batchSize) { return java.util.List.of(); }

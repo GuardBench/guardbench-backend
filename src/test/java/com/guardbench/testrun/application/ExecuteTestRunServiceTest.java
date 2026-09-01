@@ -22,6 +22,10 @@ import org.junit.jupiter.api.Test;
 import com.guardbench.testrun.application.port.out.ClaimResult;
 import com.guardbench.testrun.application.port.out.ExecutionClaimPort;
 import com.guardbench.testrun.application.port.out.ExecutionContext;
+import com.guardbench.testrun.application.port.out.EvaluatorExecutionPort;
+import com.guardbench.testrun.application.port.out.EvaluatorExecutionRequest;
+import com.guardbench.testrun.application.port.out.EvaluatorExecutionResult;
+import com.guardbench.testrun.application.port.out.EvaluatorFailureCode;
 import com.guardbench.testrun.application.port.out.TargetExecutionPort;
 import com.guardbench.testrun.application.port.out.TargetExecutionRequest;
 import com.guardbench.testrun.application.port.out.TargetExecutionResult;
@@ -30,8 +34,10 @@ import com.guardbench.testrun.application.port.out.TargetProviderException;
 import com.guardbench.testrun.application.port.out.LoadExecutionContextPort;
 import com.guardbench.testrun.application.port.out.OutboxEventRecord;
 import com.guardbench.testrun.application.port.out.OutboxPort;
-import com.guardbench.testrun.domain.ActualResult;
 import com.guardbench.testrun.domain.Action;
+import com.guardbench.testrun.domain.ApplicationResponse;
+import com.guardbench.testrun.domain.EvaluationResult;
+import com.guardbench.testrun.domain.TestExecutionErrorStage;
 import com.guardbench.testrun.domain.TestCaseSnapshotId;
 import com.guardbench.testrun.domain.TestExecution;
 import com.guardbench.testrun.domain.TestExecutionErrorCode;
@@ -52,6 +58,7 @@ class ExecuteTestRunServiceTest {
     private FakeTestExecutionRepository executionRepository;
     private FakeLoadExecutionContextPort contextPort;
     private FakeTargetExecutionPort guardrailPort;
+    private FakeEvaluatorExecutionPort evaluatorPort;
     private FakeOutboxPort outboxPort;
     private ExecuteTestRunService service;
 
@@ -61,11 +68,70 @@ class ExecuteTestRunServiceTest {
         executionRepository = new FakeTestExecutionRepository();
         contextPort = new FakeLoadExecutionContextPort();
         guardrailPort = new FakeTargetExecutionPort();
+        evaluatorPort = new FakeEvaluatorExecutionPort();
         outboxPort = new FakeOutboxPort();
         service = new ExecuteTestRunService(
                 claimPort, executionRepository, contextPort,
-                guardrailPort, outboxPort, new InlineTransactionalPhase(), FIXED_CLOCK
+                guardrailPort, evaluatorPort, outboxPort, new InlineTransactionalPhase(), FIXED_CLOCK
         );
+    }
+
+    @Nested
+    @DisplayName("Application → Evaluator 분리 흐름")
+    class ApplicationEvaluatorFlow {
+
+        @Test
+        @DisplayName("Application response와 Evaluator verdict를 별도 저장한다")
+        void storesApplicationResponseAndEvaluatorVerdictSeparately() {
+            claimPort.willAcquire(SNAPSHOT_ID);
+            contextPort.setContext(SNAPSHOT_ID, new ExecutionContext(
+                    TARGET_REFERENCE, INPUT_TEXT, TEST_RUN_ID, "evaluator-ref"));
+            guardrailPort.willReturn(TargetExecutionResult.succeeded("natural language response"));
+            evaluatorPort.willReturn(EvaluatorExecutionResult.succeeded("BLOCK"));
+
+            service.execute(SNAPSHOT_ID);
+
+            TestExecution saved = executionRepository.savedExecutions().getFirst();
+            assertEquals("natural language response", saved.applicationResponse().value());
+            assertEquals(Action.BLOCK, saved.evaluationResult().action());
+            assertEquals(1, evaluatorPort.callCount());
+            assertEquals("natural language response", evaluatorPort.lastRequest().applicationResponse());
+            assertEquals("evaluator-ref", evaluatorPort.lastRequest().evaluatorReference().value());
+        }
+
+        @Test
+        @DisplayName("Application Target 실패 시 Evaluator를 호출하지 않는다")
+        void doesNotEvaluateTargetFailure() {
+            claimPort.willAcquire(SNAPSHOT_ID);
+            contextPort.setContext(SNAPSHOT_ID, new ExecutionContext(
+                    TARGET_REFERENCE, INPUT_TEXT, TEST_RUN_ID, "evaluator-ref"));
+            guardrailPort.willReturn(TargetExecutionResult.failed(TargetFailureCode.TARGET_NOT_FOUND));
+
+            service.execute(SNAPSHOT_ID);
+
+            TestExecution saved = executionRepository.savedExecutions().getFirst();
+            assertEquals(TestExecutionStatus.FAILED, saved.status());
+            assertEquals(TestExecutionErrorStage.APPLICATION_TARGET, saved.error().stage());
+            assertEquals(0, evaluatorPort.callCount());
+        }
+
+        @Test
+        @DisplayName("Evaluator 실패 시 response만 보존하고 verdict는 저장하지 않는다")
+        void storesEvaluatorFailureWithoutVerdict() {
+            claimPort.willAcquire(SNAPSHOT_ID);
+            contextPort.setContext(SNAPSHOT_ID, new ExecutionContext(
+                    TARGET_REFERENCE, INPUT_TEXT, TEST_RUN_ID, "evaluator-ref"));
+            guardrailPort.willReturn(TargetExecutionResult.succeeded("natural language response"));
+            evaluatorPort.willReturn(EvaluatorExecutionResult.failed(EvaluatorFailureCode.EVALUATOR_NOT_FOUND));
+
+            service.execute(SNAPSHOT_ID);
+
+            TestExecution saved = executionRepository.savedExecutions().getFirst();
+            assertEquals(TestExecutionStatus.FAILED, saved.status());
+            assertEquals("natural language response", saved.applicationResponse().value());
+            assertEquals(TestExecutionErrorStage.EVALUATOR, saved.error().stage());
+            assertEquals(null, saved.evaluationResult());
+        }
     }
 
     @Nested
@@ -74,7 +140,7 @@ class ExecuteTestRunServiceTest {
 
         @Test
         @DisplayName("ALLOW 결과의 Target 실행을 SUCCEEDED로 저장하고 Outbox를 생성한다")
-        void executesBaselineAllow() {
+        void executesAllow() {
             claimPort.willAcquire(SNAPSHOT_ID);
             contextPort.setContext(SNAPSHOT_ID, defaultContext());
             guardrailPort.willReturn(TargetExecutionResult.succeeded("ALLOW"));
@@ -88,7 +154,7 @@ class ExecuteTestRunServiceTest {
             // terminal TestExecution이 저장되었다
             TestExecution saved = executionRepository.savedExecutions().getFirst();
             assertEquals(TestExecutionStatus.SUCCEEDED, saved.status());
-            assertEquals(new ActualResult(Action.ALLOW), saved.actualResult());
+            assertEquals(new EvaluationResult(Action.ALLOW), saved.evaluationResult());
             assertEquals(FIXED_NOW, saved.startedAt());
             assertEquals(FIXED_NOW, saved.completedAt());
 
@@ -103,7 +169,7 @@ class ExecuteTestRunServiceTest {
 
         @Test
         @DisplayName("BLOCK 결과의 Target 실행을 SUCCEEDED로 저장한다")
-        void executesCandidateBlock() {
+        void executesBlock() {
             claimPort.willAcquire(SNAPSHOT_ID);
             contextPort.setContext(SNAPSHOT_ID, defaultContext());
             guardrailPort.willReturn(TargetExecutionResult.succeeded("BLOCK"));
@@ -115,7 +181,7 @@ class ExecuteTestRunServiceTest {
 
             TestExecution saved = executionRepository.savedExecutions().getFirst();
             assertEquals(TestExecutionStatus.SUCCEEDED, saved.status());
-            assertEquals(new ActualResult(Action.BLOCK), saved.actualResult());
+            assertEquals(new EvaluationResult(Action.BLOCK), saved.evaluationResult());
         }
 
         @Test
@@ -143,7 +209,8 @@ class ExecuteTestRunServiceTest {
         void alreadyTerminal() {
             TestExecutionId id = new TestExecutionId(new TestCaseSnapshotId(SNAPSHOT_ID));
             executionRepository.store(
-                    TestExecution.succeeded(id, new ActualResult(Action.ALLOW), FIXED_NOW, FIXED_NOW)
+                    TestExecution.succeeded(id, new ApplicationResponse("response"),
+                            new EvaluationResult(Action.ALLOW), FIXED_NOW, FIXED_NOW)
             );
 
             ExecuteTestRunService.ExecutionOutcome outcome =
@@ -165,6 +232,7 @@ class ExecuteTestRunServiceTest {
                     TestExecution.failed(
                             id,
                             new com.guardbench.testrun.domain.TestExecutionError(
+                                    TestExecutionErrorStage.APPLICATION_TARGET,
                                     TestExecutionErrorCode.TARGET_NOT_FOUND,
                                     "Guardrail target was not found."
                             ),
@@ -437,7 +505,7 @@ class ExecuteTestRunServiceTest {
     // ─── Test Fixtures ────────────────────────────────────────────────────────
 
     private static ExecutionContext defaultContext() {
-        return new ExecutionContext(TARGET_REFERENCE, INPUT_TEXT, TEST_RUN_ID);
+        return new ExecutionContext(TARGET_REFERENCE, INPUT_TEXT, TEST_RUN_ID, "evaluator-ref");
     }
 
     // ─── Fake Adapters ────────────────────────────────────────────────────────
@@ -547,6 +615,31 @@ class ExecuteTestRunServiceTest {
                 throw new TargetProviderException(throwFailureCode);
             }
             return successResult;
+        }
+    }
+
+    private static final class FakeEvaluatorExecutionPort implements EvaluatorExecutionPort {
+        private EvaluatorExecutionResult result;
+        private EvaluatorExecutionRequest lastRequest;
+        private int callCount;
+
+        void willReturn(EvaluatorExecutionResult result) {
+            this.result = result;
+        }
+
+        EvaluatorExecutionRequest lastRequest() {
+            return lastRequest;
+        }
+
+        int callCount() {
+            return callCount;
+        }
+
+        @Override
+        public EvaluatorExecutionResult evaluate(EvaluatorExecutionRequest request) {
+            lastRequest = request;
+            callCount++;
+            return result != null ? result : EvaluatorExecutionResult.succeeded(request.applicationResponse());
         }
     }
 

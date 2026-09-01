@@ -71,6 +71,7 @@ entity "http_endpoint_target" as http_endpoint_target {
   * reference_id : TEXT <<PK, FK>>
   --
   * endpoint_url : TEXT
+  * model : TEXT
     requested_revision : TEXT
 }
 
@@ -106,7 +107,9 @@ entity "test_execution" as execution {
   * snapshot_id : BIGINT <<PK, FK>>
   --
   * result_status : VARCHAR(16)
-    actual_action : VARCHAR(16)
+    application_response : TEXT
+    evaluator_verdict : VARCHAR(16)
+    error_stage : VARCHAR(32)
     error_code : TEXT
     error_message : TEXT
     started_at : TIMESTAMPTZ(6)
@@ -132,11 +135,8 @@ entity "quality_gate_result" as quality_gate {
   * test_run_id : BIGINT <<PK, FK>>
   --
   * gate_status : VARCHAR(32)
-    candidate_assertion_pass_rate : DOUBLE PRECISION
-    security_regression_count : INTEGER
-    security_regression_rate : DOUBLE PRECISION
-    usability_regression_rate : DOUBLE PRECISION
-    test_execution_success_rate : DOUBLE PRECISION
+    assertion_pass_rate : DOUBLE PRECISION
+    execution_success_rate : DOUBLE PRECISION
   * created_at : TIMESTAMPTZ(6)
 }
 
@@ -183,11 +183,11 @@ entity "outbox_event" as outbox {
 
 test_suite ||--o{ test_case : contains
 test_suite ||--o{ test_run : selected by
-target_reference ||--|| test_run : referenced by
+target_reference ||--o| test_run : referenced by
 target_reference ||--o| bedrock_target : provider detail
 target_reference ||--o| http_endpoint_target : provider detail
 evaluator_reference ||--o| bedrock_evaluator : provider detail
-evaluator_reference ||--o| test_run : immutable evaluator snapshot
+evaluator_reference ||--o{ test_run : immutable evaluator snapshot
 test_run ||--|{ snapshot : fixes
 test_case ||--o{ snapshot : source of
 snapshot ||--o| execution : single target
@@ -202,11 +202,25 @@ outbox ..> test_run : payload reference only
 note right of target_reference
   target_type: BEDROCK_GUARDRAIL | HTTP_ENDPOINT
   Provider detail is stored in the matching table.
+  test_run.target_reference_id is NOT NULL with a UNIQUE
+  constraint, so at most one TestRun per target_reference.
+  New TestRuns register HTTP_ENDPOINT only;
+  bedrock_guardrail_target is retained V3 legacy data.
+end note
+
+note right of evaluator_reference
+  evaluator_type: BEDROCK_GUARDRAIL only (V6).
+  test_run.evaluator_reference_id is nullable and has no
+  UNIQUE constraint, so the schema permits reuse across Runs.
+  New TestRuns always fix checks + strictness + evaluator
+  reference together (ck_test_run_evaluation_profile_pair).
 end note
 
 note right of http_endpoint_target
   V4 adds HTTP_ENDPOINT persistence; V6 adds requested revision.
   V5 requires an http/https URL with host-like text.
+  V7 adds the OpenAI-compatible model; V8 makes it NOT NULL.
+  Public API accepts HTTP_ENDPOINT only.
 end note
 
 note right of test_case
@@ -235,7 +249,7 @@ legend left
   carries the immutable event identifiers.
   Claim relations are technical leases, not Domain IDs
   or Aggregate Repositories.
-  Diagram reflects Flyway V1 through V6.
+  Diagram reflects Flyway V1 through V8.
 endlegend
 
 @enduml

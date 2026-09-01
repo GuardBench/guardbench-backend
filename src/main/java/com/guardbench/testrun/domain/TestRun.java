@@ -28,11 +28,8 @@ public final class TestRun {
         this.id = Objects.requireNonNull(id, "TestRun ID must not be null");
         this.sourceTestSuiteId = Objects.requireNonNull(sourceTestSuiteId, "source TestSuite ID must not be null");
         this.targetReference = Objects.requireNonNull(targetReference, "target reference must not be null");
-        if ((evaluationProfile == null) != (evaluatorReference == null)) {
-            throw new IllegalArgumentException("evaluation profile and evaluator reference must be both present or absent");
-        }
-        this.evaluationProfile = evaluationProfile;
-        this.evaluatorReference = evaluatorReference;
+        this.evaluationProfile = Objects.requireNonNull(evaluationProfile, "evaluation profile must not be null");
+        this.evaluatorReference = Objects.requireNonNull(evaluatorReference, "evaluator reference must not be null");
         if (testCaseCount <= 0) {
             throw new IllegalArgumentException("test case count must be positive");
         }
@@ -51,12 +48,6 @@ public final class TestRun {
             Instant createdAt
     ) {
         return new TestRun(id, sourceTestSuiteId, targetReference, evaluationProfile, evaluatorReference, testCaseCount, createdAt);
-    }
-
-    /** Legacy history has no profile/evaluator snapshot. */
-    public static TestRun queue(TestRunId id, SourceTestSuiteId sourceTestSuiteId, TargetReference targetReference,
-                                int testCaseCount, Instant createdAt) {
-        return new TestRun(id, sourceTestSuiteId, targetReference, null, null, testCaseCount, createdAt);
     }
 
     public static TestRun rehydrate(
@@ -88,13 +79,6 @@ public final class TestRun {
         testRun.executionOutcome = executionOutcome;
         testRun.timeline = Objects.requireNonNull(timeline, "TestRun timeline must not be null");
         return testRun;
-    }
-
-    public static TestRun rehydrate(TestRunId id, SourceTestSuiteId sourceTestSuiteId, TargetReference targetReference,
-                                    int testCaseCount, int processedTestCaseCount, TestRunStatus status,
-                                    TestRunExecutionOutcome executionOutcome, TestRunTimeline timeline) {
-        return rehydrate(id, sourceTestSuiteId, targetReference, null, null, testCaseCount, processedTestCaseCount,
-                status, executionOutcome, timeline);
     }
 
     public void beginPreparing(Instant preparedAt) {

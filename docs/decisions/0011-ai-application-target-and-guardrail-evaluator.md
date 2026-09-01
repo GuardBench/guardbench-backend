@@ -68,14 +68,15 @@ Completed TestRun A + Completed TestRun B
 
 ### 현재 구현과 전환
 
-이 ADR과 [OpenAPI](../api/openapi.yaml)는 합의된 목표 계약이다. #113에서는 Java 코드, Migration과 물리 ERD를 변경하지 않는다. 현재 구현은 `BEDROCK_GUARDRAIL`과 `HTTP_ENDPOINT`를 같은 Target abstraction으로 저장하고, Bedrock Guardrail을 실행해 `ActualResult`를 만들며, 단일 Target Quality Gate를 `NOT_EVALUATED`로 저장한다.
+이 ADR과 [OpenAPI](../api/openapi.yaml)는 합의된 계약이다. ADR 승인 당시의 구현 차이는 후속 Issue에서 해소되었으며, 현재 구현은 새 TestRun에 `HTTP_ENDPOINT` Application Target과 immutable EvaluatorReference를 고정하고 Bedrock Guardrail을 Evaluator로 호출한다. Worker는 Application response → `EvaluationResult` → Assertion 흐름으로 결과를 저장한다. `bedrock_guardrail_target`은 기존 V3 데이터 조회를 위해 남아 있지만 새 TestRun 등록에는 사용하지 않는다.
+Quality Gate는 현재 Run의 평가 가능한 Assertion 통과율과 전체 실행 성공률을 집계하며, 두 비율이 각각 95% 이상일 때 PASS, 평가 가능한 Assertion이 없으면 NOT_EVALUATED가 된다. Regression은 #119 범위다.
 
-목표 계약과 구현의 차이는 다음 후속 Issue에서 해소한다.
+이 계약을 구현한 후속 Issue와 남은 범위는 다음과 같다.
 
-- [#114](https://github.com/GuardBench/guardbench-backend/issues/114): TestRun의 EvaluatorReference 고정과 Guardrail Target 의존 제거
-- [#115](https://github.com/GuardBench/guardbench-backend/issues/115): HTTP Endpoint AI Application 실행과 자연어 응답 수집
-- [#116](https://github.com/GuardBench/guardbench-backend/issues/116): AWS Bedrock Guardrail Evaluator Adapter 전환
-- [#117](https://github.com/GuardBench/guardbench-backend/issues/117): Worker를 Application 실행 → Evaluator → Assertion 흐름으로 전환
+- [#114](https://github.com/GuardBench/guardbench-backend/issues/114): TestRun의 EvaluatorReference 고정과 Guardrail Target 의존 제거 (완료)
+- [#115](https://github.com/GuardBench/guardbench-backend/issues/115): HTTP Endpoint AI Application 실행과 자연어 응답 수집 (완료)
+- [#116](https://github.com/GuardBench/guardbench-backend/issues/116): AWS Bedrock Guardrail Evaluator Adapter 전환 (완료)
+- [#117](https://github.com/GuardBench/guardbench-backend/issues/117): Worker를 Application 실행 → Evaluator → Assertion 흐름으로 전환 (완료)
 - [#118](https://github.com/GuardBench/guardbench-backend/issues/118): 현재 TestRun Assertion 기반 Quality Gate
 - [#119](https://github.com/GuardBench/guardbench-backend/issues/119): 저장된 완료 Run 결과 기반 Regression API
 

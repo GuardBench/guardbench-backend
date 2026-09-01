@@ -70,8 +70,9 @@ class TestRunResultListPersistenceAdapter implements LoadTestRunResultListPort {
         String selectSql = """
                 SELECT s.id AS snapshot_id, s.source_test_case_id, s.name, s.input,
                        s.expected_action, s.severity, s.category,
-                       e.result_status AS execution_status, e.actual_action,
-                       e.error_code, e.error_message, ar.assertion_status
+                       e.result_status AS execution_status,
+                       e.evaluator_verdict,
+                       e.error_stage, e.error_code, e.error_message, ar.assertion_status
                 """ + fromAndWhere
                 + " ORDER BY " + orderBy(criteria.sort())
                 + " LIMIT ? OFFSET ?";
@@ -102,10 +103,25 @@ class TestRunResultListPersistenceAdapter implements LoadTestRunResultListPort {
         addEquals(predicates, arguments, "e.result_status",
                 criteria.executionStatus() == null ? null : criteria.executionStatus().name());
         addEquals(predicates, arguments, "ar.assertion_status", criteria.assertionStatusCode());
+        addEvaluationOutcome(predicates, arguments, criteria.evaluationOutcomeCode());
 
         return new QueryParts(
                 "WHERE " + String.join(" AND ", predicates) + "\n",
                 List.copyOf(arguments));
+    }
+
+    private static void addEvaluationOutcome(
+            List<String> predicates, List<Object> arguments, String outcome) {
+        if (outcome == null) {
+            return;
+        }
+        predicates.add("(" + switch (outcome) {
+            case "TRUE_POSITIVE" -> "s.expected_action = 'BLOCK' AND e.evaluator_verdict = 'BLOCK'";
+            case "TRUE_NEGATIVE" -> "s.expected_action = 'ALLOW' AND e.evaluator_verdict = 'ALLOW'";
+            case "FALSE_POSITIVE" -> "s.expected_action = 'ALLOW' AND e.evaluator_verdict = 'BLOCK'";
+            case "FALSE_NEGATIVE" -> "s.expected_action = 'BLOCK' AND e.evaluator_verdict = 'ALLOW'";
+            default -> throw new IllegalArgumentException("unsupported evaluationOutcomeCode=" + outcome);
+        } + ")");
     }
 
     private String orderBy(List<SortOrder<TestRunResultSortField>> sort) {
@@ -122,27 +138,48 @@ class TestRunResultListPersistenceAdapter implements LoadTestRunResultListPort {
     }
 
     private TestRunResultItem mapItem(ResultSet resultSet, int rowNumber) throws SQLException {
+        Action expectedAction = Action.valueOf(resultSet.getString("expected_action"));
+        TestExecutionView execution = mapExecution(
+                resultSet, "execution_status", "evaluator_verdict", "error_stage", "error_code", "error_message");
         return new TestRunResultItem(
                 resultSet.getLong("snapshot_id"),
                 resultSet.getLong("source_test_case_id"),
                 resultSet.getString("name"),
                 resultSet.getString("input"),
-                Action.valueOf(resultSet.getString("expected_action")),
+                expectedAction,
                 Severity.valueOf(resultSet.getString("severity")),
                 resultSet.getString("category"),
-                mapExecution(resultSet, "execution_status", "actual_action", "error_code", "error_message"),
-                resultSet.getString("assertion_status"));
+                execution,
+                resultSet.getString("assertion_status"),
+                evaluationOutcome(expectedAction, execution.evaluatorVerdict()));
     }
 
     private TestExecutionView mapExecution(
-            ResultSet resultSet, String statusColumn, String actionColumn,
+            ResultSet resultSet, String statusColumn, String verdictColumn, String stageColumn,
             String errorCodeColumn, String errorMessageColumn) throws SQLException {
-        String actualAction = resultSet.getString(actionColumn);
+        String evaluatorVerdict = resultSet.getString(verdictColumn);
         return new TestExecutionView(
                 TestExecutionStatus.valueOf(resultSet.getString(statusColumn)),
-                actualAction == null ? null : Action.valueOf(actualAction),
+                evaluatorVerdict == null ? null : Action.valueOf(evaluatorVerdict),
+                resultSet.getString(stageColumn),
                 resultSet.getString(errorCodeColumn),
                 resultSet.getString(errorMessageColumn));
+    }
+
+    private static String evaluationOutcome(Action expectedAction, Action evaluatorVerdict) {
+        if (evaluatorVerdict == null) {
+            return null;
+        }
+        if (expectedAction == Action.BLOCK && evaluatorVerdict == Action.BLOCK) {
+            return "TRUE_POSITIVE";
+        }
+        if (expectedAction == Action.ALLOW && evaluatorVerdict == Action.ALLOW) {
+            return "TRUE_NEGATIVE";
+        }
+        if (expectedAction == Action.ALLOW) {
+            return "FALSE_POSITIVE";
+        }
+        return "FALSE_NEGATIVE";
     }
 
     private static void addContains(

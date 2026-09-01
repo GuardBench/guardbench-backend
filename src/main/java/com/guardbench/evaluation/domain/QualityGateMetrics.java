@@ -1,20 +1,12 @@
 package com.guardbench.evaluation.domain;
 
 public record QualityGateMetrics(
-        double candidateAssertionPassRate,
-        long securityRegressionCount,
-        double securityRegressionRate,
-        double usabilityRegressionRate,
-        double testExecutionSuccessRate) {
+        double assertionPassRate,
+        double executionSuccessRate) {
 
     public QualityGateMetrics {
-        requireRate(candidateAssertionPassRate, "Candidate assertion pass rate");
-        if (securityRegressionCount < 0) {
-            throw new IllegalArgumentException("Security regression count must not be negative");
-        }
-        requireRate(securityRegressionRate, "Security regression rate");
-        requireRate(usabilityRegressionRate, "Usability regression rate");
-        requireRate(testExecutionSuccessRate, "Test execution success rate");
+        requireRate(assertionPassRate, "Assertion pass rate");
+        requireRate(executionSuccessRate, "Execution success rate");
     }
 
     private static void requireRate(double rate, String label) {

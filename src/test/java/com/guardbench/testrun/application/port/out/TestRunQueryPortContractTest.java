@@ -46,14 +46,14 @@ class TestRunQueryPortContractTest {
     void qualityGateViewKeepsEvaluationValuesAsLocalScalarCodes() {
         QualityGateView evaluated = new QualityGateView(
                 "PASS",
-                new QualityGateMetricsView(0.95, 0L, 0.0, 0.05, 0.95));
+                new QualityGateMetricsView(0.95, 0.95));
         QualityGateView notEvaluated = new QualityGateView("NOT_EVALUATED", null);
 
         assertEquals("PASS", evaluated.statusCode());
         assertEquals("NOT_EVALUATED", notEvaluated.statusCode());
         assertThrows(IllegalArgumentException.class, () -> new QualityGateView("FAIL", null));
         assertThrows(IllegalArgumentException.class, () -> new QualityGateView(
-                "NOT_EVALUATED", new QualityGateMetricsView(0.0, 0L, 0.0, 0.0, 0.0)));
+                "NOT_EVALUATED", new QualityGateMetricsView(0.0, 0.0)));
     }
 
     @Test
@@ -68,14 +68,14 @@ class TestRunQueryPortContractTest {
                 com.guardbench.testrun.domain.Severity.HIGH,
                 "category",
                 new TestExecutionView(com.guardbench.testrun.domain.TestExecutionStatus.FAILED,
-                        null, "PROVIDER_ERROR", "safe message"),
-                null);
+                        null, "APPLICATION_TARGET", "PROVIDER_ERROR", "safe message"),
+                null, null);
 
         assertEquals(List.of(SortOrder.asc(TestRunResultSortField.SNAPSHOT_ID)), criteria.sort());
         assertFalse(item.assertionStatusCode() != null);
         assertThrows(IllegalArgumentException.class, () -> new TestRunResultItem(
                 10L, 20L, "case", "input", com.guardbench.testrun.domain.Action.BLOCK,
-                com.guardbench.testrun.domain.Severity.HIGH, "category", item.execution(), "UNKNOWN"));
+                com.guardbench.testrun.domain.Severity.HIGH, "category", item.execution(), "UNKNOWN", null));
     }
 
     @Test

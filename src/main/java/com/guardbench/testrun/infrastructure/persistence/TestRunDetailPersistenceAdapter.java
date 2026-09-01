@@ -43,9 +43,7 @@ class TestRunDetailPersistenceAdapter implements LoadTestRunDetailPort {
                    he.model AS target_model,
                    r.evaluation_checks, r.evaluation_strictness, r.execution_outcome,
                    r.created_at, r.started_at, r.completed_at, r.updated_at,
-                   qgr.gate_status, qgr.candidate_assertion_pass_rate,
-                   qgr.security_regression_count, qgr.security_regression_rate,
-                   qgr.usability_regression_rate, qgr.test_execution_success_rate
+                   qgr.gate_status, qgr.assertion_pass_rate, qgr.execution_success_rate
             FROM test_run r
             JOIN target_reference tr ON tr.reference_id = r.target_reference_id
             LEFT JOIN bedrock_guardrail_target bg ON bg.reference_id = tr.reference_id
@@ -106,11 +104,8 @@ class TestRunDetailPersistenceAdapter implements LoadTestRunDetailPort {
             return new QualityGateView(gateStatus, null);
         }
         QualityGateMetricsView metrics = new QualityGateMetricsView(
-                resultSet.getDouble("candidate_assertion_pass_rate"),
-                resultSet.getLong("security_regression_count"),
-                resultSet.getDouble("security_regression_rate"),
-                resultSet.getDouble("usability_regression_rate"),
-                resultSet.getDouble("test_execution_success_rate"));
+                resultSet.getDouble("assertion_pass_rate"),
+                resultSet.getDouble("execution_success_rate"));
         return new QualityGateView(gateStatus, metrics);
     }
 

@@ -31,6 +31,7 @@ class HttpEndpointTargetRequestTest {
         when(createTestRunService.create(any())).thenReturn(new TestRunCreateResult(
                 902L, 1L, "QUEUED", 1, new com.guardbench.testrun.application.port.out.TargetReferenceView(
                         "target-ref", "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", null, "gpt-4o-mini"),
+                new com.guardbench.testrun.domain.EvaluationProfile(java.util.List.of("PII_LEAKAGE"), "STANDARD"),
                 Instant.parse("2026-08-24T14:30:00Z")));
         ArgumentCaptor<TestRunCreateCommand> captor = ArgumentCaptor.forClass(TestRunCreateCommand.class);
         String valid = "{\"testSuiteId\":1,\"target\":{\"type\":\"HTTP_ENDPOINT\",\"identifier\":\"https://example.com/v1/chat/completions\",\"model\":\"gpt-4o-mini\"},\"evaluationProfile\":{\"checks\":[\"PII_LEAKAGE\"],\"strictness\":\"STANDARD\"}}";
