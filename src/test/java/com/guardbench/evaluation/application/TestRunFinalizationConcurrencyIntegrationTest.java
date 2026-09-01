@@ -167,8 +167,9 @@ class TestRunFinalizationConcurrencyIntegrationTest {
 
     private void insertSucceededExecution() {
         jdbcTemplate.update("""
-                INSERT INTO test_execution(snapshot_id, result_status, actual_action, started_at, completed_at)
-                VALUES (?, 'SUCCEEDED', 'ALLOW', ?, ?)
+                INSERT INTO test_execution(snapshot_id, result_status, application_response, evaluator_verdict,
+                    started_at, completed_at)
+                VALUES (?, 'SUCCEEDED', 'stored application response', 'ALLOW', ?, ?)
                 """, SNAPSHOT_ID, Timestamp.from(NOW), Timestamp.from(NOW));
     }
 

@@ -1,7 +1,6 @@
 package com.guardbench.testrun.infrastructure.persistence;
 
 import com.guardbench.testrun.domain.Action;
-import com.guardbench.testrun.domain.ActualResult;
 import com.guardbench.testrun.domain.ApplicationResponse;
 import com.guardbench.testrun.domain.EvaluationProfile;
 import com.guardbench.testrun.domain.EvaluationResult;
@@ -105,8 +104,6 @@ final class TestRunPersistenceMapper {
         return TestExecutionEntity.of(
                 source.id().snapshotId().value(),
                 source.status().name(),
-                source.applicationResponse() == null && source.evaluationResult() != null
-                        ? source.evaluationResult().action().name() : null,
                 source.applicationResponse() == null ? null : source.applicationResponse().value(),
                 source.evaluationResult() == null ? null : source.evaluationResult().action().name(),
                 source.error() == null ? null : source.error().stage().name(),
@@ -120,8 +117,6 @@ final class TestRunPersistenceMapper {
     static TestExecution toDomain(TestExecutionEntity source) {
         TestExecutionId id = new TestExecutionId(new TestCaseSnapshotId(source.snapshotId));
         TestExecutionStatus status = TestExecutionStatus.valueOf(source.resultStatus);
-        String evaluatorVerdict = source.evaluatorVerdict != null
-                ? source.evaluatorVerdict : source.actualAction;
         TestExecutionError error = source.errorCode == null ? null : new TestExecutionError(
                 source.errorStage == null
                         ? TestExecutionErrorStage.APPLICATION_TARGET
@@ -129,7 +124,12 @@ final class TestRunPersistenceMapper {
                 TestExecutionErrorCode.valueOf(source.errorCode),
                 source.errorMessage);
         return switch (status) {
-            case SUCCEEDED -> rehydrateSucceeded(source, id, evaluatorVerdict);
+            case SUCCEEDED -> TestExecution.succeeded(
+                    id,
+                    new ApplicationResponse(source.applicationResponse),
+                    new EvaluationResult(Action.valueOf(source.evaluatorVerdict)),
+                    source.startedAt,
+                    source.completedAt);
             case FAILED -> source.applicationResponse != null && error.stage() == TestExecutionErrorStage.EVALUATOR
                     ? TestExecution.failedAfterApplication(
                             id,
@@ -150,22 +150,4 @@ final class TestRunPersistenceMapper {
         };
     }
 
-    private static TestExecution rehydrateSucceeded(
-            TestExecutionEntity source,
-            TestExecutionId id,
-            String evaluatorVerdict) {
-        if (source.applicationResponse == null) {
-            return TestExecution.succeeded(
-                    id,
-                    new ActualResult(Action.valueOf(evaluatorVerdict)),
-                    source.startedAt,
-                    source.completedAt);
-        }
-        return TestExecution.succeeded(
-                id,
-                new ApplicationResponse(source.applicationResponse),
-                new EvaluationResult(Action.valueOf(evaluatorVerdict)),
-                source.startedAt,
-                source.completedAt);
-    }
 }

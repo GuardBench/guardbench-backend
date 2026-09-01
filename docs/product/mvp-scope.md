@@ -69,7 +69,7 @@ Completed TestRun A + Completed TestRun B
 
 ## 현재 구현과 후속 전환
 
-현재 코드는 `BEDROCK_GUARDRAIL`과 `HTTP_ENDPOINT`를 같은 Target abstraction으로 다루고, Bedrock Guardrail action을 Target `ActualResult`로 정규화한다. inline Evaluation Profile 해석은 없고, Quality Gate는 단일 Target 실행에서 `NOT_EVALUATED`이며 Regression API는 없다. 이는 목표 계약의 구현 완료 상태가 아니다.
+현재 코드는 OpenAI-compatible `HTTP_ENDPOINT` Application Target과 Bedrock Guardrail Evaluator를 분리하고, Application response를 Evaluator의 입력으로 사용해 `EvaluationResult`와 Assertion을 생성한다. Quality Gate와 Regression API는 각각 #118과 #119 범위다.
 
 - #114: EvaluatorReference 고정과 Guardrail Target 의존 제거
 - #115: HTTP Endpoint AI Application 실행과 자연어 응답 수집

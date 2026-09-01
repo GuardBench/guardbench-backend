@@ -17,7 +17,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import com.guardbench.testrun.application.port.out.NextTestCaseSnapshotIdPort;
 import com.guardbench.testrun.application.port.out.NextTestRunIdPort;
 import com.guardbench.testrun.domain.Action;
-import com.guardbench.testrun.domain.ActualResult;
 import com.guardbench.testrun.domain.ApplicationResponse;
 import com.guardbench.testrun.domain.EvaluationResult;
 import com.guardbench.testrun.domain.ExpectedResult;
@@ -107,14 +106,16 @@ class TestRunPersistenceAdapterIntegrationTest {
 
         TestExecution execution = TestExecution.succeeded(
                 new TestExecutionId(snapshot.id()),
-                new ActualResult(Action.ALLOW),
+                new ApplicationResponse("natural language response"),
+                new EvaluationResult(Action.ALLOW),
                 CREATED_AT.plusSeconds(1),
                 CREATED_AT.plusSeconds(2));
         executionRepository.save(execution);
 
         TestExecution restored = executionRepository.findById(execution.id()).orElseThrow();
         assertEquals(execution.status(), restored.status());
-        assertEquals(execution.actualResult(), restored.actualResult());
+        assertEquals(execution.applicationResponse(), restored.applicationResponse());
+        assertEquals(execution.evaluationResult(), restored.evaluationResult());
         assertEquals(execution.startedAt(), restored.startedAt());
         assertEquals(execution.completedAt(), restored.completedAt());
     }

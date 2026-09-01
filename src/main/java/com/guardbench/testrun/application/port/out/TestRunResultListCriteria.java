@@ -33,20 +33,6 @@ public record TestRunResultListCriteria(
         sort = normalizeSort(sort);
     }
 
-    public TestRunResultListCriteria(
-            String nameContains,
-            String inputContains,
-            String category,
-            Action expectedAction,
-            Severity severity,
-            TestExecutionStatus executionStatus,
-            String assertionStatusCode,
-            List<SortOrder<TestRunResultSortField>> sort,
-            PageCriteria page) {
-        this(nameContains, inputContains, category, expectedAction, severity, executionStatus,
-                assertionStatusCode, null, sort, page);
-    }
-
     public static TestRunResultListCriteria firstPage() {
         return new TestRunResultListCriteria(
                 null, null, null, null, null, null, null, null, List.of(), PageCriteria.firstPage());

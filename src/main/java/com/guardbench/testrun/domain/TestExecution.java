@@ -46,19 +46,6 @@ public final class TestExecution {
                 null, startedAt, completedAt);
     }
 
-    /**
-     * Legacy completion factory retained for already persisted pre-evaluator history and old callers.
-     */
-    public static TestExecution succeeded(
-            TestExecutionId id,
-            ActualResult actualResult,
-            Instant startedAt,
-            Instant completedAt
-    ) {
-        return new TestExecution(id, TestExecutionStatus.SUCCEEDED, null,
-                new EvaluationResult(actualResult.action()), null, startedAt, completedAt);
-    }
-
     public static TestExecution failed(
             TestExecutionId id,
             TestExecutionError error,
@@ -131,12 +118,6 @@ public final class TestExecution {
 
     public EvaluationResult evaluationResult() {
         return evaluationResult;
-    }
-
-    /** @deprecated use {@link #evaluationResult()} for the evaluator verdict. */
-    @Deprecated
-    public ActualResult actualResult() {
-        return evaluationResult == null ? null : new ActualResult(evaluationResult.action());
     }
 
     public TestExecutionError error() {

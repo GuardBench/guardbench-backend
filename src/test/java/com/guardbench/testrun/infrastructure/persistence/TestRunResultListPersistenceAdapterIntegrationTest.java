@@ -71,7 +71,7 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
         insertExecution(90_012L, "FAILED", null, "PROVIDER_ERROR", "오류");
 
         PageResult<TestRunResultItem> result = port.load(80_011L, new TestRunResultListCriteria(
-                null, null, null, null, null, null, "FAIL",
+                null, null, null, null, null, null, "FAIL", null,
                 List.of(), com.guardbench.testrun.application.port.out.PageCriteria.firstPage()));
 
         assertEquals(List.of(90_011L), result.items().stream().map(TestRunResultItem::snapshotId).toList());
@@ -88,7 +88,7 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
         insertExecution(90_022L, "SUCCEEDED", "BLOCK", null, null);
 
         PageResult<TestRunResultItem> result = port.load(80_021L, new TestRunResultListCriteria(
-                null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null,
                 List.of(SortOrder.asc(TestRunResultSortField.SEVERITY)),
                 com.guardbench.testrun.application.port.out.PageCriteria.firstPage()));
 
@@ -160,15 +160,16 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
     }
 
     private void insertExecution(
-            long snapshotId, String status, String actualAction,
+            long snapshotId, String status, String evaluatorVerdict,
             String errorCode, String errorMessage) {
         jdbcTemplate.update("""
                 INSERT INTO test_execution (
-                    snapshot_id, result_status, actual_action, error_code,
-                    error_message, started_at, completed_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, snapshotId, status, actualAction, errorCode, errorMessage,
-                Timestamp.from(T0), Timestamp.from(T0));
+                    snapshot_id, result_status, application_response, evaluator_verdict,
+                    error_code, error_message, started_at, completed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, snapshotId, status,
+                evaluatorVerdict == null ? null : "stored application response",
+                evaluatorVerdict, errorCode, errorMessage, Timestamp.from(T0), Timestamp.from(T0));
     }
 
     private void insertModernExecution(long snapshotId, String evaluatorVerdict, String applicationResponse) {

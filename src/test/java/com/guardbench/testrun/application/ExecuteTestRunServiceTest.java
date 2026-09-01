@@ -34,8 +34,9 @@ import com.guardbench.testrun.application.port.out.TargetProviderException;
 import com.guardbench.testrun.application.port.out.LoadExecutionContextPort;
 import com.guardbench.testrun.application.port.out.OutboxEventRecord;
 import com.guardbench.testrun.application.port.out.OutboxPort;
-import com.guardbench.testrun.domain.ActualResult;
 import com.guardbench.testrun.domain.Action;
+import com.guardbench.testrun.domain.ApplicationResponse;
+import com.guardbench.testrun.domain.EvaluationResult;
 import com.guardbench.testrun.domain.TestExecutionErrorStage;
 import com.guardbench.testrun.domain.TestCaseSnapshotId;
 import com.guardbench.testrun.domain.TestExecution;
@@ -153,7 +154,7 @@ class ExecuteTestRunServiceTest {
             // terminal TestExecution이 저장되었다
             TestExecution saved = executionRepository.savedExecutions().getFirst();
             assertEquals(TestExecutionStatus.SUCCEEDED, saved.status());
-            assertEquals(new ActualResult(Action.ALLOW), saved.actualResult());
+            assertEquals(new EvaluationResult(Action.ALLOW), saved.evaluationResult());
             assertEquals(FIXED_NOW, saved.startedAt());
             assertEquals(FIXED_NOW, saved.completedAt());
 
@@ -180,7 +181,7 @@ class ExecuteTestRunServiceTest {
 
             TestExecution saved = executionRepository.savedExecutions().getFirst();
             assertEquals(TestExecutionStatus.SUCCEEDED, saved.status());
-            assertEquals(new ActualResult(Action.BLOCK), saved.actualResult());
+            assertEquals(new EvaluationResult(Action.BLOCK), saved.evaluationResult());
         }
 
         @Test
@@ -208,7 +209,8 @@ class ExecuteTestRunServiceTest {
         void alreadyTerminal() {
             TestExecutionId id = new TestExecutionId(new TestCaseSnapshotId(SNAPSHOT_ID));
             executionRepository.store(
-                    TestExecution.succeeded(id, new ActualResult(Action.ALLOW), FIXED_NOW, FIXED_NOW)
+                    TestExecution.succeeded(id, new ApplicationResponse("response"),
+                            new EvaluationResult(Action.ALLOW), FIXED_NOW, FIXED_NOW)
             );
 
             ExecuteTestRunService.ExecutionOutcome outcome =

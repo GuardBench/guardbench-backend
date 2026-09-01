@@ -11,7 +11,6 @@ import jakarta.persistence.Table;
 class TestExecutionEntity {
     @Id Long snapshotId;
     String resultStatus;
-    String actualAction;
     String applicationResponse;
     String evaluatorVerdict;
     String errorStage;
@@ -26,7 +25,6 @@ class TestExecutionEntity {
     private TestExecutionEntity(
             Long snapshotId,
             String resultStatus,
-            String actualAction,
             String applicationResponse,
             String evaluatorVerdict,
             String errorStage,
@@ -37,7 +35,6 @@ class TestExecutionEntity {
     ) {
         this.snapshotId = snapshotId;
         this.resultStatus = resultStatus;
-        this.actualAction = actualAction;
         this.applicationResponse = applicationResponse;
         this.evaluatorVerdict = evaluatorVerdict;
         this.errorStage = errorStage;
@@ -50,7 +47,6 @@ class TestExecutionEntity {
     static TestExecutionEntity of(
             Long snapshotId,
             String resultStatus,
-            String actualAction,
             String applicationResponse,
             String evaluatorVerdict,
             String errorStage,
@@ -59,7 +55,7 @@ class TestExecutionEntity {
             Instant startedAt,
             Instant completedAt
     ) {
-        return new TestExecutionEntity(snapshotId, resultStatus, actualAction, applicationResponse,
+        return new TestExecutionEntity(snapshotId, resultStatus, applicationResponse,
                 evaluatorVerdict, errorStage, errorCode, errorMessage, startedAt, completedAt);
     }
 }

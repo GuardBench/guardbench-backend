@@ -56,7 +56,6 @@ public class ExecuteTestRunService {
     private final OutboxPort outboxPort;
     private final TransactionalPhasePort transactionalPhasePort;
     private final Clock clock;
-    private final boolean legacyCompatibility;
 
     public ExecuteTestRunService(
             ExecutionClaimPort executionClaimPort,
@@ -67,29 +66,6 @@ public class ExecuteTestRunService {
             OutboxPort outboxPort,
             TransactionalPhasePort transactionalPhasePort,
             Clock clock
-    ) {
-        this(
-                executionClaimPort,
-                testExecutionRepository,
-                loadExecutionContextPort,
-                targetExecutionPort,
-                evaluatorExecutionPort,
-                outboxPort,
-                transactionalPhasePort,
-                clock,
-                false);
-    }
-
-    private ExecuteTestRunService(
-            ExecutionClaimPort executionClaimPort,
-            TestExecutionRepository testExecutionRepository,
-            LoadExecutionContextPort loadExecutionContextPort,
-            TargetExecutionPort targetExecutionPort,
-            EvaluatorExecutionPort evaluatorExecutionPort,
-            OutboxPort outboxPort,
-            TransactionalPhasePort transactionalPhasePort,
-            Clock clock,
-            boolean legacyCompatibility
     ) {
         this.executionClaimPort = Objects.requireNonNull(executionClaimPort);
         this.testExecutionRepository = Objects.requireNonNull(testExecutionRepository);
@@ -99,40 +75,6 @@ public class ExecuteTestRunService {
         this.outboxPort = Objects.requireNonNull(outboxPort);
         this.transactionalPhasePort = Objects.requireNonNull(transactionalPhasePort);
         this.clock = Objects.requireNonNull(clock);
-        this.legacyCompatibility = legacyCompatibility;
-    }
-
-    /**
-     * Legacy constructor retained for callers that predate the Evaluator Port. New worker
-     * wiring must provide an explicit EvaluatorExecutionPort.
-     */
-    @Deprecated
-    public ExecuteTestRunService(
-            ExecutionClaimPort executionClaimPort,
-            TestExecutionRepository testExecutionRepository,
-            LoadExecutionContextPort loadExecutionContextPort,
-            TargetExecutionPort targetExecutionPort,
-            OutboxPort outboxPort,
-            TransactionalPhasePort transactionalPhasePort,
-            Clock clock
-    ) {
-        this(
-                executionClaimPort,
-                testExecutionRepository,
-                loadExecutionContextPort,
-                targetExecutionPort,
-                request -> legacyEvaluatorResult(request.applicationResponse()),
-                outboxPort,
-                transactionalPhasePort,
-                clock,
-                true);
-    }
-
-    private static EvaluatorExecutionResult legacyEvaluatorResult(String applicationResponse) {
-        if ("ALLOW".equals(applicationResponse) || "BLOCK".equals(applicationResponse)) {
-            return EvaluatorExecutionResult.succeeded(applicationResponse);
-        }
-        return EvaluatorExecutionResult.failed(EvaluatorFailureCode.PROVIDER_RESPONSE_INVALID);
     }
 
     public ExecutionOutcome execute(long snapshotId) {
@@ -225,16 +167,14 @@ public class ExecuteTestRunService {
     private EvaluatorExecutionNormalization callEvaluator(
             ExecutionContext context,
             ApplicationResponse applicationResponse) {
-        if (!legacyCompatibility && (context.evaluatorReference() == null || context.evaluatorReference().isBlank())) {
+        if (context.evaluatorReference() == null || context.evaluatorReference().isBlank()) {
             return EvaluatorResultNormalizer.normalize(
                     EvaluatorExecutionResult.failed(EvaluatorFailureCode.EVALUATOR_NOT_FOUND));
         }
 
         try {
-            String reference = context.evaluatorReference() == null
-                    ? "legacy-evaluator" : context.evaluatorReference();
             EvaluatorExecutionResult result = evaluatorExecutionPort.evaluate(new EvaluatorExecutionRequest(
-                    new EvaluatorReference(reference), applicationResponse.value()));
+                    new EvaluatorReference(context.evaluatorReference()), applicationResponse.value()));
             return EvaluatorResultNormalizer.normalize(result);
         } catch (RuntimeException exception) {
             return EvaluatorResultNormalizer.normalize(

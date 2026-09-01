@@ -16,20 +16,6 @@ public record TestRunResultItem(
         TestExecutionView execution,
         String assertionStatusCode,
         String evaluationOutcomeCode) {
-    public TestRunResultItem(
-            long snapshotId,
-            long testCaseId,
-            String name,
-            String input,
-            Action expectedAction,
-            Severity severity,
-            String category,
-            TestExecutionView execution,
-            String assertionStatusCode) {
-        this(snapshotId, testCaseId, name, input, expectedAction, severity, category,
-                execution, assertionStatusCode, null);
-    }
-
     public TestRunResultItem {
         if (snapshotId <= 0 || testCaseId <= 0) {
             throw new IllegalArgumentException("snapshotId and testCaseId must be positive");

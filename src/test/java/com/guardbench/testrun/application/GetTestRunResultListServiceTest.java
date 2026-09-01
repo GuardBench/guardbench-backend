@@ -37,8 +37,8 @@ class GetTestRunResultListServiceTest {
         TestRunDetail finishedTestRun = detailWithStatus(TestRunStatus.FINISHED);
         TestRunResultItem resultItem = new TestRunResultItem(
                 1001L, 10L, "case", "input", Action.BLOCK, Severity.HIGH, "category",
-                new TestExecutionView(TestExecutionStatus.SUCCEEDED, Action.ALLOW, null, null),
-                "FAIL");
+                new TestExecutionView(TestExecutionStatus.SUCCEEDED, Action.ALLOW, null, null, null),
+                "FAIL", "FALSE_NEGATIVE");
         PageResult<TestRunResultItem> expected =
                 PageResult.of(List.of(resultItem), new PageCriteria(1, 20), 1L);
         LoadTestRunDetailPort detailPort = testRunId -> Optional.of(finishedTestRun);

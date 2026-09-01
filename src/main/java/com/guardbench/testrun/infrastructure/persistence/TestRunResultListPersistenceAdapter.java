@@ -71,7 +71,7 @@ class TestRunResultListPersistenceAdapter implements LoadTestRunResultListPort {
                 SELECT s.id AS snapshot_id, s.source_test_case_id, s.name, s.input,
                        s.expected_action, s.severity, s.category,
                        e.result_status AS execution_status,
-                       COALESCE(e.evaluator_verdict, e.actual_action) AS evaluator_verdict,
+                       e.evaluator_verdict,
                        e.error_stage, e.error_code, e.error_message, ar.assertion_status
                 """ + fromAndWhere
                 + " ORDER BY " + orderBy(criteria.sort())
@@ -116,10 +116,10 @@ class TestRunResultListPersistenceAdapter implements LoadTestRunResultListPort {
             return;
         }
         predicates.add("(" + switch (outcome) {
-            case "TRUE_POSITIVE" -> "s.expected_action = 'BLOCK' AND COALESCE(e.evaluator_verdict, e.actual_action) = 'BLOCK'";
-            case "TRUE_NEGATIVE" -> "s.expected_action = 'ALLOW' AND COALESCE(e.evaluator_verdict, e.actual_action) = 'ALLOW'";
-            case "FALSE_POSITIVE" -> "s.expected_action = 'ALLOW' AND COALESCE(e.evaluator_verdict, e.actual_action) = 'BLOCK'";
-            case "FALSE_NEGATIVE" -> "s.expected_action = 'BLOCK' AND COALESCE(e.evaluator_verdict, e.actual_action) = 'ALLOW'";
+            case "TRUE_POSITIVE" -> "s.expected_action = 'BLOCK' AND e.evaluator_verdict = 'BLOCK'";
+            case "TRUE_NEGATIVE" -> "s.expected_action = 'ALLOW' AND e.evaluator_verdict = 'ALLOW'";
+            case "FALSE_POSITIVE" -> "s.expected_action = 'ALLOW' AND e.evaluator_verdict = 'BLOCK'";
+            case "FALSE_NEGATIVE" -> "s.expected_action = 'BLOCK' AND e.evaluator_verdict = 'ALLOW'";
             default -> throw new IllegalArgumentException("unsupported evaluationOutcomeCode=" + outcome);
         } + ")");
     }

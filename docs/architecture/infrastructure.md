@@ -235,7 +235,7 @@ from outbox_event
 where status = 'PENDING';
 ```
 
-이 query는 V2 migration의 `outbox_event(status, created_at)` 계약과 일치한다. 입력, ActualResult, Guardrail 설정 전문, secret과 SDK 예외의 credential 값은 로그에 남기지 않는다.
+이 query는 V2 migration의 `outbox_event(status, created_at)` 계약과 일치한다. 입력, Application response, EvaluationResult, Guardrail 설정 전문, secret과 SDK 예외의 credential 값은 로그에 남기지 않는다.
 
 ## 기존 IaC에서 반드시 고칠 항목
 

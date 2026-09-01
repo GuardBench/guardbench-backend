@@ -70,4 +70,4 @@ HTTP 오류 ≠ Application 실행 오류 ≠ Evaluator 오류 ≠ Assertion FAI
 
 ## 현재 구현
 
-현재 코드는 Bedrock Guardrail action을 Target `ActualResult`로 저장해 ExpectedResult와 Assertion하고, 단일 Target Quality Gate를 항상 `NOT_EVALUATED`로 저장한다. [OpenAPI](../api/openapi.yaml)는 합의된 목표 EvaluationResult·Quality Gate·Regression 계약을 먼저 정의하며, Java·DB와의 차이는 #114~#119에서 해소한다.
+현재 코드는 Application response를 내부 execution에 저장하고 Bedrock Guardrail Evaluator가 만든 `EvaluationResult`를 ExpectedResult와 Assertion에 사용한다. 단일 TestRun Quality Gate와 Regression은 각각 #118과 #119 범위다.

@@ -15,17 +15,19 @@ class TestExecutionTest {
     private static final Instant COMPLETED_AT = Instant.parse("2026-08-25T00:00:01Z");
 
     @Test
-    @DisplayName("SUCCEEDED 실행은 ActualResult와 Application Clock lifecycle 시각만 가진다")
-    void succeededExecutionContainsActualResultAndApplicationTimeline() {
+    @DisplayName("SUCCEEDED 실행은 Application response, Evaluator verdict와 lifecycle 시각을 가진다")
+    void succeededExecutionContainsApplicationAndEvaluationResults() {
         TestExecution execution = TestExecution.succeeded(
                 executionId(),
-                new ActualResult(Action.ALLOW),
+                new ApplicationResponse("natural language response"),
+                new EvaluationResult(Action.ALLOW),
                 STARTED_AT,
                 COMPLETED_AT
         );
 
         assertEquals(TestExecutionStatus.SUCCEEDED, execution.status());
-        assertEquals(new ActualResult(Action.ALLOW), execution.actualResult());
+        assertEquals(new ApplicationResponse("natural language response"), execution.applicationResponse());
+        assertEquals(new EvaluationResult(Action.ALLOW), execution.evaluationResult());
         assertNull(execution.error());
         assertEquals(STARTED_AT, execution.startedAt());
         assertEquals(COMPLETED_AT, execution.completedAt());
@@ -47,7 +49,7 @@ class TestExecutionTest {
         );
 
         assertEquals(TestExecutionStatus.FAILED, execution.status());
-        assertNull(execution.actualResult());
+        assertNull(execution.evaluationResult());
         assertEquals(error, execution.error());
         assertEquals(STARTED_AT, execution.startedAt());
         assertEquals(COMPLETED_AT, execution.completedAt());
@@ -79,7 +81,8 @@ class TestExecutionTest {
                 NullPointerException.class,
                 () -> TestExecution.succeeded(
                         executionId(),
-                        new ActualResult(Action.ALLOW),
+                        new ApplicationResponse("response"),
+                        new EvaluationResult(Action.ALLOW),
                         null,
                         COMPLETED_AT
                 )
@@ -101,12 +104,13 @@ class TestExecutionTest {
     }
 
     @Test
-    @DisplayName("NOT_STARTED 실행은 ActualResult, 오류와 lifecycle 시각을 모두 가지지 않는다")
+    @DisplayName("NOT_STARTED 실행은 Application response, verdict, 오류와 lifecycle 시각을 가지지 않는다")
     void notStartedExecutionContainsNeitherResultErrorNorTimeline() {
         TestExecution execution = TestExecution.notStarted(executionId());
 
         assertEquals(TestExecutionStatus.NOT_STARTED, execution.status());
-        assertNull(execution.actualResult());
+        assertNull(execution.applicationResponse());
+        assertNull(execution.evaluationResult());
         assertNull(execution.error());
         assertNull(execution.startedAt());
         assertNull(execution.completedAt());

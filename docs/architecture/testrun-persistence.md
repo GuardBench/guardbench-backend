@@ -32,7 +32,7 @@
 | HTTP Endpoint Target schema | `src/main/resources/db/migration/V4__http_endpoint_target.sql`, `V7__openai_compatible_http_target.sql`, `V8__require_http_target_model.sql` | `HTTP_ENDPOINT` provider table, OpenAI-compatible `model` 저장 및 `NOT NULL` 제약 |
 | HTTP Endpoint URL constraint | `src/main/resources/db/migration/V5__strengthen_http_endpoint_url_constraint.sql` | `endpoint_url`의 HTTP/HTTPS scheme과 host 형태 DB 제약 강화 |
 | Evaluator reference and Profile snapshot | `src/main/resources/db/migration/V6__evaluator_reference_and_profile.sql` | Evaluator provider/revision 고정, TestRun profile snapshot 및 HTTP Target revision |
-| Application/Evaluator execution result | `src/main/resources/db/migration/V9__separate_application_and_evaluator_results.sql` | Application response, Evaluator verdict, 실패 단계와 기존 execution shape의 CHECK 제약 |
+| Application/Evaluator execution result | `src/main/resources/db/migration/V9__separate_application_and_evaluator_results.sql`, `V10__remove_legacy_actual_action.sql` | Application response, Evaluator verdict, 실패 단계와 legacy action column 제거 및 execution shape CHECK 제약 |
 | ERD | [PlantUML ERD](../diagrams/guardbench-mvp-physical-erd.puml) | migration 적용 후 관계와 cardinality |
 | TestRun write adapters | `testrun/infrastructure/persistence` | TestRun, Snapshot, TestExecution, idempotency, Outbox, claim Adapter |
 | Target/Evaluator adapters | `target/infrastructure/persistence`, `testrun/infrastructure/evaluator` | HTTP Target 등록, operator catalog 해석과 immutable EvaluatorReference persistence |

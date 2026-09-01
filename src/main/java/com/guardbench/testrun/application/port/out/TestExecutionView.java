@@ -10,14 +10,6 @@ public record TestExecutionView(
         String errorCode,
         String errorMessage) {
 
-    public TestExecutionView(
-            TestExecutionStatus status,
-            Action actualAction,
-            String errorCode,
-            String errorMessage) {
-        this(status, actualAction, null, errorCode, errorMessage);
-    }
-
     public TestExecutionView {
         if (status == null) {
             throw new IllegalArgumentException("execution status must not be null");
@@ -33,9 +25,4 @@ public record TestExecutionView(
         }
     }
 
-    /** @deprecated use {@link #evaluatorVerdict()} */
-    @Deprecated
-    public Action actualAction() {
-        return evaluatorVerdict;
-    }
 }

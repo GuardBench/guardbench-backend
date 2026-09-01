@@ -129,8 +129,9 @@ class PartialCompletionProgressIntegrationTest {
 
     private void insertSucceededExecution(long snapshotId) {
         jdbcTemplate.update("""
-                INSERT INTO test_execution(snapshot_id, result_status, actual_action, started_at, completed_at)
-                VALUES (?, 'SUCCEEDED', 'ALLOW', ?, ?)
+                INSERT INTO test_execution(snapshot_id, result_status, application_response, evaluator_verdict,
+                    started_at, completed_at)
+                VALUES (?, 'SUCCEEDED', 'stored application response', 'ALLOW', ?, ?)
                 """, snapshotId, Timestamp.from(NOW), Timestamp.from(NOW));
     }
 
