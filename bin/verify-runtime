@@ -21,7 +21,7 @@ test -f "$root/performance/datasets/baseline-v1.yaml"
 test -f "$root/http/testsets/notion-testset-import.http"
 cd "$root"
 "$root/runtime/bin/python3" -c 'import performance.runner'
-"$root/bin/gradle" resolvePerformanceRuntime --dry-run >/dev/null
+"$root/bin/gradle" resolvePerformanceRuntime >/dev/null
 PERF_TARGET_URL=https://artifact.verify.invalid/v1/chat/completions \
 PERF_TARGET_MODEL=artifact-verify-model \
 PERF_TARGET_REVISION=artifact-verify \
