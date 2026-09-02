@@ -22,12 +22,14 @@ public record SqsProperties(
         Outbox outbox
 ) {
 
+    private static final int DEFAULT_VISIBILITY_TIMEOUT_SECONDS = 90;
+
     public SqsProperties {
         if (region == null || region.isBlank()) {
             region = "ap-northeast-2";
         }
         if (polling == null) {
-            polling = new Polling(10, 20, 30);
+            polling = new Polling(10, 20, DEFAULT_VISIBILITY_TIMEOUT_SECONDS);
         }
         if (outbox == null) {
             outbox = new Outbox(10);
@@ -73,7 +75,7 @@ public record SqsProperties(
                 waitTimeSeconds = 20;
             }
             if (visibilityTimeoutSeconds <= 0) {
-                visibilityTimeoutSeconds = 30;
+                visibilityTimeoutSeconds = DEFAULT_VISIBILITY_TIMEOUT_SECONDS;
             }
         }
     }
