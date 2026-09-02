@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Team
-> Last reviewed: 2026-08-31
+> Last reviewed: 2026-09-02
 > Canonical source: GitHub
 > Origin: PR #20·#23 리뷰 사례, Issue #33 및 PR #77 회귀 개선 사례
 
@@ -13,11 +13,25 @@
 1. PR의 Issue, base/head, 변경 파일과 완료 조건을 확인한다.
 2. 변경과 직접 관련된 APPROVED 계약, 테스트와 공개 코드를 확인한다. DRAFT는 확정 근거로 사용하지 않는다.
 3. 실제 diff를 기준으로 계약 회귀, 데이터 손실, 보안, 동시성·트랜잭션, 주요 기능 오류를 먼저 찾는다.
-4. 리뷰 단위 커밋(Domain/Port, Adapter, Test, Docs)이 논리적으로 분리되어 있는지 확인한다.
-5. 테스트가 결함을 잡는지 확인하고, 실행하지 못한 검증은 남은 위험으로 기록한다.
-6. 스타일과 선호는 정확성 문제와 분리한다.
+4. SQS, Outbox, Worker, 외부 Provider 등 비동기/retry 변경이 있으면 retry 계층 중복, idempotency, transient/permanent failure 구분, retry exhaustion의 terminal convergence, timeout/visibility/lease 관계를 함께 검토한다.
+5. 리뷰 단위 커밋(Domain/Port, Adapter, Test, Docs)이 논리적으로 분리되어 있는지 확인한다.
+6. 테스트가 결함을 잡는지 확인하고, 실행하지 못한 검증은 남은 위험으로 기록한다.
+7. 스타일과 선호는 정확성 문제와 분리한다.
 
 PR 설명이나 주석만 믿지 않는다. 결함으로 단정하려면 재현 가능한 동작, 코드 경로, 테스트 또는 계약 근거가 있어야 한다. 가능성만 있는 우려는 `질문` 또는 `미검증 위험`으로 표시한다.
+
+### 비동기/retry 리뷰 지침
+
+- delivery retry와 business retry가 같은 counter/state로 결합되어 있지 않은지 확인한다.
+- 동일 작업의 재시도가 side effect를 중복시키지 않도록 idempotency 경계가 있는지 확인한다.
+- 여러 계층이 같은 실패를 동시에 retry해 호출량이나 메시지 수를 증폭시키지 않는지 확인한다.
+- retryable failure가 bounded되어 있고 최종 시도 이후 `FAILED`, `TIMED_OUT` 등 terminal 상태로 수렴하는지 확인한다.
+- 정상 중간 상태(`AlreadyHeld`, partial finalization 등)가 NACK/retry/DLQ 사유로 잘못 해석되지 않는지 확인한다.
+- timeout, SQS visibility timeout, claim lease처럼 서로 영향을 주는 값은 개별 설정이 아니라 cross-component contract로 검토한다.
+- 단순한 retry 횟수 증가 또는 `maxReceiveCount` 증가만으로 원인을 덮지 않았는지 확인한다.
+- 개별 상태 테스트뿐 아니라 duplicate delivery, timeout, claim contention 이후 eventual convergence를 검증하는 테스트가 있는지 확인한다.
+
+상세 배경과 테스트 모델은 [비동기 신뢰성 및 테스트 원칙](../architecture/async-reliability-and-testing.md)을 참고한다. 문서가 `DRAFT`인 동안에는 새로운 구현 요구사항의 단독 근거로 사용하지 않고, 현재 Issue/승인 계약과 함께 판단한다.
 
 ### 문맥 경계 지침 (PR #77 회귀 예시 반영)
 
@@ -96,4 +110,5 @@ Approve — Blocking 발견 없음.
 - Issue 범위 밖 개선을 승인 조건으로 만들지 않았는가
 - inline과 요약을 중복하지 않았는가
 - 발견이 없어도 미검증 영역을 숨기지 않았는가
+- 비동기/retry 변경에서 idempotency, retry amplification, terminal convergence, timeout/lease/visibility 관계를 검토했는가
 - 현재 PR/Issue 범위를 벗어난 무관한 이슈나 커밋을 언급하지 않았는가

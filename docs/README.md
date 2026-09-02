@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: KOSA AWS 3팀
-> Last reviewed: 2026-09-01
+> Last reviewed: 2026-09-02
 > Canonical source: GitHub
 > Origin: [Notion Dashboard](https://app.notion.com/p/3c0eeed6b62d80fbb64eec69796cc56d)
 
@@ -39,6 +39,7 @@
 | 아키텍처 | [시스템 개요](architecture/system-overview.md) | APPROVED | Backend | 2026-09-01 | [도메인 모델 정의](https://app.notion.com/p/3c0eeed6b62d81b48c03ed6034440936) |
 | 아키텍처 | [인프라](architecture/infrastructure.md) | APPROVED | Infra | 2026-08-27 | [인프라 구성 설계](https://app.notion.com/p/3c0eeed6b62d81269f60e1c69fbf9fcc) |
 | 아키텍처 | [TestRun Persistence 구현 인덱스](architecture/testrun-persistence.md) | APPROVED | Backend | 2026-09-01 | 없음 |
+| 아키텍처 | [비동기 신뢰성 및 테스트 원칙](architecture/async-reliability-and-testing.md) | DRAFT | Backend | 2026-09-02 | 없음 |
 | 계약 라우팅 | [비동기 TestRun 계약 맵](contracts/README.md) | APPROVED | Backend | 2026-08-31 | 없음 |
 | 통합 | [Bedrock Guardrails Adapter 설계 근거](integrations/bedrock-guardrails-adapter.md) | APPROVED | Backend | 2026-09-01 | 없음 |
 | 통합 | [HTTP Endpoint Application Target Adapter](integrations/http-endpoint-target.md) | APPROVED | Backend | 2026-09-01 | 없음 |
