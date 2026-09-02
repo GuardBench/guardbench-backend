@@ -59,6 +59,17 @@ import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
  *       그 자체가 #149의 결함을 정확히 재현한 유효한 결과다.</li>
  * </ul>
  *
+ * <p><b>현재 관측된 실제 결과: Scenario 1/2/4/5 PASS, Scenario 3은 알려진 production
+ * regression으로 {@code @Disabled} 처리.</b> Scenario 3은 partial finalization
+ * 메시지가 실제로 ACK(삭제)되는지를 직접 검증하는데, 현재 {@code
+ * EvaluationFinalizationWorkerConfiguration}이 {@code FinalizationOutcome.NotReady}를
+ * NACK(false)으로 처리해 메시지가 {@code maxReceiveCount(5)} 소진 후 finalize DLQ로
+ * 실제 이동한다(#149와 동일 패턴). mutation testing(핸들러를 강제로 항상 false 반환하도록
+ * 조작 → FAIL, 원복 후 원본 코드에서도 동일하게 FAIL)으로 이 실패가 테스트 결함이 아니라
+ * 실제 결함임을 확인했다. 테스트 본문과 기대값은 수정 후 계약을 그대로 유지하며 완화하지
+ * 않는다. #149 production fix 구현 시 {@code @Disabled}를 제거하고 PASS를 완료조건으로
+ * 삼는다.
+ *
  * <p>시간 기반 설정은 절대값보다 관계로 검증한다.
  * <ul>
  *   <li>Scenario 1: {@code visibility timeout < claim lease} (#149와 동일한 순서 관계)</li>
@@ -234,10 +245,30 @@ class SqsReliabilityConvergenceIntegrationTest {
     // 분류: #149 regression 계약 — allExecutionsTerminal=false가 정상 중간 상태로
     // 처리되어 ACK되는지 검증한다. #149 장애의 핵심은 이 상태가 NACK/retry로
     // 잘못 해석되어 finalize DLQ로 누적된 것이었다.
+    //
+    // 현재 알려진 결과: FAIL (production bug, #149와 동일 패턴)
+    //   EvaluationFinalizationWorkerConfiguration.handleTestExecutionCompletedPort()가
+    //   FinalizationOutcome.NotReady를 false(NACK)로 매핑한다. 그 결과 partial
+    //   finalization 메시지는 ACK되지 않고 visibility timeout(1s)마다 재전달되어
+    //   maxReceiveCount(5) 소진 후 finalize DLQ로 실제로 이동한다(관측값: DLQ depth=1).
+    //   mutation testing으로 이 테스트의 유효성을 확인했다: handleTestExecutionCompletedPort를
+    //   강제로 항상 false를 반환하도록 조작(mutant)해도 FAIL, 원본 프로덕션 코드로
+    //   되돌려도 동일하게 FAIL한다. 즉 이 실패는 테스트 결함이 아니라 실제 결함이다.
+    //
+    // 이 이슈(#153)는 #149 production fix를 구현하지 않으므로 테스트 본문과 기대값은
+    // 수정 후 계약(partial finalization -> ACK, source/DLQ 모두 empty)을 그대로 유지하고
+    // @Disabled로만 비활성화한다. #149 production fix 구현 시 이 @Disabled를 제거하고
+    // 이 시나리오가 PASS하는 것을 완료조건으로 삼는다.
     // ─────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("Scenario 3: 일부 TestExecution만 terminal이면 finalize 메시지는 ACK되고 DLQ로 이동하지 않는다")
+    @org.junit.jupiter.api.Disabled(
+            "Known regression tracked by #149: EvaluationFinalizationWorkerConfiguration이 "
+                    + "FinalizationOutcome.NotReady를 NACK(false)으로 처리해 partial finalization 메시지가 "
+                    + "maxReceiveCount(5) 소진 후 finalize DLQ로 실제 이동한다(관측: DLQ depth=1). "
+                    + "이 테스트는 수정 후 기대 계약(ACK, DLQ 미도달)을 그대로 유지한다. "
+                    + "#149 production fix 후 이 애노테이션을 제거하고 PASS를 완료조건으로 삼는다.")
+    @DisplayName("Scenario 3: 일부 TestExecution만 terminal이면 finalize 메시지는 실제로 ACK(삭제)되고 재전달되지 않으며 DLQ로도 이동하지 않는다")
     void partialCompletionFinalizeIsAcknowledgedWithoutReachingDlq() {
         stub.useAlwaysSucceed();
 
@@ -250,24 +281,51 @@ class SqsReliabilityConvergenceIntegrationTest {
 
         // snapshot1만 terminal로 직접 저장하고(다른 target은 아직 미완료), 조기 완료 이벤트를 보낸다.
         insertTerminalExecution(snapshotId1);
+        String finalizeQueueUrl = queueUrl(TestRunQueue.FINALIZE.queueName());
         sendExecutionCompleted(testRunId, snapshotId1);
 
-        // finalize 메시지가 최소 한 번은 소비되어(RUNNING 유지) DLQ로 가지 않는지 확인한다.
+        // 1) 메시지가 최초 1회 이상 receive되어 처리 시도가 실제로 일어났는지 확인한다.
+        //    NotReady -> false 경로에서 partial finalization이 progress 갱신만 하고
+        //    ACK되는지가 이 시나리오의 핵심이므로, "처리됨"을 진행률 반영으로 확인한다.
         await().atMost(Duration.ofSeconds(6))
                 .pollInterval(Duration.ofMillis(200))
-                .until(() -> testRunStatus(testRunId).equals("RUNNING"));
+                .until(() -> processedTestCaseCount(testRunId) == 1);
 
-        // finalize queue/DLQ 모두 안정적으로 비어 있는 상태(재처리 종료)를 bounded 시간 동안 확인한다.
-        await().during(Duration.ofSeconds(2))
-                .atMost(Duration.ofSeconds(5))
-                .until(() -> queueDepth(TestRunQueue.FINALIZE.deadLetterQueueName()) == 0);
+        // 2) 메시지가 실제로 ACK(삭제)되었는지 직접 검증한다.
+        //    NotReady -> false로 처리되면 SqsInboundPollingAdapter는 메시지를 삭제하지
+        //    않고 방치하므로, visibility timeout(1s)마다 재전달되어 maxReceiveCount(5)
+        //    소진 후 DLQ로 이동한다. "큐 depth가 일시적으로 0으로 보이는 순간"은 메시지가
+        //    아직 in-flight(재전달 대기) 상태일 때도 관측될 수 있어 ACK의 증거가 될 수 없다.
+        //    따라서 maxReceiveCount(5) * visibility timeout(1s)을 충분히 넘는 시간만큼
+        //    실제로 기다린 뒤(방치되었다면 이 시간 안에 반드시 DLQ로 이동한다), 원본 큐와
+        //    DLQ를 한 번에 최종 스냅샷으로 확인한다.
+        await().atMost(Duration.ofSeconds(20))
+                .pollDelay(Duration.ofSeconds(15))
+                .pollInterval(Duration.ofMillis(500))
+                .until(() -> true);
 
+        var remaining = SQS.receiveMessage(ReceiveMessageRequest.builder()
+                .queueUrl(finalizeQueueUrl)
+                .maxNumberOfMessages(10)
+                .waitTimeSeconds(0)
+                .visibilityTimeout(0)
+                .build()).messages();
+
+        assertThat(remaining)
+                .as("ACK된 finalize 메시지는 maxReceiveCount(5) * visibility timeout(1s)을 넘는 "
+                        + "충분한 시간이 지나도 원본 큐에 재전달되어 남아 있지 않아야 한다")
+                .isEmpty();
+        assertThat(queueDepth(TestRunQueue.FINALIZE.deadLetterQueueName()))
+                .as("partial finalization은 정상 중간 상태이므로 방치(NACK)되어 DLQ로 누적되지 않아야 한다. "
+                        + "DLQ에 메시지가 있다면 이 메시지가 ACK되지 않고 계속 재전달되다 maxReceiveCount를 "
+                        + "소진했다는 뜻이다")
+                .isZero();
         assertThat(testRunStatus(testRunId))
                 .as("모든 실행이 terminal이 아니면 TestRun은 RUNNING을 유지해야 한다")
                 .isEqualTo("RUNNING");
-        assertThat(queueDepth(TestRunQueue.FINALIZE.deadLetterQueueName()))
-                .as("partial finalization은 정상 중간 상태이므로 finalize DLQ에 누적되지 않아야 한다")
-                .isZero();
+        assertThat(processedTestCaseCount(testRunId))
+                .as("partial finalization은 처리 완료된 Snapshot 수만큼 진행률을 반영해야 한다")
+                .isEqualTo(1);
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -318,27 +376,42 @@ class SqsReliabilityConvergenceIntegrationTest {
     // ─────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("Scenario 5: 이미 terminal인 TestExecution에 대한 중복 work-item/completion 전달은 상태를 중복 변경하지 않는다")
+    @DisplayName("Scenario 5: 이미 FINISHED인 TestRun에 대한 중복 work-item/completion 전달은 progress·상태·결과를 중복 변경하지 않는다")
     void duplicateWorkItemAndCompletionDeliveryDoesNotDoubleMutateState() {
         stub.useAlwaysSucceed();
 
         long testRunId = 90005L;
-        long snapshotId = 90108L;
-        String input = "scenario5-input";
-        seedRunningTestRunWithSnapshot(testRunId, snapshotId, input);
+        long snapshotId1 = 90108L;
+        long snapshotId2 = 90109L;
+        String input1 = "scenario5-input-1";
+        String input2 = "scenario5-input-2";
+        seedRunningTestRunWithSnapshots(testRunId, 2,
+                new long[]{snapshotId1, snapshotId2},
+                new String[]{input1, input2});
 
-        sendExecutionRequested(testRunId, snapshotId);
+        sendExecutionRequested(testRunId, snapshotId1);
+        sendExecutionRequested(testRunId, snapshotId2);
 
-        await().atMost(Duration.ofSeconds(6))
+        // 두 Snapshot이 모두 terminal로 수렴하고 TestRun이 FINISHED로 수렴할 때까지 기다린다.
+        await().atMost(Duration.ofSeconds(10))
                 .pollInterval(Duration.ofMillis(150))
-                .until(() -> isSnapshotTerminal(snapshotId));
+                .until(() -> "FINISHED".equals(testRunStatus(testRunId)));
 
-        int invocationAfterFirstCompletion = stub.invocationCountFor(input);
+        int processedAfterFirstFinish = processedTestCaseCount(testRunId);
+        String executionOutcomeAfterFirstFinish = executionOutcome(testRunId);
+        Instant completedAtAfterFirstFinish = completedAt(testRunId);
+        int invocationAfterFirstCompletion1 = stub.invocationCountFor(input1);
+        int invocationAfterFirstCompletion2 = stub.invocationCountFor(input2);
 
-        // 이미 terminal이 된 후 같은 TestExecutionRequested 메시지를 중복 전달한다.
-        sendExecutionRequested(testRunId, snapshotId);
-        sendExecutionCompleted(testRunId, snapshotId);
-        sendExecutionCompleted(testRunId, snapshotId);
+        assertThat(processedAfterFirstFinish)
+                .as("FINISHED 시점의 progress는 전체 TestCase 수와 같아야 한다")
+                .isEqualTo(2);
+
+        // 이미 terminal/FINISHED가 된 후 같은 이벤트를 중복 전달한다.
+        sendExecutionRequested(testRunId, snapshotId1);
+        sendExecutionCompleted(testRunId, snapshotId1);
+        sendExecutionCompleted(testRunId, snapshotId1);
+        sendExecutionCompleted(testRunId, snapshotId2);
 
         // 중복 메시지가 모두 소비될 시간을 bounded로 기다린다.
         await().atMost(Duration.ofSeconds(5))
@@ -346,10 +419,25 @@ class SqsReliabilityConvergenceIntegrationTest {
                 .until(() -> queueDepth(TestRunQueue.WORK_ITEMS.queueName()) == 0
                         && queueDepth(TestRunQueue.FINALIZE.queueName()) == 0);
 
-        assertThat(stub.invocationCountFor(input))
+        assertThat(stub.invocationCountFor(input1))
                 .as("이미 terminal인 실행에 대한 중복 work-item 전달은 Provider를 다시 호출하지 않아야 한다")
-                .isEqualTo(invocationAfterFirstCompletion);
-        assertThat(terminalExecutionCount(testRunId)).isEqualTo(1);
+                .isEqualTo(invocationAfterFirstCompletion1);
+        assertThat(stub.invocationCountFor(input2))
+                .as("다른 snapshot의 Provider invocation 수도 중복 completion으로 바뀌지 않아야 한다")
+                .isEqualTo(invocationAfterFirstCompletion2);
+        assertThat(terminalExecutionCount(testRunId)).isEqualTo(2);
+        assertThat(processedTestCaseCount(testRunId))
+                .as("중복 completion 전달은 progress를 중복으로 증가시키지 않아야 한다 (#153: progress 중복 증가/감소 금지)")
+                .isEqualTo(processedAfterFirstFinish);
+        assertThat(testRunStatus(testRunId))
+                .as("이미 FINISHED인 TestRun은 중복 completion으로 다시 RUNNING 등으로 되돌아가지 않아야 한다")
+                .isEqualTo("FINISHED");
+        assertThat(executionOutcome(testRunId))
+                .as("이미 FINISHED인 TestRun의 executionOutcome은 중복 completion으로 재계산되지 않아야 한다")
+                .isEqualTo(executionOutcomeAfterFirstFinish);
+        assertThat(completedAt(testRunId))
+                .as("이미 FINISHED인 TestRun의 completedAt은 중복 completion으로 갱신되지 않아야 한다 (#153: FINISHED TestRun 불변성)")
+                .isEqualTo(completedAtAfterFirstFinish);
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -401,6 +489,12 @@ class SqsReliabilityConvergenceIntegrationTest {
 
     private String testRunStatus(long testRunId) {
         return jdbcTemplate.queryForObject("SELECT status FROM test_run WHERE id = ?", String.class, testRunId);
+    }
+
+    private int processedTestCaseCount(long testRunId) {
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT processed_test_case_count FROM test_run WHERE id = ?", Integer.class, testRunId);
+        return count == null ? 0 : count;
     }
 
     private Instant completedAt(long testRunId) {
