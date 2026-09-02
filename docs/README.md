@@ -67,7 +67,7 @@
 | [코드 스타일](conventions/code-style.md) | APPROVED | [코드 컨벤션](https://app.notion.com/p/3c0eeed6b62d816a8028cc3261c3edf3) |
 | [테스트 코드](conventions/test-code.md) | APPROVED | 없음 |
 | [DTO 네이밍](conventions/dto-naming.md) | APPROVED | [DTO 네이밍](https://app.notion.com/p/3c0eeed6b62d8153b1f4fdffc39e328e) |
-| [패키지 구조](conventions/package-structure.md) | APPROVED | [패키지 네이밍](https://app.notion.com/p/3c0eeed6b62d816a8028cc3261c3edf3) |
+| [패키지 구조](conventions/package-structure.md) | APPROVED | [패키지 네이밍](https://app.notion.com/p/3c0eeed6b62d81d59ec3cb3beb995c68) |
 | [API 공통 응답](conventions/api-response.md) | APPROVED | [API 공통 응답 DTO](https://app.notion.com/p/3c1eeed6b62d81e7abe2eea3d730c611) |
 | [애플리케이션 오류](conventions/application-errors.md) | APPROVED | [애플리케이션 오류 코드](https://app.notion.com/p/3c1eeed6b62d81d3a7c9f014bb788aa8) |
 
