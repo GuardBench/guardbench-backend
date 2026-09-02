@@ -10,6 +10,7 @@ from performance.runner.config import ConfigurationError, load_profile
 from performance.runner.dataset import load_seed_payload
 from performance.runner.cli import K6_THRESHOLD_FAILURE_EXIT_CODE, RunnerError, reset_database, run_k6
 from performance.runner.safety import migration_jdbc_url, validate_reset_safety
+from performance.runner.storage import RESULT_FILENAMES, ResultUploadError, upload_result_directory
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -171,6 +172,125 @@ class PerformanceRunnerTest(unittest.TestCase):
             with patch("performance.runner.cli.subprocess.run", return_value=completed):
                 with self.assertRaises(RunnerError):
                     run_k6(k6_profile(), "run-id", 1, "http://localhost", summary_path, ROOT.parent)
+
+    def test_completed_result_files_are_uploaded_to_the_run_prefix(self):
+        class FakeS3:
+            def __init__(self):
+                self.calls = []
+
+            def upload_file(self, filename, bucket, key):
+                self.calls.append((Path(filename).name, bucket, key))
+
+        with tempfile.TemporaryDirectory() as directory:
+            result_dir = Path(directory)
+            for filename in RESULT_FILENAMES:
+                (result_dir / filename).write_text("{}", encoding="utf-8")
+            client = FakeS3()
+
+            upload_result_directory(result_dir, "performance-results", "small-123", s3_client=client)
+
+        self.assertEqual(len(RESULT_FILENAMES), len(client.calls))
+        self.assertEqual(
+            ("result.json", "performance-results", "performance/results/small-123/result.json"),
+            client.calls[-2],
+        )
+
+    def test_result_upload_rejects_incomplete_runs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(ResultUploadError):
+                upload_result_directory(Path(directory), "performance-results", "small-123", s3_client=object())
+
+    def test_verify_runtime_checks_container_contract_inputs(self):
+        verify_runtime = (ROOT.parent / "bin" / "verify-runtime").read_text(encoding="utf-8")
+
+        self.assertIn("python3.11 --version", verify_runtime)
+        self.assertIn("k6 version", verify_runtime)
+        self.assertIn("psql --version", verify_runtime)
+        self.assertIn("java -version", verify_runtime)
+        self.assertIn("javac -version", verify_runtime)
+        self.assertIn("bin/run-performance", verify_runtime)
+        self.assertIn("src/main/resources/db/migration", verify_runtime)
+        self.assertIn("performance/profiles/small.yaml", verify_runtime)
+        self.assertIn("performance/datasets/baseline-v1.yaml", verify_runtime)
+
+    def test_container_launcher_uses_image_runtime(self):
+        launcher = (ROOT.parent / "bin" / "run-performance").read_text(encoding="utf-8")
+        gradle = (ROOT.parent / "bin" / "gradle").read_text(encoding="utf-8")
+
+        self.assertIn('export PYTHONPATH="$root${PYTHONPATH:+:$PYTHONPATH}"', launcher)
+        self.assertIn('exec python3.11 -m performance.runner.cli "$@"', launcher)
+        self.assertIn('export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$root/.gradle}"', gradle)
+        self.assertIn('--offline', gradle)
+
+    def test_dockerfile_is_a_directly_runnable_image(self):
+        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+
+        self.assertIn("ARG APP_REVISION=unknown", dockerfile)
+        self.assertIn("COPY performance performance", dockerfile)
+        self.assertIn("COPY src src", dockerfile)
+        self.assertIn("COPY gradle gradle", dockerfile)
+        self.assertIn('ENTRYPOINT ["python3.11", "-m", "performance.runner.cli"]', dockerfile)
+
+    def test_image_build_derives_tag_and_revision_from_repository_head(self):
+        build_script = (ROOT / "build-runner-image.sh").read_text(encoding="utf-8")
+        publish_script = (ROOT.parent / "bin" / "publish-runner-image").read_text(encoding="utf-8")
+
+        self.assertIn('[[ $# -ne 1 || -z "$1" ]]', build_script)
+        self.assertIn('repository="$1"', build_script)
+        self.assertIn('revision="$(git -C "$root" rev-parse HEAD)"', build_script)
+        self.assertIn('image_ref="${repository}:${revision}"', build_script)
+        self.assertNotIn('APP_REVISION:-', build_script)
+        self.assertIn('"$root/performance/Dockerfile"', build_script)
+        self.assertIn('--tag "$image_ref"', build_script)
+        self.assertIn('docker push "$1"', publish_script)
+        self.assertNotIn("guardbench", build_script)
+
+    def test_image_build_passes_one_git_sha_to_tag_and_revision(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fake_bin = Path(directory) / "bin"
+            fake_bin.mkdir()
+            docker_args = Path(directory) / "docker-args"
+            fake_docker = fake_bin / "docker"
+            fake_docker.write_text(
+                '#!/usr/bin/env bash\nprintf \'%s\\n\' "$@" > "$DOCKER_ARGS_FILE"\n',
+                encoding="utf-8",
+            )
+            fake_docker.chmod(0o755)
+            environment = dict(os.environ)
+            environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
+            environment["DOCKER_ARGS_FILE"] = str(docker_args)
+            environment["APP_REVISION"] = "caller-selected-revision"
+
+            completed = subprocess.run(
+                [str(ROOT / "build-runner-image.sh"), "registry.example/performance-runner"],
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            revision = subprocess.run(
+                ["git", "-C", str(ROOT.parent), "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            arguments = docker_args.read_text(encoding="utf-8").splitlines()
+            self.assertIn(f"registry.example/performance-runner:{revision}", arguments)
+            self.assertIn(f"APP_REVISION={revision}", arguments)
+            self.assertNotIn("caller-selected-revision", arguments)
+
+    def test_image_build_rejects_a_repository_with_a_caller_selected_tag(self):
+        completed = subprocess.run(
+            [str(ROOT / "build-runner-image.sh"), "registry.example/performance-runner:caller-tag"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(2, completed.returncode)
+        self.assertIn("must not include a tag", completed.stderr)
 
 
 if __name__ == "__main__":

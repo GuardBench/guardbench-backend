@@ -43,3 +43,10 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+tasks.register('resolvePerformanceRuntime') {
+	description = 'Resolves the runtime classpath required by offline performance Flyway bootRun.'
+	doLast {
+		configurations.runtimeClasspath.files
+	}
+}

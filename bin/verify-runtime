@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export PYTHONPATH="$root${PYTHONPATH:+:$PYTHONPATH}"
+
+command -v python3.11 >/dev/null
+command -v k6 >/dev/null
+command -v psql >/dev/null
+command -v java >/dev/null
+command -v javac >/dev/null
+python3.11 --version
+k6 version
+psql --version
+java -version
+javac -version
+test -x "$root/bin/gradle"
+test -x "$root/bin/run-performance"
+test -f "$root/gradlew"
+test -d "$root/gradle/wrapper"
+test -d "$root/src/main/resources/db/migration"
+test -f "$root/performance/profiles/small.yaml"
+test -f "$root/performance/datasets/baseline-v1.yaml"
+test -f "$root/http/testsets/notion-testset-import.http"
+cd "$root"
+python3.11 -c 'import performance.runner'
+"$root/bin/gradle" resolvePerformanceRuntime >/dev/null
+PERF_TARGET_URL=https://artifact.verify.invalid/v1/chat/completions \
+PERF_TARGET_MODEL=artifact-verify-model \
+PERF_TARGET_REVISION=artifact-verify \
+  "$root/bin/run-performance" --dry-run --result-dir "$(mktemp -d)/dry-run" >/dev/null
+echo "GuardBench Performance Runner container verification passed."
