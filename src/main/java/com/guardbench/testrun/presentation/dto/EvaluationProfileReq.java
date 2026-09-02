@@ -14,7 +14,7 @@ import com.guardbench.testrun.domain.EvaluationProfile;
 public record EvaluationProfileReq(
         @NotEmpty(message = "evaluationProfile.checks는 하나 이상 필요합니다.")
         @UniqueElements(message = "evaluationProfile.checks에는 중복 값이 있을 수 없습니다.")
-        List<@Pattern(regexp = "PROMPT_INJECTION|PII_LEAKAGE|HARMFUL_CONTENT",
+        List<@Pattern(regexp = "PII_LEAKAGE|HARMFUL_CONTENT",
                 message = "지원하지 않는 evaluationProfile.checks입니다.") String> checks,
         @NotBlank(message = "evaluationProfile.strictness는 필수입니다.")
         @Pattern(regexp = "RELAXED|STANDARD|STRICT", message = "지원하지 않는 evaluationProfile.strictness입니다.")
