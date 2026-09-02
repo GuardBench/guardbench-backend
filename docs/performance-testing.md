@@ -95,6 +95,19 @@ python3 -m performance.runner.cli --dry-run
 python3 -m performance.runner.cli --reset
 ```
 
+Performance API가 internal ALB 뒤에 있으면 Worker 설정의
+`guardbench.http-endpoint.allowed-private-hostnames`에 ALB의 전체 hostname을 정확히
+등록한다. `allow-private-addresses=true`를 사용하지 않으며, wildcard나 private IP를
+allowlist에 등록하지 않는다. 예를 들어 배포 환경 설정은 다음과 같다.
+
+```yaml
+guardbench:
+  http-endpoint:
+    allow-private-addresses: false
+    allowed-private-hostnames:
+      - internal-performance-api-123.ap-northeast-2.elb.amazonaws.com
+```
+
 실행 결과는 `performance/results/<run-id>/`에 `profile.yaml`, `dataset.yaml`,
 `k6-summary.json`, `aws-metrics.json`, `result.json`, `report.md`로 저장한다. `report.md`의
 Application/Infrastructure revision은 `APP_REVISION`, `INFRA_REVISION` 환경변수로 주입한다.
