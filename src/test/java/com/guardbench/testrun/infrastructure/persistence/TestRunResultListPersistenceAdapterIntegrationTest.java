@@ -15,6 +15,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.guardbench.testrun.application.port.out.EvaluatorMetricsView;
+import com.guardbench.testrun.application.port.out.LoadTestRunEvaluatorMetricsPort;
 import com.guardbench.testrun.application.port.out.LoadTestRunResultListPort;
 import com.guardbench.testrun.application.port.out.PageResult;
 import com.guardbench.testrun.application.port.out.SortOrder;
@@ -38,6 +40,8 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
 
     @Autowired
     private LoadTestRunResultListPort port;
+    @Autowired
+    private LoadTestRunEvaluatorMetricsPort metricsPort;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -113,6 +117,56 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
         TestRunResultItem item = result.items().getFirst();
         assertEquals("BLOCK", item.execution().evaluatorVerdict().name());
         assertEquals("TRUE_POSITIVE", item.evaluationOutcomeCode());
+    }
+
+    @Test
+    @DisplayName("전체 TestRun 결과를 TP/TN/FP/FN으로 집계하고 verdict 없는 실행은 제외한다")
+    void aggregatesAllStoredVerdictsAcrossTestRun() {
+        insertSuite(70_041L);
+        insertTestRun(80_041L, 70_041L);
+        insertSnapshot(90_041L, 80_041L, 1L, "tp1", "input", "BLOCK", "LOW", "PII");
+        insertModernExecution(90_041L, "BLOCK", "response");
+        insertSnapshot(90_042L, 80_041L, 2L, "tp2", "input", "BLOCK", "LOW", "PII");
+        insertModernExecution(90_042L, "BLOCK", "response");
+        insertSnapshot(90_043L, 80_041L, 3L, "tn1", "input", "ALLOW", "LOW", "PII");
+        insertModernExecution(90_043L, "ALLOW", "response");
+        insertSnapshot(90_044L, 80_041L, 4L, "tn2", "input", "ALLOW", "LOW", "PII");
+        insertModernExecution(90_044L, "ALLOW", "response");
+        insertSnapshot(90_045L, 80_041L, 5L, "tn3", "input", "ALLOW", "LOW", "PII");
+        insertModernExecution(90_045L, "ALLOW", "response");
+        insertSnapshot(90_046L, 80_041L, 6L, "fp", "input", "ALLOW", "LOW", "PII");
+        insertModernExecution(90_046L, "BLOCK", "response");
+        insertSnapshot(90_047L, 80_041L, 7L, "fn", "input", "BLOCK", "LOW", "PII");
+        insertModernExecution(90_047L, "ALLOW", "response");
+        insertSnapshot(90_048L, 80_041L, 8L, "not evaluated", "input", "BLOCK", "LOW", "PII");
+        insertExecution(90_048L, "FAILED", null, "PROVIDER_ERROR", "안전한 오류");
+
+        EvaluatorMetricsView metrics = metricsPort.load(80_041L);
+
+        assertEquals(2L, metrics.truePositive());
+        assertEquals(3L, metrics.trueNegative());
+        assertEquals(1L, metrics.falsePositive());
+        assertEquals(1L, metrics.falseNegative());
+        assertEquals(0.25, metrics.falsePositiveRate());
+        assertEquals(1.0 / 3.0, metrics.falseNegativeRate());
+    }
+
+    @Test
+    @DisplayName("분류 분모가 0이면 해당 rate를 null로 반환한다")
+    void returnsNullRatesWhenDenominatorsAreZero() {
+        insertSuite(70_051L);
+        insertTestRun(80_051L, 70_051L);
+        insertSnapshot(90_051L, 80_051L, 1L, "not evaluated", "input", "BLOCK", "LOW", "PII");
+        insertExecution(90_051L, "FAILED", null, "PROVIDER_ERROR", "안전한 오류");
+
+        EvaluatorMetricsView metrics = metricsPort.load(80_051L);
+
+        assertEquals(0L, metrics.truePositive());
+        assertEquals(0L, metrics.trueNegative());
+        assertEquals(0L, metrics.falsePositive());
+        assertEquals(0L, metrics.falseNegative());
+        assertNull(metrics.falsePositiveRate());
+        assertNull(metrics.falseNegativeRate());
     }
 
     private void insertSuite(long id) {
