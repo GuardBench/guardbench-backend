@@ -33,6 +33,20 @@
 - Context 경계를 넘을 때는 다른 Context의 Domain 타입·ID VO·Enum·Repository를 직접 재사용하거나 import하지 않는다. 소비 Context가 outbound Port와 scalar/code 값 계약, 로컬 reference/value 타입을 소유한다.
 - Integration Adapter만 양쪽 경계를 연결해 값을 명시적으로 변환하며, `common` 또는 공유 Domain 타입으로 이 규칙을 우회하지 않는다.
 
+## 비동기 처리와 Retry
+
+SQS, 외부 Provider, Outbox, Worker 등 retry가 존재하는 경로를 설계·수정할 때 다음 원칙을 따른다. 상세 근거와 테스트 기준은 [비동기 신뢰성 및 테스트 원칙](docs/architecture/async-reliability-and-testing.md)을 참고한다.
+
+- delivery retry와 business retry를 같은 횟수나 상태로 취급하지 않는다.
+- retry 전에 해당 작업이 idempotent한지 확인한다.
+- transient failure와 permanent failure를 구분한다.
+- retry는 bounded해야 하며 exhaustion 이후의 terminal 상태를 정의한다.
+- 여러 계층의 retry가 곱셈식으로 증폭되지 않는지 확인한다.
+- timeout, visibility timeout, claim lease 등 시간 기반 설정은 독립 값이 아니라 하나의 cross-component contract로 검토한다.
+- retry 횟수나 DLQ `maxReceiveCount`를 단순히 늘리는 것을 근본 해결책으로 사용하지 않는다.
+- `AlreadyHeld`, partial finalization 같은 정상 중간 상태를 실패/retry 신호로 변환하지 않는다.
+- 비동기 상태 머신은 개별 상태 전이의 정확성뿐 아니라 safety와 eventual convergence를 함께 검증한다.
+
 ## Git과 검증
 
 - Issue 하나당 별도 worktree와 `agent/{issue-number}-{slug}` 브랜치를 사용한다.
