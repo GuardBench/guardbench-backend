@@ -34,16 +34,22 @@ RUN set -eux; \
     mkdir -p /artifact/runtime/root/usr/lib/jvm /artifact/runtime/root/usr/lib64 /artifact/runtime/bin; \
     copy_binary() { \
       binary="$1"; \
-      cp --parents "$binary" /artifact/runtime/root; \
+      cp -L --parents "$binary" /artifact/runtime/root; \
       ldd "$binary" | awk '/=> \/|^\// { for (i = 1; i <= NF; i++) if ($i ~ /^\//) print $i }' \
-        | sort -u | xargs -r -I{} cp --parents {} /artifact/runtime/root; \
+        | sort -u | xargs -r -I{} cp -L --parents {} /artifact/runtime/root; \
     }; \
     copy_binary /usr/bin/python3.11; \
     copy_binary /usr/bin/psql; \
     copy_binary /usr/local/bin/k6; \
     cp -L /lib64/ld-linux-x86-64.so.2 /artifact/runtime/root/lib64/ld-linux-x86-64.so.2; \
     cp -a /usr/lib64/python3.11 /artifact/runtime/root/usr/lib64/; \
-    cp -aL /usr/lib/jvm/java-21-amazon-corretto /artifact/runtime/root/usr/lib/jvm/java-21-amazon-corretto; \
+    jdk_home="$(readlink -f /usr/lib/jvm/java-21-amazon-corretto)"; \
+    mkdir -p /artifact/runtime/root/usr/lib/jvm/java-21-amazon-corretto; \
+    cp -a "$jdk_home/." /artifact/runtime/root/usr/lib/jvm/java-21-amazon-corretto/; \
+    find "$jdk_home" -type f \( -name '*.so*' -o -perm -u+x \) -print0 \
+      | xargs -0 -r -n1 ldd 2>/dev/null \
+      | awk '/=> \// { print $3 }' | sort -u | grep -v "^$jdk_home" \
+      | xargs -r -I{} cp -L --parents {} /artifact/runtime/root; \
     cp -a /workspace/. /artifact/; \
     find /artifact/runtime/root -type d ! -perm -u+w -exec chmod u+w {} +; \
     printf '{\n  "backend_revision": "%s",\n  "k6_version": "%s",\n  "runner_os": "AL2023"\n}\n' "$APP_REVISION" "$K6_VERSION" > /artifact/ARTIFACT-METADATA.json; \
