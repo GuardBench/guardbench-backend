@@ -19,7 +19,9 @@ target:
   model: "${PERF_TARGET_MODEL}"
   revision: "${PERF_TARGET_REVISION}"
   evaluation_profile:
-    checks: [PROMPT_INJECTION]
+    # 기존 단일-check Smoke 형태와 STANDARD strictness를 유지한다.
+    # HARMFUL_CONTENT는 MVP에서 strictness가 실제 적용되는 지원 check다.
+    checks: [HARMFUL_CONTENT]
     strictness: STANDARD
 
 acceptance:

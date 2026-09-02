@@ -27,10 +27,9 @@ TestRun 생성 중에는 Guardrail DRAFT를 수정하거나 numbered version을 
 
 ## 공개 Evaluation Profile
 
-MVP Evaluation Check는 세 종류다.
+MVP Evaluation Check는 두 종류다.
 
 ```text
-PROMPT_INJECTION
 PII_LEAKAGE
 HARMFUL_CONTENT
 ```
@@ -48,16 +47,6 @@ STRICT
 ## strictness 의미
 
 `strictness`는 GuardBench가 정의한 추상적인 평가 민감도다. AWS Bedrock의 특정 필드명을 그대로 공개하는 값이 아니다.
-
-### PROMPT_INJECTION
-
-`strictness`를 Bedrock prompt attack filtering strength로 정규화한다.
-
-```text
-RELAXED  → LOW
-STANDARD → MEDIUM
-STRICT   → HIGH
-```
 
 ### HARMFUL_CONTENT
 
@@ -89,41 +78,33 @@ PII-only에서 의미 없는 `strictness`를 API와 UI에서 조건부 제거하
 
 ## 지원 Profile과 canonical catalog entry
 
-세 check의 non-empty 조합은 7개이고 API가 표현할 수 있는 `(checks, strictness)` 입력은 21개다.
+두 check의 non-empty 조합은 3개이고 API가 표현할 수 있는 `(checks, strictness)` 입력은 9개다.
 
-그러나 PII-only의 세 strictness 입력이 동일한 Evaluator 설정으로 정규화되므로 실질 catalog entry는 19개다.
+그러나 PII-only의 세 strictness 입력이 동일한 Evaluator 설정으로 정규화되므로 실질 catalog entry는 7개다.
 
 | checks | canonical entry 수 | strictness 적용 |
 | --- | ---: | --- |
 | `PII_LEAKAGE` | 1 | 미적용 |
-| `PROMPT_INJECTION` | 3 | 적용 |
 | `HARMFUL_CONTENT` | 3 | 적용 |
-| `PROMPT_INJECTION + PII_LEAKAGE` | 3 | PI에 적용 |
 | `HARMFUL_CONTENT + PII_LEAKAGE` | 3 | HC에 적용 |
-| `PROMPT_INJECTION + HARMFUL_CONTENT` | 3 | PI, HC에 동일 값 적용 |
-| 세 check 모두 | 3 | PI, HC에 동일 값 적용, PII는 고정 |
-| **합계** | **19** | |
+| **합계** | **7** | |
 
 `checks`의 요청 배열 순서는 Profile identity에 영향을 주지 않는다. catalog lookup 전 canonical order로 정렬하여 동일한 check set은 하나의 key로 취급한다.
 
 ## Bedrock Guardrail 물리 배치
 
-하나의 Bedrock Guardrail에 21개 Profile을 numbered version으로 몰아넣지 않는다. MVP에서는 7개의 non-empty check 조합을 각각 하나의 Guardrail identity로 분리한다.
+하나의 Bedrock Guardrail에 Profile을 numbered version으로 몰아넣지 않는다. MVP에서는 다음 3개의 non-empty check 조합을 Guardrail identity로 분리한다.
 
 ```text
-G1: PROMPT_INJECTION
-G2: PII_LEAKAGE
-G3: HARMFUL_CONTENT
-G4: PROMPT_INJECTION + PII_LEAKAGE
-G5: PROMPT_INJECTION + HARMFUL_CONTENT
-G6: PII_LEAKAGE + HARMFUL_CONTENT
-G7: PROMPT_INJECTION + PII_LEAKAGE + HARMFUL_CONTENT
+G1: PII_LEAKAGE
+G2: HARMFUL_CONTENT
+G3: PII_LEAKAGE + HARMFUL_CONTENT
 ```
 
 각 Guardrail에는 해당 check set에서 필요한 profile 설정을 numbered version으로 미리 provisioning한다.
 
 - PII-only Guardrail은 strictness와 무관한 하나의 canonical policy version만 필요하다.
-- PI 또는 HC를 포함한 Guardrail은 `RELAXED`, `STANDARD`, `STRICT`에 대응하는 세 canonical configuration을 가진다.
+- HARMFUL_CONTENT를 포함한 Guardrail은 `RELAXED`, `STANDARD`, `STRICT`에 대응하는 세 canonical configuration을 가진다.
 - version 번호 자체에는 strictness 의미를 부여하지 않는다.
 - `RELAXED → version 1` 같은 규칙을 도메인 계약으로 사용하지 않는다.
 - 실제 `strictness → numberedVersion` 연결은 운영 catalog가 소유한다.
@@ -169,7 +150,15 @@ TestRun 접수 시 Backend는 다음 순서로 동작한다.
 5. 이미 provisioning된 immutable Bedrock Guardrail identifier와 numbered version을 얻는다.
 6. 사용자의 원래 EvaluationProfile snapshot과 실제 `EvaluatorReference`를 TestRun 실행 조건으로 각각 고정한다.
 
-catalog에 canonical key가 없으면 계약된 `409 EVALUATION_PROFILE_NOT_SUPPORTED`로 실패한다. MVP 운영 catalog는 위 19개 canonical entry 전체를 provisioning하는 것을 목표로 한다.
+catalog에 canonical key가 없으면 계약된 `409 EVALUATION_PROFILE_NOT_SUPPORTED`로 실패한다. MVP 운영 catalog는 위 7개 canonical entry 전체를 provisioning한다.
+
+운영 catalog의 현재 Bedrock 연결은 다음과 같다. version 번호 자체에는 strictness 의미를 부여하지 않지만, 현재 provisioning 결과에서는 각 Guardrail의 version 1/2/3이 각각 RELAXED/STANDARD/STRICT에 대응한다.
+
+| Guardrail | Identifier | Version mapping |
+| --- | --- | --- |
+| G1 PII_LEAKAGE | `ddsaa7puiszg` | PII-only fixed policy: `1` |
+| G2 HARMFUL_CONTENT | `0vkh7a4wkphg` | RELAXED `1`, STANDARD `2`, STRICT `3` |
+| G3 PII_LEAKAGE + HARMFUL_CONTENT | `571rwjlw2ozk` | RELAXED `1`, STANDARD `2`, STRICT `3` |
 
 ## 책임 경계
 
@@ -196,6 +185,7 @@ catalog에 canonical key가 없으면 계약된 `409 EVALUATION_PROFILE_NOT_SUPP
 - PII entity set을 사용자-facing 세부 옵션으로 노출
 - PII-only strictness를 API/UI에서 조건부 제거하는 개선
 - multi-provider/ensemble 일반화
+- Prompt Injection 평가는 MVP 범위에 포함하지 않는다. Bedrock `PROMPT_ATTACK`을 output 평가에 매핑하지 않으며, 별도 evaluator 후보로 남긴다.
 
 ## 관련 계약
 

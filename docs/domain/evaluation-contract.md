@@ -17,7 +17,9 @@ AI Application은 자연어 ApplicationResponse를 반환한다. `ALLOW`와 `BLO
 
 ApplicationResponse는 내부 Evaluator 입력이며 frontend-facing API에 노출하지 않는다. 공개 결과는 TestCase input, 실행 상태·안전한 오류, Evaluator verdict, ExpectedResult와 Assertion을 제공한다.
 
-TestRun 생성 요청의 inline `evaluationProfile`은 사용자가 선택한 평가 목적을 `checks`와 `strictness`로 표현한다. 사용자는 Evaluator type, provider 또는 Bedrock Guardrail identifier/version을 제출하지 않으며 GuardBench가 profile을 실제 Evaluator 설정으로 해석한다. 요청한 profile은 TestRun 조회에서 다시 확인할 수 있어야 한다.
+TestRun 생성 요청의 inline `evaluationProfile`은 사용자가 선택한 평가 목적을 `checks`와 `strictness`로 표현한다. MVP에서 지원하는 `checks`는 `PII_LEAKAGE | HARMFUL_CONTENT`이며, `strictness`는 `RELAXED | STANDARD | STRICT`다. 사용자는 Evaluator type, provider 또는 Bedrock Guardrail identifier/version을 제출하지 않으며 GuardBench가 profile을 실제 Evaluator 설정으로 해석한다. 요청한 profile은 TestRun 조회에서 다시 확인할 수 있어야 한다.
+
+Evaluator는 AI Application의 자연어 **output**만 평가한다. 따라서 Bedrock `PROMPT_ATTACK`을 output evaluator로 사용하지 않으며, Prompt Injection 성공 여부 평가는 MVP 범위가 아닌 별도 evaluator 후보로 남긴다.
 
 EvaluationResult가 있으면 ExpectedResult와 비교해 AssertionResult를 생성한다.
 

@@ -369,7 +369,7 @@ class TestRunLocalE2eTest {
                 {
                   "testSuiteId":%d,
                   "target":{"type":"HTTP_ENDPOINT","identifier":"%s/v1/chat/completions","model":"local-model","revision":"local"},
-                  "evaluationProfile":{"checks":["PROMPT_INJECTION"],"strictness":"STANDARD"}
+                  "evaluationProfile":{"checks":["PII_LEAKAGE"],"strictness":"STANDARD"}
                 }
                 """.formatted(suiteId, applicationServerUrl());
         JsonNode response = send("POST", TEST_RUN_URL, body).bodyJson();

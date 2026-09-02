@@ -27,29 +27,17 @@ spring:
 # SQS 런타임 설정 (DefaultCredentialsProvider 체인 사용, Spring Cloud AWS 없음)
 # SQS 빈 활성화: guardbench.sqs.enabled=true일 때만 SqsClient를 생성한다.
 guardbench:
-  # MVP operator catalog: 19 canonical entries (7 check sets; PII-only collapses strictness).
+  # MVP operator catalog: 7 canonical entries (PII-only collapses strictness).
   # Identifiers and revisions are environment-overridable for pre-provisioned immutable Guardrails.
   evaluator-catalog:
     entries:
-      - { checks: [PROMPT_INJECTION], strictness: RELAXED, guardrail-identifier: "${EVALUATOR_CATALOG_G1_ID:guardbench-g1-prompt-injection}", guardrail-revision: "${EVALUATOR_CATALOG_G1_RELAXED_REVISION:1}" }
-      - { checks: [PROMPT_INJECTION], strictness: STANDARD, guardrail-identifier: "${EVALUATOR_CATALOG_G1_ID:guardbench-g1-prompt-injection}", guardrail-revision: "${EVALUATOR_CATALOG_G1_STANDARD_REVISION:2}" }
-      - { checks: [PROMPT_INJECTION], strictness: STRICT, guardrail-identifier: "${EVALUATOR_CATALOG_G1_ID:guardbench-g1-prompt-injection}", guardrail-revision: "${EVALUATOR_CATALOG_G1_STRICT_REVISION:3}" }
-      - { checks: [PII_LEAKAGE], strictness: STANDARD, guardrail-identifier: "${EVALUATOR_CATALOG_G2_ID:guardbench-g2-pii-leakage}", guardrail-revision: "${EVALUATOR_CATALOG_G2_REVISION:1}" }
-      - { checks: [HARMFUL_CONTENT], strictness: RELAXED, guardrail-identifier: "${EVALUATOR_CATALOG_G3_ID:guardbench-g3-harmful-content}", guardrail-revision: "${EVALUATOR_CATALOG_G3_RELAXED_REVISION:1}" }
-      - { checks: [HARMFUL_CONTENT], strictness: STANDARD, guardrail-identifier: "${EVALUATOR_CATALOG_G3_ID:guardbench-g3-harmful-content}", guardrail-revision: "${EVALUATOR_CATALOG_G3_STANDARD_REVISION:2}" }
-      - { checks: [HARMFUL_CONTENT], strictness: STRICT, guardrail-identifier: "${EVALUATOR_CATALOG_G3_ID:guardbench-g3-harmful-content}", guardrail-revision: "${EVALUATOR_CATALOG_G3_STRICT_REVISION:3}" }
-      - { checks: [PROMPT_INJECTION, PII_LEAKAGE], strictness: RELAXED, guardrail-identifier: "${EVALUATOR_CATALOG_G4_ID:guardbench-g4-prompt-injection-pii}", guardrail-revision: "${EVALUATOR_CATALOG_G4_RELAXED_REVISION:1}" }
-      - { checks: [PROMPT_INJECTION, PII_LEAKAGE], strictness: STANDARD, guardrail-identifier: "${EVALUATOR_CATALOG_G4_ID:guardbench-g4-prompt-injection-pii}", guardrail-revision: "${EVALUATOR_CATALOG_G4_STANDARD_REVISION:2}" }
-      - { checks: [PROMPT_INJECTION, PII_LEAKAGE], strictness: STRICT, guardrail-identifier: "${EVALUATOR_CATALOG_G4_ID:guardbench-g4-prompt-injection-pii}", guardrail-revision: "${EVALUATOR_CATALOG_G4_STRICT_REVISION:3}" }
-      - { checks: [PROMPT_INJECTION, HARMFUL_CONTENT], strictness: RELAXED, guardrail-identifier: "${EVALUATOR_CATALOG_G5_ID:guardbench-g5-prompt-injection-harmful-content}", guardrail-revision: "${EVALUATOR_CATALOG_G5_RELAXED_REVISION:1}" }
-      - { checks: [PROMPT_INJECTION, HARMFUL_CONTENT], strictness: STANDARD, guardrail-identifier: "${EVALUATOR_CATALOG_G5_ID:guardbench-g5-prompt-injection-harmful-content}", guardrail-revision: "${EVALUATOR_CATALOG_G5_STANDARD_REVISION:2}" }
-      - { checks: [PROMPT_INJECTION, HARMFUL_CONTENT], strictness: STRICT, guardrail-identifier: "${EVALUATOR_CATALOG_G5_ID:guardbench-g5-prompt-injection-harmful-content}", guardrail-revision: "${EVALUATOR_CATALOG_G5_STRICT_REVISION:3}" }
-      - { checks: [PII_LEAKAGE, HARMFUL_CONTENT], strictness: RELAXED, guardrail-identifier: "${EVALUATOR_CATALOG_G6_ID:guardbench-g6-pii-harmful-content}", guardrail-revision: "${EVALUATOR_CATALOG_G6_RELAXED_REVISION:1}" }
-      - { checks: [PII_LEAKAGE, HARMFUL_CONTENT], strictness: STANDARD, guardrail-identifier: "${EVALUATOR_CATALOG_G6_ID:guardbench-g6-pii-harmful-content}", guardrail-revision: "${EVALUATOR_CATALOG_G6_STANDARD_REVISION:2}" }
-      - { checks: [PII_LEAKAGE, HARMFUL_CONTENT], strictness: STRICT, guardrail-identifier: "${EVALUATOR_CATALOG_G6_ID:guardbench-g6-pii-harmful-content}", guardrail-revision: "${EVALUATOR_CATALOG_G6_STRICT_REVISION:3}" }
-      - { checks: [PROMPT_INJECTION, PII_LEAKAGE, HARMFUL_CONTENT], strictness: RELAXED, guardrail-identifier: "${EVALUATOR_CATALOG_G7_ID:guardbench-g7-all-checks}", guardrail-revision: "${EVALUATOR_CATALOG_G7_RELAXED_REVISION:1}" }
-      - { checks: [PROMPT_INJECTION, PII_LEAKAGE, HARMFUL_CONTENT], strictness: STANDARD, guardrail-identifier: "${EVALUATOR_CATALOG_G7_ID:guardbench-g7-all-checks}", guardrail-revision: "${EVALUATOR_CATALOG_G7_STANDARD_REVISION:2}" }
-      - { checks: [PROMPT_INJECTION, PII_LEAKAGE, HARMFUL_CONTENT], strictness: STRICT, guardrail-identifier: "${EVALUATOR_CATALOG_G7_ID:guardbench-g7-all-checks}", guardrail-revision: "${EVALUATOR_CATALOG_G7_STRICT_REVISION:3}" }
+      - { checks: [PII_LEAKAGE], strictness: STANDARD, guardrail-identifier: "${EVALUATOR_CATALOG_G1_ID:ddsaa7puiszg}", guardrail-revision: "${EVALUATOR_CATALOG_G1_REVISION:1}" }
+      - { checks: [HARMFUL_CONTENT], strictness: RELAXED, guardrail-identifier: "${EVALUATOR_CATALOG_G2_ID:0vkh7a4wkphg}", guardrail-revision: "${EVALUATOR_CATALOG_G2_RELAXED_REVISION:1}" }
+      - { checks: [HARMFUL_CONTENT], strictness: STANDARD, guardrail-identifier: "${EVALUATOR_CATALOG_G2_ID:0vkh7a4wkphg}", guardrail-revision: "${EVALUATOR_CATALOG_G2_STANDARD_REVISION:2}" }
+      - { checks: [HARMFUL_CONTENT], strictness: STRICT, guardrail-identifier: "${EVALUATOR_CATALOG_G2_ID:0vkh7a4wkphg}", guardrail-revision: "${EVALUATOR_CATALOG_G2_STRICT_REVISION:3}" }
+      - { checks: [PII_LEAKAGE, HARMFUL_CONTENT], strictness: RELAXED, guardrail-identifier: "${EVALUATOR_CATALOG_G3_ID:571rwjlw2ozk}", guardrail-revision: "${EVALUATOR_CATALOG_G3_RELAXED_REVISION:1}" }
+      - { checks: [PII_LEAKAGE, HARMFUL_CONTENT], strictness: STANDARD, guardrail-identifier: "${EVALUATOR_CATALOG_G3_ID:571rwjlw2ozk}", guardrail-revision: "${EVALUATOR_CATALOG_G3_STANDARD_REVISION:2}" }
+      - { checks: [PII_LEAKAGE, HARMFUL_CONTENT], strictness: STRICT, guardrail-identifier: "${EVALUATOR_CATALOG_G3_ID:571rwjlw2ozk}", guardrail-revision: "${EVALUATOR_CATALOG_G3_STRICT_REVISION:3}" }
   sqs:
     enabled: ${SQS_ENABLED:false}
     region: ${AWS_REGION:ap-northeast-2}

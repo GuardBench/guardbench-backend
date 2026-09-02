@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from performance.runner.acceptance import evaluate
-from performance.runner.config import ConfigurationError, load_profile
+from performance.runner.config import ConfigurationError, load_profile, validate_profile
 from performance.runner.dataset import load_seed_payload
 from performance.runner.cli import K6_THRESHOLD_FAILURE_EXIT_CODE, RunnerError, reset_database, run_k6
 from performance.runner.safety import migration_jdbc_url, validate_reset_safety
@@ -56,6 +56,20 @@ class PerformanceRunnerTest(unittest.TestCase):
 
         self.assertEqual("SMOKE", profile["test"]["type"])
         self.assertNotIn("dataset", profile)
+        self.assertEqual(["HARMFUL_CONTENT"], profile["target"]["evaluation_profile"]["checks"])
+
+    def test_prompt_injection_is_rejected_by_profile_validation(self):
+        with patch.dict(os.environ, {
+            "PERF_TARGET_URL": "https://target.example.test/v1/chat/completions",
+            "PERF_TARGET_MODEL": "test-model",
+            "PERF_TARGET_REVISION": "test-revision",
+        }, clear=True):
+            profile = load_profile(ROOT / "profiles/small.yaml")
+
+        profile["target"]["evaluation_profile"]["checks"] = ["PROMPT_INJECTION"]
+
+        with self.assertRaises(ConfigurationError):
+            validate_profile(profile)
 
     def test_baseline_dataset_has_78_cases(self):
         payload, count = load_seed_payload(ROOT / "datasets/baseline-v1.yaml")

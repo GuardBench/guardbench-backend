@@ -91,7 +91,7 @@ def validate_profile(profile: dict[str, Any]) -> None:
             or not evaluation_profile.get("checks") \
             or evaluation_profile.get("strictness") not in {"RELAXED", "STANDARD", "STRICT"}:
         raise ConfigurationError("target.evaluation_profile의 checks와 strictness가 올바르지 않습니다.")
-    if any(check not in {"PROMPT_INJECTION", "PII_LEAKAGE", "HARMFUL_CONTENT"}
+    if any(check not in {"PII_LEAKAGE", "HARMFUL_CONTENT"}
            for check in evaluation_profile["checks"]):
         raise ConfigurationError("지원하지 않는 evaluation_profile.checks가 있습니다.")
 

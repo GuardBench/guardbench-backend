@@ -44,7 +44,7 @@ class TestRunCommandControllerTest {
                 "revision": "v1",
                 "model": "test-model"
               },
-              "evaluationProfile": { "checks": ["PROMPT_INJECTION"], "strictness": "STANDARD" }
+              "evaluationProfile": { "checks": ["PII_LEAKAGE"], "strictness": "STANDARD" }
             }
             """;
 
@@ -70,7 +70,7 @@ class TestRunCommandControllerTest {
                 .andExpect(jsonPath("$.data.status").value("QUEUED"))
                 .andExpect(jsonPath("$.data.testCaseCount").value(253))
                 .andExpect(jsonPath("$.data.target.model").value("test-model"))
-                .andExpect(jsonPath("$.data.evaluationProfile.checks[0]").value("PROMPT_INJECTION"));
+                .andExpect(jsonPath("$.data.evaluationProfile.checks[0]").value("PII_LEAKAGE"));
     }
 
     @Test
@@ -101,7 +101,7 @@ class TestRunCommandControllerTest {
                     "identifier": "https://example.com/v1/chat/completions",
                     "model": "test-model"
                   },
-                  "evaluationProfile": { "checks": ["PROMPT_INJECTION"], "strictness": "STANDARD" }
+                  "evaluationProfile": { "checks": ["PII_LEAKAGE"], "strictness": "STANDARD" }
                 }
                 """;
 
@@ -117,7 +117,7 @@ class TestRunCommandControllerTest {
                 {
                   "testSuiteId": 1,
                   "target": { "type": "HTTP_ENDPOINT", "identifier": "https://example.com/v1/chat/completions" },
-                  "evaluationProfile": { "checks": ["PROMPT_INJECTION"], "strictness": "STANDARD" }
+                  "evaluationProfile": { "checks": ["PII_LEAKAGE"], "strictness": "STANDARD" }
                 }
                 """;
 
@@ -137,9 +137,19 @@ class TestRunCommandControllerTest {
                     "identifier": "https://example.com/v1/chat/completions",
                     "model": "test-model"
                   },
-                  "evaluationProfile": { "checks": ["PROMPT_INJECTION", "PROMPT_INJECTION"], "strictness": "STANDARD" }
+                  "evaluationProfile": { "checks": ["PII_LEAKAGE", "PII_LEAKAGE"], "strictness": "STANDARD" }
                 }
                 """;
+
+        mockMvc.perform(post(BASE).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    @DisplayName("MVP에서 지원하지 않는 PROMPT_INJECTION check는 400 VALIDATION_ERROR를 반환한다")
+    void unsupportedPromptInjectionCheckReturnsValidationError() throws Exception {
+        String body = VALID_BODY.replace("PII_LEAKAGE", "PROMPT_INJECTION");
 
         mockMvc.perform(post(BASE).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest())
@@ -153,7 +163,7 @@ class TestRunCommandControllerTest {
                 {
                   "testSuiteId": 1,
                   "target": { "type": "HTTP", "identifier": "target-123", "revision": "DRAFT", "model": "test-model" },
-                  "evaluationProfile": { "checks": ["PROMPT_INJECTION"], "strictness": "STANDARD" }
+                  "evaluationProfile": { "checks": ["PII_LEAKAGE"], "strictness": "STANDARD" }
                 }
                 """;
 
@@ -169,7 +179,7 @@ class TestRunCommandControllerTest {
                 {
                   "testSuiteId": 1,
                   "target": { "type": "BEDROCK_GUARDRAIL", "identifier": "guardrail-123", "revision": "1", "model": "test-model" },
-                  "evaluationProfile": { "checks": ["PROMPT_INJECTION"], "strictness": "STANDARD" }
+                  "evaluationProfile": { "checks": ["PII_LEAKAGE"], "strictness": "STANDARD" }
                 }
                 """;
 
@@ -243,7 +253,7 @@ class TestRunCommandControllerTest {
         return new TestRunCreateResult(id, 1L, "QUEUED", testCaseCount,
                 new com.guardbench.testrun.application.port.out.TargetReferenceView(
                         "target-ref-" + id, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", "test-model"),
-                new com.guardbench.testrun.domain.EvaluationProfile(java.util.List.of("PROMPT_INJECTION"), "STANDARD"),
+                new com.guardbench.testrun.domain.EvaluationProfile(java.util.List.of("PII_LEAKAGE"), "STANDARD"),
                 Instant.parse("2026-08-24T14:30:00Z"));
     }
 }
