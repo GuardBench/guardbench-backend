@@ -22,7 +22,7 @@ const payload = JSON.stringify({
     revision: __ENV.PERF_TARGET_REVISION || null,
   },
   evaluationProfile: {
-    checks: (__ENV.PERF_EVALUATION_CHECKS || 'PROMPT_INJECTION').split(','),
+    checks: (__ENV.PERF_EVALUATION_CHECKS || 'HARMFUL_CONTENT').split(','),
     strictness: __ENV.PERF_EVALUATION_STRICTNESS || 'STANDARD',
   },
 });
