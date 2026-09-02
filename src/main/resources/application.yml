@@ -45,7 +45,9 @@ guardbench:
     polling:
       max-messages: 10
       wait-time-seconds: 20
-      visibility-timeout-seconds: 30
+      # SQS queue default and ReceiveMessage override must stay aligned with
+      # the 45s Backend claim lease and its processing buffer.
+      visibility-timeout-seconds: 90
     outbox:
       # 발행 트랜잭션이 PENDING row lock을 SQS 전송 동안 유지하므로 batch는 작게 유지한다.
       batch-size: 10
