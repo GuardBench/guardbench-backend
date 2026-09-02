@@ -10,6 +10,7 @@ export JAVA_HOME="$root/runtime/root/usr/lib/jvm/java-21-amazon-corretto"
 "$root/runtime/bin/k6" version
 "$root/runtime/bin/psql" --version
 "$root/runtime/bin/java" -version
+test -x "$root/runtime/root/lib64/ld-linux-x86-64.so.2"
 test -x "$root/bin/gradle"
 test -x "$root/bin/run-performance"
 test -f "$root/gradlew"

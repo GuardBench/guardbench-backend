@@ -52,7 +52,7 @@ RUN set -eux; \
         k6) target='/usr/local/bin/k6'; args='';; \
         java) target='/usr/lib/jvm/java-21-amazon-corretto/bin/java'; args='';; \
       esac; \
-      printf '#!/usr/bin/env bash\nset -euo pipefail\nroot="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"\nexport LD_LIBRARY_PATH="$root/runtime/root/usr/lib64:$root/runtime/root/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"\n%s\nexec "$root/runtime/root%s" "$@"\n' "$args" "$target" > "/artifact/runtime/bin/$command"; \
+      printf '#!/usr/bin/env bash\nset -euo pipefail\nroot="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"\nloader="$root/runtime/root/lib64/ld-linux-x86-64.so.2"\nlibpath="$root/runtime/root/lib64:$root/runtime/root/usr/lib64"\nexport LD_LIBRARY_PATH="$libpath${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"\n%s\nexec "$loader" --library-path "$libpath" "$root/runtime/root%s" "$@"\n' "$args" "$target" > "/artifact/runtime/bin/$command"; \
       chmod +x "/artifact/runtime/bin/$command"; \
     done; \
     chmod +x /artifact/bin/*
