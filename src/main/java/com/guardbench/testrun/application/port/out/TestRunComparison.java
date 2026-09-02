@@ -34,5 +34,19 @@ public record TestRunComparison(
             Action currentVerdict,
             String comparabilityStatus,
             String changeType) {
+
+        public TestRunComparisonItem {
+            boolean comparable = "COMPARABLE".equals(comparabilityStatus);
+            boolean notComparable = "NOT_COMPARABLE".equals(comparabilityStatus);
+            if (!comparable && !notComparable) {
+                throw new IllegalArgumentException("Unknown comparison status");
+            }
+            if (comparable && (comparisonVerdict == null || currentVerdict == null || changeType == null)) {
+                throw new IllegalArgumentException("Comparable item requires verdicts and change type");
+            }
+            if (notComparable && ((comparisonVerdict != null && currentVerdict != null) || changeType != null)) {
+                throw new IllegalArgumentException("Not-comparable item requires a missing verdict and null change type");
+            }
+        }
     }
 }

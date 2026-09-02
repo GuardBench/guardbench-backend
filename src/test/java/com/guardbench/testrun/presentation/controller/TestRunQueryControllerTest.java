@@ -364,6 +364,25 @@ class TestRunQueryControllerTest {
         }
 
         @Test
+        @DisplayName("저장 verdict가 없는 항목은 비교 불가와 null 비교 필드를 반환한다")
+        void returnsNullComparisonFieldsWhenStoredVerdictIsMissing() throws Exception {
+            TestRunComparison comparison = new TestRunComparison(
+                    901L, 800L, 1L, 0L, 0L, 0L, 0L, 1L,
+                    List.of(new TestRunComparison.TestRunComparisonItem(
+                            1001L, 10L, "case", "input", Action.BLOCK, Action.ALLOW, null,
+                            "NOT_COMPARABLE", null)));
+            when(compareTestRunsService.compare(901L, 800L)).thenReturn(comparison);
+
+            mockMvc.perform(get(BASE + "/901/comparisons/800"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.notComparableCount").value(1))
+                    .andExpect(jsonPath("$.data.items[0].comparisonVerdict").value("ALLOW"))
+                    .andExpect(jsonPath("$.data.items[0].currentVerdict").isEmpty())
+                    .andExpect(jsonPath("$.data.items[0].comparabilityStatus").value("NOT_COMPARABLE"))
+                    .andExpect(jsonPath("$.data.items[0].changeType").isEmpty());
+        }
+
+        @Test
         @DisplayName("비교 불가능한 Run은 409를 반환한다")
         void returnsConflictWhenRunsAreNotComparable() throws Exception {
             when(compareTestRunsService.compare(901L, 800L))
