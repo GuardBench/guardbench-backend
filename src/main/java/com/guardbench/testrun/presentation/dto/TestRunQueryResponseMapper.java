@@ -4,6 +4,7 @@ import java.time.Instant;
 
 import com.guardbench.testrun.application.port.out.PageResult;
 import com.guardbench.testrun.application.port.out.QualityGateMetricsView;
+import com.guardbench.testrun.application.port.out.EvaluatorMetricsView;
 import com.guardbench.testrun.application.port.out.QualityGateView;
 import com.guardbench.testrun.application.port.out.TestExecutionView;
 import com.guardbench.testrun.application.port.out.TestRunDetail;
@@ -52,6 +53,12 @@ public final class TestRunQueryResponseMapper {
         return new TestRunResultListRes(
                 page.items().stream().map(TestRunQueryResponseMapper::toResultItemRes).toList(),
                 toPageMetaRes(page));
+    }
+
+    public static EvaluatorMetricsRes toEvaluatorMetricsRes(EvaluatorMetricsView metrics) {
+        return new EvaluatorMetricsRes(
+                metrics.truePositive(), metrics.trueNegative(), metrics.falsePositive(), metrics.falseNegative(),
+                metrics.falsePositiveRate(), metrics.falseNegativeRate());
     }
 
     public static ComparableTestRunListRes toComparableListRes(PageResult<TestRunRegressionView> page) {
