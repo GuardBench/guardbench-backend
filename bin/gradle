@@ -2,7 +2,5 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-export GRADLE_USER_HOME="$root/runtime/gradle-user-home"
-export JAVA_HOME="$root/runtime/root/usr/lib/jvm/java-21-amazon-corretto"
-export PATH="$root/runtime/bin:$PATH"
+export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$root/.gradle}"
 exec "$root/gradlew" --offline "$@"

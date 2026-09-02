@@ -82,9 +82,8 @@ def apply_migrations(environment: dict[str, str], migration_dir: Path) -> None:
     else:
         # The application owns Flyway history/checksums. A non-web Boot run applies
         # the same migrations and exits, rather than replaying SQL outside Flyway.
-        gradle = _repo_root() / "bin" / "gradle"
-        command = [str(gradle if gradle.is_file() else _repo_root() / "gradlew"),
-                   "bootRun", "--args=--spring.main.web-application-type=none"]
+        gradle_command = environment.get("PERFORMANCE_GRADLE_COMMAND", "./gradlew")
+        command = [gradle_command, "bootRun", "--args=--spring.main.web-application-type=none"]
     migration_environment = dict(environment)
     migration_environment.update({
         "SPRING_DATASOURCE_URL": jdbc_url,

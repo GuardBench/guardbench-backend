@@ -2,10 +2,5 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-export PATH="$root/runtime/bin:$PATH"
-export PYTHONPATH="$root/runtime/python${PYTHONPATH:+:$PYTHONPATH}"
-export GRADLE_USER_HOME="$root/runtime/gradle-user-home"
-export JAVA_HOME="$root/runtime/root/usr/lib/jvm/java-21-amazon-corretto"
-export K6_BIN="$root/runtime/bin/k6"
-export PSQL_BIN="$root/runtime/bin/psql"
-exec "$root/runtime/bin/python3" -m performance.runner.cli "$@"
+export PYTHONPATH="$root${PYTHONPATH:+:$PYTHONPATH}"
+exec python3.11 -m performance.runner.cli "$@"
