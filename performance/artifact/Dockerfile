@@ -41,6 +41,7 @@ RUN set -eux; \
     copy_binary /usr/bin/python3.11; \
     copy_binary /usr/bin/psql; \
     copy_binary /usr/local/bin/k6; \
+    cp -L /lib64/ld-linux-x86-64.so.2 /artifact/runtime/root/lib64/ld-linux-x86-64.so.2; \
     cp -a /usr/lib64/python3.11 /artifact/runtime/root/usr/lib64/; \
     cp -a /usr/lib/jvm/java-21-amazon-corretto /artifact/runtime/root/usr/lib/jvm/; \
     cp -a /workspace/. /artifact/; \
