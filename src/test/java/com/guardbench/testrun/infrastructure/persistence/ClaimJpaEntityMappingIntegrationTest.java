@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
@@ -27,6 +28,7 @@ import com.guardbench.testsupport.PostgresTestConfiguration;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = Replace.NONE)
+@EnableConfigurationProperties(ClaimProperties.class)
 @Import({
         PostgresTestConfiguration.class,
         PostgresResolutionClaimAdapter.class,
