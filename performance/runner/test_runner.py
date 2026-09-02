@@ -218,10 +218,10 @@ class PerformanceRunnerTest(unittest.TestCase):
 
         self.assertIn('PATH="$root/runtime/bin:$PATH"', launcher)
         self.assertIn('PYTHONPATH="$root/runtime/python', launcher)
-        self.assertIn('JAVA_HOME="$root/runtime/root/usr/lib/jvm/java-21-amazon-corretto"', launcher)
+        self.assertIn('JAVA_HOME="$root/runtime/java-home"', launcher)
         self.assertIn('K6_BIN="$root/runtime/bin/k6"', launcher)
         self.assertIn('exec "$root/runtime/bin/python3" -m performance.runner.cli "$@"', launcher)
-        self.assertIn('JAVA_HOME="$root/runtime/root/usr/lib/jvm/java-21-amazon-corretto"', gradle)
+        self.assertIn('JAVA_HOME="$root/runtime/java-home"', gradle)
         self.assertIn('--offline', gradle)
 
 
