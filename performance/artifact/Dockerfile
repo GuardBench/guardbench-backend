@@ -43,7 +43,7 @@ RUN set -eux; \
     copy_binary /usr/local/bin/k6; \
     cp -L /lib64/ld-linux-x86-64.so.2 /artifact/runtime/root/lib64/ld-linux-x86-64.so.2; \
     cp -a /usr/lib64/python3.11 /artifact/runtime/root/usr/lib64/; \
-    cp -a /usr/lib/jvm/java-21-amazon-corretto /artifact/runtime/root/usr/lib/jvm/; \
+    cp -aL /usr/lib/jvm/java-21-amazon-corretto /artifact/runtime/root/usr/lib/jvm/java-21-amazon-corretto; \
     cp -a /workspace/. /artifact/; \
     find /artifact/runtime/root -type d ! -perm -u+w -exec chmod u+w {} +; \
     printf '{\n  "backend_revision": "%s",\n  "k6_version": "%s",\n  "runner_os": "AL2023"\n}\n' "$APP_REVISION" "$K6_VERSION" > /artifact/ARTIFACT-METADATA.json; \
