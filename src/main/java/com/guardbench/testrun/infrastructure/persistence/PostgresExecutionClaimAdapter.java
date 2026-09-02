@@ -13,12 +13,12 @@ import com.guardbench.testrun.application.port.out.ExecutionClaimPort;
 @Repository
 class PostgresExecutionClaimAdapter implements ExecutionClaimPort {
 
-    private static final int LEASE_SECONDS = 45;
-
     private final EntityManager entityManager;
+    private final int leaseSeconds;
 
-    PostgresExecutionClaimAdapter(EntityManager entityManager) {
+    PostgresExecutionClaimAdapter(EntityManager entityManager, ClaimProperties claimProperties) {
         this.entityManager = entityManager;
+        this.leaseSeconds = claimProperties.leaseSeconds();
     }
 
     @Override
@@ -36,7 +36,7 @@ class PostgresExecutionClaimAdapter implements ExecutionClaimPort {
                             updated_at = clock_timestamp()
                         WHERE test_execution_claim.lease_until <= clock_timestamp()
                         RETURNING claim_token, attempt_count
-                        """.formatted(LEASE_SECONDS, LEASE_SECONDS))
+                        """.formatted(leaseSeconds, leaseSeconds))
                 .setParameter("snapshotId", snapshotId)
                 .setParameter("claimToken", newToken.toString())
                 .getResultList();

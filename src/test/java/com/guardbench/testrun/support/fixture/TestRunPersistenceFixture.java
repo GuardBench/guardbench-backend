@@ -93,16 +93,21 @@ public final class TestRunPersistenceFixture {
     }
 
     public void insertSnapshot(long snapshotId, long testRunId, long sourceTestCaseId, Instant createdAt) {
+        insertSnapshot(snapshotId, testRunId, sourceTestCaseId, "input", createdAt);
+    }
+
+    public void insertSnapshot(long snapshotId, long testRunId, long sourceTestCaseId, String input, Instant createdAt) {
         jdbcTemplate.update(
                 """
                 INSERT INTO test_case_snapshot(
                     id, test_run_id, source_test_case_id, name, input,
                     expected_action, severity, category, created_at
-                ) VALUES (?, ?, ?, 'case', 'input', 'ALLOW', 'HIGH', 'category', ?)
+                ) VALUES (?, ?, ?, 'case', ?, 'ALLOW', 'HIGH', 'category', ?)
                 """,
                 snapshotId,
                 testRunId,
                 sourceTestCaseId,
+                input,
                 Timestamp.from(createdAt)
         );
     }
