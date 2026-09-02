@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: KOSA AWS 3팀
-> Last reviewed: 2026-09-01
+> Last reviewed: 2026-09-02
 > Canonical source: GitHub
 > Origin: [Notion Dashboard](https://app.notion.com/p/3c0eeed6b62d80fbb64eec69796cc56d)
 
@@ -39,6 +39,7 @@
 | 아키텍처 | [시스템 개요](architecture/system-overview.md) | APPROVED | Backend | 2026-09-01 | [도메인 모델 정의](https://app.notion.com/p/3c0eeed6b62d81b48c03ed6034440936) |
 | 아키텍처 | [인프라](architecture/infrastructure.md) | APPROVED | Infra | 2026-08-27 | [인프라 구성 설계](https://app.notion.com/p/3c0eeed6b62d81269f60e1c69fbf9fcc) |
 | 아키텍처 | [TestRun Persistence 구현 인덱스](architecture/testrun-persistence.md) | APPROVED | Backend | 2026-09-01 | 없음 |
+| 아키텍처 | [비동기 신뢰성 및 테스트 원칙](architecture/async-reliability-and-testing.md) | DRAFT | Backend | 2026-09-02 | 없음 |
 | 계약 라우팅 | [비동기 TestRun 계약 맵](contracts/README.md) | APPROVED | Backend | 2026-08-31 | 없음 |
 | 통합 | [Bedrock Guardrails Adapter 설계 근거](integrations/bedrock-guardrails-adapter.md) | APPROVED | Backend | 2026-09-01 | 없음 |
 | 통합 | [HTTP Endpoint Application Target Adapter](integrations/http-endpoint-target.md) | APPROVED | Backend | 2026-09-01 | 없음 |
@@ -66,7 +67,7 @@
 | [코드 스타일](conventions/code-style.md) | APPROVED | [코드 컨벤션](https://app.notion.com/p/3c0eeed6b62d816a8028cc3261c3edf3) |
 | [테스트 코드](conventions/test-code.md) | APPROVED | 없음 |
 | [DTO 네이밍](conventions/dto-naming.md) | APPROVED | [DTO 네이밍](https://app.notion.com/p/3c0eeed6b62d8153b1f4fdffc39e328e) |
-| [패키지 구조](conventions/package-structure.md) | APPROVED | [패키지 네이밍](https://app.notion.com/p/3c0eeed6b62d81d59ec3cb3beb995c68) |
+| [패키지 구조](conventions/package-structure.md) | APPROVED | [패키지 네이밍](https://app.notion.com/p/3c0eeed6b62d816a8028cc3261c3edf3) |
 | [API 공통 응답](conventions/api-response.md) | APPROVED | [API 공통 응답 DTO](https://app.notion.com/p/3c1eeed6b62d81e7abe2eea3d730c611) |
 | [애플리케이션 오류](conventions/application-errors.md) | APPROVED | [애플리케이션 오류 코드](https://app.notion.com/p/3c1eeed6b62d81d3a7c9f014bb788aa8) |
 
