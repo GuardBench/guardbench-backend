@@ -23,6 +23,8 @@ GuardBench는 사람이 정의한 기대 동작으로 AI Application의 자연�
 - 완료된 두 Run의 저장 결과를 재호출 없이 비교해 Regression을 판정한다.
 - 외부 provider 타입을 Core 판정 계약에서 분리한다.
 
+MVP Evaluation Profile은 `PII_LEAKAGE`와 `HARMFUL_CONTENT`만 지원한다. Bedrock Guardrail Evaluator는 Application의 자연어 output을 `ApplyGuardrail(source=OUTPUT)`으로 평가하며, Bedrock `PROMPT_ATTACK`을 output evaluator로 사용하지 않는다. Prompt Injection 성공 여부 평가는 향후 별도 evaluator 후보다.
+
 ## 핵심 사용자 흐름
 
 1. 사용자가 TestSuite와 현재 TestCase 정의를 관리한다.
@@ -91,3 +93,4 @@ Regression API는 완료된 TestRun의 저장된 Snapshot/Evaluator 설정과 Ev
 - `TestCaseRevision` 또는 `TestSuiteRevision` 도입
 - Evaluation Profile을 저장·재사용하는 독립 CRUD 리소스
 - provider ensemble 또는 provider별 고급 설정의 공개 계약 확정
+- Prompt Injection 성공 여부 평가와 Bedrock `PROMPT_ATTACK` input 평가

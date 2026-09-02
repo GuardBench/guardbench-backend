@@ -52,6 +52,12 @@ AWS SDK 요청으로 변환한다.
 `PROVIDER_RESPONSE_INVALID`다. raw assessment, output text와 provider 오류 원문은 Port 밖으로
 전달하지 않는다.
 
+## MVP Evaluation Profile 경계
+
+MVP가 지원하는 Evaluation Check는 `PII_LEAKAGE | HARMFUL_CONTENT`다. 이 Adapter는 AI Application
+output만 `ApplyGuardrail(source=OUTPUT)`으로 평가하며, Bedrock `PROMPT_ATTACK`을 output evaluator로
+사용하지 않는다. Prompt Injection 성공 여부 평가는 MVP 이후 별도 evaluator 후보로 남긴다.
+
 #114의 evaluator catalog는 numbered revision을 접수 시 `EvaluatorReference`에 고정하므로
 새 Evaluator 흐름은 DRAFT materialization을 지원하지 않는다. 기존 Target 전용
 `CreateGuardrailVersion` 경계와 `bedrock_guardrail_target` 저장소는 Evaluator 실행 경로에서
