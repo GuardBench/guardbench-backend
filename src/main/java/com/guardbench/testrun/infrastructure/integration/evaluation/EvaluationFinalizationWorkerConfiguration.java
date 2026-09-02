@@ -54,11 +54,14 @@ class EvaluationFinalizationWorkerConfiguration {
         return testRunId -> {
             FinalizeTestRunService.FinalizationOutcome outcome = finalizeTestRunService.finalize(testRunId);
             return switch (outcome) {
+                // Partial finalization(NotReady)은 오류가 아니라 정상적인 부분 완료 중간 상태다.
+                // FinalizeTestRunService.finalize()가 이미 같은 트랜잭션에서 진행도를 반영했으므로
+                // ACK하여 source finalize queue/DLQ에 재전달이 누적되지 않게 한다(#157, #149 재발 방지).
                 case FinalizeTestRunService.FinalizationOutcome.Finalized ignored -> true;
                 case FinalizeTestRunService.FinalizationOutcome.AlreadyFinalized ignored -> true;
                 case FinalizeTestRunService.FinalizationOutcome.NotFound ignored -> true;
                 case FinalizeTestRunService.FinalizationOutcome.InvariantViolation ignored -> true;
-                case FinalizeTestRunService.FinalizationOutcome.NotReady ignored -> false;
+                case FinalizeTestRunService.FinalizationOutcome.NotReady ignored -> true;
             };
         };
     }
