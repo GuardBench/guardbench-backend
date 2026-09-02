@@ -106,7 +106,7 @@ Accept: application/json
 
 Target 실행 Adapter는 호출 내부 retry를 수행하지 않는다. 기존 Worker의 execution claim 재전달·최대 3회 시도 경계를 사용해 at-least-once 특성은 유지하되 한 메시지 수신당 Application 호출은 한 번으로 제한한다. 오류 메시지와 로그에는 응답 본문, 입력, URL, 인증 정보와 Provider 원문을 포함하지 않는다.
 
-Target URL은 HTTP/HTTPS absolute URL, host 필수, userinfo·fragment 금지다. Worker 기본 egress 정책은 loopback/private/link-local/multicast 주소를 차단하며, 내부 SUT가 필요한 배포만 `guardbench.http-endpoint.allow-private-addresses=true`를 명시적으로 설정한다. 응답 본문은 1 MiB를 넘을 수 없다.
+Target URL은 HTTP/HTTPS absolute URL, host 필수, userinfo·fragment 금지다. Worker 기본 egress 정책은 loopback/private/link-local/multicast 주소를 차단하며, 내부 SUT가 필요한 배포는 `guardbench.http-endpoint.allowed-private-hostnames`에 승인된 hostname을 정확히 지정한다. allowlist를 사용해도 loopback/link-local/multicast/AWS metadata endpoint와 private IP literal은 차단한다. 운영 성능 환경에서 `guardbench.http-endpoint.allow-private-addresses=true`를 전역 설정하지 않는다. 응답 본문은 1 MiB를 넘을 수 없다.
 
 HTTP Application Target 실행, OpenAI-compatible response 정규화, inline Evaluation Profile 접수와 EvaluatorReference 고정, Bedrock Guardrail Evaluator와 Application response → Evaluator verdict → Assertion Worker orchestration, 현재 Run Quality Gate 및 stored-result Regression 결과 API는 구현되었다.
 

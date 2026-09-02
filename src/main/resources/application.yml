@@ -61,6 +61,9 @@ guardbench:
     max-response-bytes: 1048576
     # 운영 기본값은 loopback/private/link-local/multicast 주소를 차단한다.
     allow-private-addresses: false
+    # 성능 환경의 승인된 internal ALB hostname만 정확히 일치시켜 private 주소를 허용한다.
+    # 와일드카드와 private IP literal은 허용하지 않는다.
+    allowed-private-hostnames: []
   # Bedrock Provider 호출 한도 (ADR 0005: 재시도 포함 전체 15초, claim lease 45초 미만)
   bedrock:
     region: ${AWS_REGION:ap-northeast-2}

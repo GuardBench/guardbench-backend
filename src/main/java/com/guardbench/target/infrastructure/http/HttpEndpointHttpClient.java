@@ -32,7 +32,10 @@ final class HttpEndpointHttpClient {
         final URI endpoint;
         try {
             endpoint = HttpEndpointUrlValidator.parse(endpointUrl);
-            HttpEndpointUrlValidator.validateResolvedAddress(endpoint, properties.allowPrivateAddresses());
+            HttpEndpointUrlValidator.validateResolvedAddress(
+                    endpoint,
+                    properties.allowPrivateAddresses(),
+                    properties.allowedPrivateHostnames());
         } catch (UnknownHostException | IllegalArgumentException exception) {
             return TargetExecutionResult.failed(TargetFailureCode.TARGET_CONFIGURATION_INVALID);
         }

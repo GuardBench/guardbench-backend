@@ -72,7 +72,17 @@ Adapter 자체는 retry하지 않는다. 한 SQS 메시지 수신당 Application
 
 ## URL 안전성
 
-등록 값은 absolute `http`/`https` URL이며 host가 필요하고 userinfo와 fragment를 허용하지 않는다. Worker는 기본적으로 DNS 결과의 loopback, private/site-local, link-local, multicast와 IPv6 unique-local 주소를 차단한다. 내부망 Application을 연결해야 하는 환경은 `allow-private-addresses`를 명시적으로 활성화해야 한다. 이 설정은 인증이나 네트워크 ACL을 대체하지 않으며 배포 네트워크 egress 정책을 함께 적용해야 한다.
+등록 값은 absolute `http`/`https` URL이며 host가 필요하고 userinfo와 fragment를 허용하지 않는다. Worker는 기본적으로 DNS 결과의 loopback, private/site-local, link-local, multicast와 IPv6 unique-local 주소를 차단한다. 내부망 Application을 연결해야 하는 환경은 `allowed-private-hostnames`에 승인된 hostname을 정확히 지정해야 한다. allowlist는 hostname에만 적용되고 private IP literal, wildcard, loopback, link-local, multicast와 AWS metadata endpoint는 계속 차단한다. `allow-private-addresses`는 로컬 통합 테스트와 같은 명시적 예외에만 사용하며 운영 성능 환경에서는 활성화하지 않는다. 이 설정은 인증이나 네트워크 ACL을 대체하지 않으며 배포 네트워크 egress 정책을 함께 적용해야 한다.
+
+성능 환경 예시:
+
+```yaml
+guardbench:
+  http-endpoint:
+    allow-private-addresses: false
+    allowed-private-hostnames:
+      - internal-performance-api-123.ap-northeast-2.elb.amazonaws.com
+```
 
 입력·응답 본문, endpoint URL, 인증 정보와 provider 원문은 일반 로그나 오류 결과에 기록하지 않는다.
 
