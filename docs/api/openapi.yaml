@@ -346,7 +346,7 @@ paths:
                 revision: v2
                 model: example-model
               evaluationProfile:
-                checks: [PROMPT_INJECTION, PII_LEAKAGE, HARMFUL_CONTENT]
+                checks: [PII_LEAKAGE, HARMFUL_CONTENT]
                 strictness: STRICT
       responses:
         '202':
@@ -376,7 +376,7 @@ paths:
                     revision: v2
                     model: example-model
                   evaluationProfile:
-                    checks: [PROMPT_INJECTION, PII_LEAKAGE, HARMFUL_CONTENT]
+                    checks: [PII_LEAKAGE, HARMFUL_CONTENT]
                     strictness: STRICT
                   createdAt: '2026-08-24T14:30:00Z'
         '400': { $ref: '#/components/responses/ValidationError' }
@@ -439,7 +439,7 @@ paths:
                     revision: v2
                     model: example-model
                   evaluationProfile:
-                    checks: [PROMPT_INJECTION, PII_LEAKAGE]
+                    checks: [PII_LEAKAGE, HARMFUL_CONTENT]
                     strictness: STRICT
                   executionOutcome: COMPLETED
                   qualityGate:
@@ -1170,7 +1170,7 @@ components:
     EvaluationCheck:
       type: string
       description: MVP에서 사용자가 선택할 수 있는 보안 평가 목적
-      enum: [PROMPT_INJECTION, PII_LEAKAGE, HARMFUL_CONTENT]
+      enum: [PII_LEAKAGE, HARMFUL_CONTENT]
     EvaluationStrictness:
       type: string
       enum: [RELAXED, STANDARD, STRICT]
