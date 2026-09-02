@@ -99,6 +99,36 @@ python3 -m performance.runner.cli --reset
 `k6-summary.json`, `aws-metrics.json`, `result.json`, `report.md`로 저장한다. `report.md`의
 Application/Infrastructure revision은 `APP_REVISION`, `INFRA_REVISION` 환경변수로 주입한다.
 
+## Spot Runner artifact와 결과 보존
+
+IaC의 AL2023 Spot Runner는 private subnet에서 다음 bootstrap artifact를 받는다. artifact는
+Python dependency, k6, PostgreSQL client, Java 21, Gradle dependency cache, backend migration과
+canonical HTTP fixture를 함께 제공하므로 실행 중 Git clone이나 package download가 필요 없다.
+
+```bash
+# Docker가 있는 Backend repository에서 실행한다.
+APP_REVISION="$(git rev-parse HEAD)" performance/artifact/build-runner-artifact.sh
+
+# IaC bootstrap contract에 publish한다.
+export PERFORMANCE_RESULTS_BUCKET=<terraform output performance_results_bucket_name>
+export APP_REVISION="$(git rev-parse HEAD)"
+bin/publish-runner-artifact
+```
+
+압축 해제 후 SSM bootstrap은 `/opt/guardbench-performance-runner/bin/verify-runtime`을 실행한다.
+이 검증은 runtime, Flyway/Gradle 입력, profile, dataset, canonical fixture와
+`performance.runner` import를 확인하고 하나라도 없으면 non-zero로 종료한다. artifact의
+`ARTIFACT-METADATA.json`에는 Backend revision과 k6 version이 포함된다.
+
+실제 Runner는 `PERFORMANCE_RESULTS_BUCKET`이 설정된 경우, 결과 파일을 모두 만든 뒤 다음
+prefix에 업로드한다. 따라서 PASS와 acceptance FAIL(k6 exit 99 포함)은 모두 보존된다. S3 upload
+실패는 정상 성능 판정과 구분되는 Runner 오류이며, 로컬 결과는 남긴다. 환경변수가 없는 로컬
+실행은 기존처럼 결과를 로컬에만 보존한다.
+
+```text
+s3://<PERFORMANCE_RESULTS_BUCKET>/performance/results/<run-id>/
+```
+
 로컬 API에 대한 입력 검증은 `--dry-run`으로 수행할 수 있다. 실제 비동기 Smoke 실행은
 SQS와 Worker가 동작하는 로컬 또는 dev 배포가 필요하다. LocalStack을 사용할 때는
 `PERF_SOURCE_QUEUE_URLS`와 `PERF_DLQ_URLS`에 LocalStack URL을 지정하고
