@@ -18,7 +18,7 @@ docker build \
   "$root"
 
 mkdir -p "$staging/root"
-tar --extract --no-same-owner --file "$staging/artifact.tar" --directory "$staging/root"
+tar --extract --no-same-owner --no-same-permissions --file "$staging/artifact.tar" --directory "$staging/root"
 tar --create --gzip --file "$output" \
   --directory "$staging/root" \
   --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner .
