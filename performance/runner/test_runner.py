@@ -200,29 +200,51 @@ class PerformanceRunnerTest(unittest.TestCase):
             with self.assertRaises(ResultUploadError):
                 upload_result_directory(Path(directory), "performance-results", "small-123", s3_client=object())
 
-    def test_verify_runtime_checks_packaged_contract_inputs(self):
+    def test_verify_runtime_checks_container_contract_inputs(self):
         verify_runtime = (ROOT.parent / "bin" / "verify-runtime").read_text(encoding="utf-8")
 
-        self.assertIn("runtime/bin/python3", verify_runtime)
-        self.assertIn("runtime/bin/k6", verify_runtime)
-        self.assertIn("runtime/bin/psql", verify_runtime)
-        self.assertIn("runtime/bin/java", verify_runtime)
+        self.assertIn("python3.11 --version", verify_runtime)
+        self.assertIn("k6 version", verify_runtime)
+        self.assertIn("psql --version", verify_runtime)
+        self.assertIn("java -version", verify_runtime)
+        self.assertIn("javac -version", verify_runtime)
         self.assertIn("bin/run-performance", verify_runtime)
         self.assertIn("src/main/resources/db/migration", verify_runtime)
         self.assertIn("performance/profiles/small.yaml", verify_runtime)
         self.assertIn("performance/datasets/baseline-v1.yaml", verify_runtime)
+        self.assertNotIn("runtime/root", verify_runtime)
+        self.assertNotIn("ld-linux", verify_runtime)
 
-    def test_artifact_launcher_uses_only_bundled_runtime_paths(self):
+    def test_container_launcher_uses_image_runtime(self):
         launcher = (ROOT.parent / "bin" / "run-performance").read_text(encoding="utf-8")
         gradle = (ROOT.parent / "bin" / "gradle").read_text(encoding="utf-8")
 
-        self.assertIn('PATH="$root/runtime/bin:$PATH"', launcher)
-        self.assertIn('PYTHONPATH="$root/runtime/python', launcher)
-        self.assertIn('JAVA_HOME="$root/runtime/java-home"', launcher)
-        self.assertIn('K6_BIN="$root/runtime/bin/k6"', launcher)
-        self.assertIn('exec "$root/runtime/bin/python3" -m performance.runner.cli "$@"', launcher)
-        self.assertIn('JAVA_HOME="$root/runtime/java-home"', gradle)
+        self.assertIn('export PYTHONPATH="$root${PYTHONPATH:+:$PYTHONPATH}"', launcher)
+        self.assertIn('exec python3.11 -m performance.runner.cli "$@"', launcher)
+        self.assertIn('export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$root/.gradle}"', gradle)
         self.assertIn('--offline', gradle)
+
+    def test_dockerfile_is_a_directly_runnable_image(self):
+        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+
+        self.assertIn("ARG APP_REVISION=unknown", dockerfile)
+        self.assertIn("COPY performance performance", dockerfile)
+        self.assertIn("COPY src src", dockerfile)
+        self.assertIn("COPY gradle gradle", dockerfile)
+        self.assertIn('ENTRYPOINT ["python3.11", "-m", "performance.runner.cli"]', dockerfile)
+        self.assertNotIn("FROM scratch", dockerfile)
+        self.assertNotIn("runtime/root", dockerfile)
+        self.assertNotIn("ldd", dockerfile)
+
+    def test_image_build_and_publish_require_external_image_reference(self):
+        build_script = (ROOT / "build-runner-image.sh").read_text(encoding="utf-8")
+        publish_script = (ROOT.parent / "bin" / "publish-runner-image").read_text(encoding="utf-8")
+
+        self.assertIn('[[ $# -ne 1 || -z "$1" ]]', build_script)
+        self.assertIn('"$root/performance/Dockerfile"', build_script)
+        self.assertIn('--tag "$image_ref"', build_script)
+        self.assertIn('docker push "$1"', publish_script)
+        self.assertNotIn("guardbench", build_script)
 
 
 if __name__ == "__main__":
