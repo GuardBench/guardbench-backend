@@ -10,10 +10,12 @@ import com.guardbench.common.presentation.dto.ValidationErrorDetail;
 import com.guardbench.testrun.application.CompareTestRunsService;
 import com.guardbench.testrun.application.GetComparableTestRunsService;
 import com.guardbench.testrun.application.GetTestRunDetailService;
+import com.guardbench.testrun.application.GetTestRunEvaluatorMetricsService;
 import com.guardbench.testrun.application.GetTestRunListService;
 import com.guardbench.testrun.application.GetTestRunResultListService;
 import com.guardbench.testrun.application.port.out.PageCriteria;
 import com.guardbench.testrun.application.port.out.PageResult;
+import com.guardbench.testrun.application.port.out.EvaluatorMetricsView;
 import com.guardbench.testrun.application.port.out.SortOrder;
 import com.guardbench.testrun.application.port.out.TestRunDetail;
 import com.guardbench.testrun.application.port.out.TestRunListCriteria;
@@ -33,6 +35,7 @@ import com.guardbench.testrun.presentation.dto.TestRunDetailRes;
 import com.guardbench.testrun.presentation.dto.TestRunListRes;
 import com.guardbench.testrun.presentation.dto.TestRunQueryResponseMapper;
 import com.guardbench.testrun.presentation.dto.TestRunResultListRes;
+import com.guardbench.testrun.presentation.dto.EvaluatorMetricsRes;
 import com.guardbench.testrun.presentation.dto.ComparableTestRunListRes;
 import com.guardbench.testrun.presentation.dto.TestRunComparisonRes;
 
@@ -71,12 +74,14 @@ public class TestRunQueryController {
     private static final String SUCCESS_MESSAGE_LIST = "TestRun 목록 조회에 성공했습니다.";
     private static final String SUCCESS_MESSAGE_DETAIL = "TestRun 조회에 성공했습니다.";
     private static final String SUCCESS_MESSAGE_RESULTS = "TestRun 개별 결과 조회에 성공했습니다.";
+    private static final String SUCCESS_MESSAGE_EVALUATOR_METRICS = "Evaluator 지표 조회에 성공했습니다.";
     private static final String SUCCESS_MESSAGE_COMPARABLE = "비교 가능한 과거 TestRun 조회에 성공했습니다.";
     private static final String SUCCESS_MESSAGE_COMPARISON = "TestRun 비교에 성공했습니다.";
 
     private final GetTestRunListService getTestRunListService;
     private final GetTestRunDetailService getTestRunDetailService;
     private final GetTestRunResultListService getTestRunResultListService;
+    private final GetTestRunEvaluatorMetricsService getTestRunEvaluatorMetricsService;
     private final GetComparableTestRunsService getComparableTestRunsService;
     private final CompareTestRunsService compareTestRunsService;
 
@@ -84,11 +89,13 @@ public class TestRunQueryController {
             GetTestRunListService getTestRunListService,
             GetTestRunDetailService getTestRunDetailService,
             GetTestRunResultListService getTestRunResultListService,
+            GetTestRunEvaluatorMetricsService getTestRunEvaluatorMetricsService,
             GetComparableTestRunsService getComparableTestRunsService,
             CompareTestRunsService compareTestRunsService) {
         this.getTestRunListService = getTestRunListService;
         this.getTestRunDetailService = getTestRunDetailService;
         this.getTestRunResultListService = getTestRunResultListService;
+        this.getTestRunEvaluatorMetricsService = getTestRunEvaluatorMetricsService;
         this.getComparableTestRunsService = getComparableTestRunsService;
         this.compareTestRunsService = compareTestRunsService;
     }
@@ -183,6 +190,14 @@ public class TestRunQueryController {
         PageResult<TestRunResultItem> result = getTestRunResultListService.getResults(testRunId, criteria);
         TestRunResultListRes response = TestRunQueryResponseMapper.toResultListRes(result);
         return ApiResponse.entity(HttpStatus.OK, SUCCESS_MESSAGE_RESULTS, response);
+    }
+
+    @GetMapping("/{testRunId}/evaluator-metrics")
+    public ResponseEntity<ApiResponse<EvaluatorMetricsRes>> getTestRunEvaluatorMetrics(
+            @PathVariable @Positive(message = "testRunId는 양의 정수여야 합니다.") long testRunId) {
+        EvaluatorMetricsView metrics = getTestRunEvaluatorMetricsService.getMetrics(testRunId);
+        return ApiResponse.entity(HttpStatus.OK, SUCCESS_MESSAGE_EVALUATOR_METRICS,
+                TestRunQueryResponseMapper.toEvaluatorMetricsRes(metrics));
     }
 
     @GetMapping("/{testRunId}/comparable-runs")

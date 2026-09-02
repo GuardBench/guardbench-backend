@@ -4,10 +4,12 @@ on:
   pull_request:
     paths:
       - docs/api/openapi.yaml
+      - scripts/verify-openapi-nullable-enums.mjs
       - .github/workflows/openapi-contract.yml
   push:
     paths:
       - docs/api/openapi.yaml
+      - scripts/verify-openapi-nullable-enums.mjs
       - .github/workflows/openapi-contract.yml
 
 permissions:
@@ -20,6 +22,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Lint OpenAPI
         run: npx --yes @redocly/cli@1.34.5 lint docs/api/openapi.yaml
+      - name: Verify nullable enum variants
+        run: node scripts/verify-openapi-nullable-enums.mjs docs/api/openapi.yaml
       - name: Verify MVP operation count
         run: |
           count=$(grep -Ec '^    (get|post|patch|delete):' docs/api/openapi.yaml)
