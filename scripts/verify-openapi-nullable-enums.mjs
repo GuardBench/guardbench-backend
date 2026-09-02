@@ -16,11 +16,12 @@ for (const line of lines) {
 
   const schemaMatch = line.match(/^    ([A-Za-z0-9]+):\s*$/);
   if (schemaMatch) {
-    currentSchema = { nullable: false, enumValues: undefined };
+    currentSchema = { nullable: false, enumValues: undefined, lines: [] };
     schemas.set(schemaMatch[1], currentSchema);
     continue;
   }
   if (!currentSchema) continue;
+  currentSchema.lines.push(line);
   if (/^      nullable: true\s*$/.test(line)) currentSchema.nullable = true;
 
   const enumMatch = line.match(/^      enum: \[(.*)]\s*$/);
@@ -31,6 +32,18 @@ for (const line of lines) {
 
 const failures = [];
 const nullableSchemas = [...schemas.entries()].filter(([name]) => name.startsWith('Nullable'));
+const nullableFieldRefs = [
+  ['TestRunListItemRes', 'executionOutcome', 'NullableTestRunExecutionOutcome'],
+  ['TestRunListItemRes', 'qualityGateStatus', 'NullableQualityGateStatus'],
+  ['TestRunDetailRes', 'executionOutcome', 'NullableTestRunExecutionOutcome'],
+  ['TestRunDetailRes', 'qualityGate', 'QualityGateRes'],
+  ['TestRunResultItemRes', 'evaluatorVerdict', 'NullableAction'],
+  ['TestRunResultItemRes', 'assertionStatus', 'NullableAssertionStatus'],
+  ['TestRunResultItemRes', 'evaluationOutcome', 'NullableEvaluationOutcome'],
+  ['TestRunComparisonItemRes', 'comparisonVerdict', 'NullableAction'],
+  ['TestRunComparisonItemRes', 'currentVerdict', 'NullableAction'],
+  ['TestRunComparisonItemRes', 'changeType', 'NullableRegressionChangeType'],
+];
 
 if (nullableSchemas.length === 0) {
   failures.push('Nullable* schema를 찾지 못했습니다.');
@@ -60,9 +73,28 @@ for (const [nullableName, nullableSchema] of nullableSchemas) {
   }
 }
 
+for (const [ownerName, fieldName, targetName] of nullableFieldRefs) {
+  const ownerSchema = schemas.get(ownerName);
+  if (!ownerSchema) {
+    failures.push(`${ownerName}: response schema가 없습니다.`);
+    continue;
+  }
+
+  const expectedRef = `${fieldName}: { $ref: '#/components/schemas/${targetName}' }`;
+  if (!ownerSchema.lines.some((line) => line.trim() === expectedRef)) {
+    failures.push(`${ownerName}.${fieldName}: ${targetName} schema를 직접 참조해야 합니다.`);
+  }
+}
+
+if (!schemas.get('QualityGateRes')?.nullable) {
+  failures.push('QualityGateRes: nullable: true가 필요합니다.');
+}
+
 if (failures.length > 0) {
   console.error(failures.join('\n'));
   process.exit(1);
 }
 
-console.log(`${nullableSchemas.length}개 Nullable* enum schema의 기반 값 집합과 null 멤버를 확인했습니다.`);
+console.log(
+  `${nullableSchemas.length}개 Nullable* enum과 ${nullableFieldRefs.length}개 nullable response field 참조를 확인했습니다.`,
+);
