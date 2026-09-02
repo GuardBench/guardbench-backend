@@ -18,10 +18,12 @@ import com.guardbench.common.error.ApplicationException;
 import com.guardbench.testrun.application.CompareTestRunsService;
 import com.guardbench.testrun.application.GetComparableTestRunsService;
 import com.guardbench.testrun.application.GetTestRunDetailService;
+import com.guardbench.testrun.application.GetTestRunEvaluatorMetricsService;
 import com.guardbench.testrun.application.GetTestRunListService;
 import com.guardbench.testrun.application.GetTestRunResultListService;
 import com.guardbench.testrun.application.port.out.PageCriteria;
 import com.guardbench.testrun.application.port.out.PageResult;
+import com.guardbench.testrun.application.port.out.EvaluatorMetricsView;
 import com.guardbench.testrun.application.port.out.SortOrder;
 import com.guardbench.testrun.application.port.out.TestExecutionView;
 import com.guardbench.testrun.application.port.out.TestRunDetail;
@@ -73,6 +75,9 @@ class TestRunQueryControllerTest {
 
     @MockitoBean
     private GetTestRunResultListService getTestRunResultListService;
+
+    @MockitoBean
+    private GetTestRunEvaluatorMetricsService getTestRunEvaluatorMetricsService;
 
     @MockitoBean
     private GetComparableTestRunsService getComparableTestRunsService;
@@ -270,7 +275,59 @@ class TestRunQueryControllerTest {
     }
 
     @Nested
+    @DisplayName("TestRun Evaluator metrics 조회")
+    class EvaluatorMetrics {
+
+        @Test
+        @DisplayName("FINISHED TestRun의 TP/TN/FP/FN과 rate를 반환한다")
+        void returnsEvaluatorMetrics() throws Exception {
+            when(getTestRunEvaluatorMetricsService.getMetrics(901L))
+                    .thenReturn(new EvaluatorMetricsView(35L, 41L, 2L, 3L, 0.0465, 0.0789));
+
+            mockMvc.perform(get(BASE + "/901/evaluator-metrics"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.httpStatus").value(200))
+                    .andExpect(jsonPath("$.data.truePositive").value(35))
+                    .andExpect(jsonPath("$.data.trueNegative").value(41))
+                    .andExpect(jsonPath("$.data.falsePositive").value(2))
+                    .andExpect(jsonPath("$.data.falseNegative").value(3))
+                    .andExpect(jsonPath("$.data.falsePositiveRate").value(0.0465))
+                    .andExpect(jsonPath("$.data.falseNegativeRate").value(0.0789));
+        }
+
+        @Test
+        @DisplayName("존재하지 않는 TestRun은 404 TEST_RUN_NOT_FOUND를 반환한다")
+        void returnsNotFoundWhenTestRunDoesNotExist() throws Exception {
+            when(getTestRunEvaluatorMetricsService.getMetrics(999L))
+                    .thenThrow(new ApplicationException(ApplicationErrorCode.TEST_RUN_NOT_FOUND));
+
+            mockMvc.perform(get(BASE + "/999/evaluator-metrics"))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.data.code").value("TEST_RUN_NOT_FOUND"));
+        }
+
+        @Test
+        @DisplayName("종료되지 않은 TestRun은 409 TEST_RUN_NOT_FINISHED를 반환한다")
+        void returnsConflictWhenTestRunNotFinished() throws Exception {
+            when(getTestRunEvaluatorMetricsService.getMetrics(901L))
+                    .thenThrow(new ApplicationException(ApplicationErrorCode.TEST_RUN_NOT_FINISHED));
+
+            mockMvc.perform(get(BASE + "/901/evaluator-metrics"))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.data.code").value("TEST_RUN_NOT_FINISHED"));
+        }
+
+        @Test
+        @DisplayName("0 이하의 testRunId는 400 VALIDATION_ERROR를 반환한다")
+        void returnsValidationErrorForNonPositiveId() throws Exception {
+            mockMvc.perform(get(BASE + "/0/evaluator-metrics"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.data.code").value("VALIDATION_ERROR"));
+        }
+    }
+    @Nested
     @DisplayName("TestRun Regression 조회")
+
     class Regression {
 
         @Test

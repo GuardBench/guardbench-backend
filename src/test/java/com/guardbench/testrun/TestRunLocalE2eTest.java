@@ -172,12 +172,20 @@ class TestRunLocalE2eTest {
 
         JsonNode detail = awaitFinished(testRunId);
         JsonNode result = getJson(TEST_RUN_URL + "/" + testRunId + "/results");
+        JsonNode metrics = getJson(TEST_RUN_URL + "/" + testRunId + "/evaluator-metrics");
 
         assertThat(detail.path("data").path("status").asText()).isEqualTo("FINISHED");
         assertThat(detail.path("data").path("qualityGate").path("status").asText()).isEqualTo("PASS");
         assertThat(detail.path("data").path("qualityGate").path("metrics").path("assertionPassRate").asDouble())
                 .isEqualTo(1.0);
         assertThat(result.path("data").path("page").path("totalElements").asInt()).isEqualTo(1);
+        assertThat(metrics.path("httpStatus").asInt()).isEqualTo(200);
+        assertThat(metrics.path("data").path("truePositive").asInt()).isEqualTo(0);
+        assertThat(metrics.path("data").path("trueNegative").asInt()).isEqualTo(1);
+        assertThat(metrics.path("data").path("falsePositive").asInt()).isEqualTo(0);
+        assertThat(metrics.path("data").path("falseNegative").asInt()).isEqualTo(0);
+        assertThat(metrics.path("data").path("falsePositiveRate").asDouble()).isEqualTo(0.0);
+        assertThat(metrics.path("data").path("falseNegativeRate").isNull()).isTrue();
         JsonNode item = result.path("data").path("items").get(0);
         assertThat(item.path("executionStatus").asText()).isEqualTo("SUCCEEDED");
         assertThat(item.path("evaluatorVerdict").asText()).isEqualTo("ALLOW");
