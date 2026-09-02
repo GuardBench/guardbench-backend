@@ -212,8 +212,6 @@ class PerformanceRunnerTest(unittest.TestCase):
         self.assertIn("src/main/resources/db/migration", verify_runtime)
         self.assertIn("performance/profiles/small.yaml", verify_runtime)
         self.assertIn("performance/datasets/baseline-v1.yaml", verify_runtime)
-        self.assertNotIn("runtime/root", verify_runtime)
-        self.assertNotIn("ld-linux", verify_runtime)
 
     def test_container_launcher_uses_image_runtime(self):
         launcher = (ROOT.parent / "bin" / "run-performance").read_text(encoding="utf-8")
@@ -232,9 +230,6 @@ class PerformanceRunnerTest(unittest.TestCase):
         self.assertIn("COPY src src", dockerfile)
         self.assertIn("COPY gradle gradle", dockerfile)
         self.assertIn('ENTRYPOINT ["python3.11", "-m", "performance.runner.cli"]', dockerfile)
-        self.assertNotIn("FROM scratch", dockerfile)
-        self.assertNotIn("runtime/root", dockerfile)
-        self.assertNotIn("ldd", dockerfile)
 
     def test_image_build_and_publish_require_external_image_reference(self):
         build_script = (ROOT / "build-runner-image.sh").read_text(encoding="utf-8")

@@ -99,26 +99,30 @@ python3 -m performance.runner.cli --reset
 `k6-summary.json`, `aws-metrics.json`, `result.json`, `report.md`로 저장한다. `report.md`의
 Application/Infrastructure revision은 `APP_REVISION`, `INFRA_REVISION` 환경변수로 주입한다.
 
-## Spot Runner artifact와 결과 보존
+## Spot Runner image와 결과 보존
 
-IaC의 AL2023 Spot Runner는 private subnet에서 다음 bootstrap artifact를 받는다. artifact는
-Python dependency, k6, PostgreSQL client, Java 21, Gradle dependency cache, backend migration과
-canonical HTTP fixture를 함께 제공하므로 실행 중 Git clone이나 package download가 필요 없다.
+Performance Runner는 private Spot host의 container runtime에서 직접 실행하는 Docker image다.
+Image에는 Python dependency, k6, PostgreSQL client, Java 21, Gradle dependency cache, backend
+migration과 canonical HTTP fixture를 함께 포함하므로 host의 실행 도구나 실행 중 Git clone/package
+download에 의존하지 않는다.
+
+Image repository와 URI는 배포 환경이 결정해 외부 입력으로 전달한다. Backend Git SHA는 image의
+`APP_REVISION` 환경변수와 OCI revision label에 기록한다.
 
 ```bash
-# Docker가 있는 Backend repository에서 실행한다.
-APP_REVISION="$(git rev-parse HEAD)" performance/artifact/build-runner-artifact.sh
+APP_REVISION="$(git rev-parse HEAD)" \
+  performance/build-runner-image.sh \
+  <account>.dkr.ecr.<region>.amazonaws.com/<repository>:<backend-git-sha>
 
-# IaC bootstrap contract에 publish한다.
-export PERFORMANCE_RESULTS_BUCKET=<terraform output performance_results_bucket_name>
-export APP_REVISION="$(git rev-parse HEAD)"
-bin/publish-runner-artifact
+# ECR login 후 외부에서 주입한 동일한 image reference를 publish한다.
+bin/publish-runner-image \
+  <account>.dkr.ecr.<region>.amazonaws.com/<repository>:<backend-git-sha>
 ```
 
-압축 해제 후 SSM bootstrap은 `/opt/guardbench-performance-runner/bin/verify-runtime`을 실행한다.
-이 검증은 runtime, Flyway/Gradle 입력, profile, dataset, canonical fixture와
-`performance.runner` import를 확인하고 하나라도 없으면 non-zero로 종료한다. artifact의
-`ARTIFACT-METADATA.json`에는 Backend revision과 k6 version이 포함된다.
+Container 시작점은 `python3.11 -m performance.runner.cli`이며 기존 `--dry-run`, `--reset`,
+`--profile`, `--dataset` 옵션을 그대로 사용한다. `/workspace/bin/verify-runtime`은 container
+내부의 Python, k6, psql, Java, Gradle/Flyway 입력, profile, dataset, canonical fixture와
+`performance.runner` import를 확인하고 하나라도 없으면 non-zero로 종료한다.
 
 실제 Runner는 `PERFORMANCE_RESULTS_BUCKET`이 설정된 경우, 결과 파일을 모두 만든 뒤 다음
 prefix에 업로드한다. 따라서 PASS와 acceptance FAIL(k6 exit 99 포함)은 모두 보존된다. S3 upload
