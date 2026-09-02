@@ -10,6 +10,7 @@ from performance.runner.config import ConfigurationError, load_profile
 from performance.runner.dataset import load_seed_payload
 from performance.runner.cli import K6_THRESHOLD_FAILURE_EXIT_CODE, RunnerError, reset_database, run_k6
 from performance.runner.safety import migration_jdbc_url, validate_reset_safety
+from performance.runner.storage import RESULT_FILENAMES, ResultUploadError, upload_result_directory
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -171,6 +172,44 @@ class PerformanceRunnerTest(unittest.TestCase):
             with patch("performance.runner.cli.subprocess.run", return_value=completed):
                 with self.assertRaises(RunnerError):
                     run_k6(k6_profile(), "run-id", 1, "http://localhost", summary_path, ROOT.parent)
+
+    def test_completed_result_files_are_uploaded_to_the_run_prefix(self):
+        class FakeS3:
+            def __init__(self):
+                self.calls = []
+
+            def upload_file(self, filename, bucket, key):
+                self.calls.append((Path(filename).name, bucket, key))
+
+        with tempfile.TemporaryDirectory() as directory:
+            result_dir = Path(directory)
+            for filename in RESULT_FILENAMES:
+                (result_dir / filename).write_text("{}", encoding="utf-8")
+            client = FakeS3()
+
+            upload_result_directory(result_dir, "performance-results", "small-123", s3_client=client)
+
+        self.assertEqual(len(RESULT_FILENAMES), len(client.calls))
+        self.assertEqual(
+            ("result.json", "performance-results", "performance/results/small-123/result.json"),
+            client.calls[-2],
+        )
+
+    def test_result_upload_rejects_incomplete_runs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(ResultUploadError):
+                upload_result_directory(Path(directory), "performance-results", "small-123", s3_client=object())
+
+    def test_verify_runtime_checks_packaged_contract_inputs(self):
+        verify_runtime = (ROOT.parent / "bin" / "verify-runtime").read_text(encoding="utf-8")
+
+        self.assertIn("runtime/bin/python3", verify_runtime)
+        self.assertIn("runtime/bin/k6", verify_runtime)
+        self.assertIn("runtime/bin/psql", verify_runtime)
+        self.assertIn("runtime/bin/java", verify_runtime)
+        self.assertIn("src/main/resources/db/migration", verify_runtime)
+        self.assertIn("performance/profiles/small.yaml", verify_runtime)
+        self.assertIn("performance/datasets/baseline-v1.yaml", verify_runtime)
 
 
 if __name__ == "__main__":
