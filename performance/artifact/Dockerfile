@@ -53,15 +53,23 @@ RUN set -eux; \
     cp -a /workspace/. /artifact/; \
     find /artifact/runtime/root -type d ! -perm -u+w -exec chmod u+w {} +; \
     printf '{\n  "backend_revision": "%s",\n  "k6_version": "%s",\n  "runner_os": "AL2023"\n}\n' "$APP_REVISION" "$K6_VERSION" > /artifact/ARTIFACT-METADATA.json; \
-    for command in python3 psql k6 java; do \
+    for command in python3 psql k6 java javac; do \
       case "$command" in \
         python3) target='/usr/bin/python3.11'; args='PYTHONHOME="$root/runtime/root/usr"';; \
         psql) target='/usr/bin/psql'; args='';; \
         k6) target='/usr/local/bin/k6'; args='';; \
         java) target='/usr/lib/jvm/java-21-amazon-corretto/bin/java'; args='';; \
+        javac) target='/usr/lib/jvm/java-21-amazon-corretto/bin/javac'; args='';; \
       esac; \
       printf '#!/usr/bin/env bash\nset -euo pipefail\nroot="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"\nloader="$root/runtime/root/lib64/ld-linux-x86-64.so.2"\nlibpath="$root/runtime/root/lib64:$root/runtime/root/usr/lib64"\nexport LD_LIBRARY_PATH="$libpath${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"\n%s\nexec "$loader" --library-path "$libpath" "$root/runtime/root%s" "$@"\n' "$args" "$target" > "/artifact/runtime/bin/$command"; \
       chmod +x "/artifact/runtime/bin/$command"; \
+    done; \
+    mkdir -p /artifact/runtime/java-home/bin; \
+    ln -s ../root/usr/lib/jvm/java-21-amazon-corretto/lib /artifact/runtime/java-home/lib; \
+    ln -s ../root/usr/lib/jvm/java-21-amazon-corretto/include /artifact/runtime/java-home/include; \
+    for command in java javac; do \
+      printf '#!/usr/bin/env bash\nset -euo pipefail\nroot="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"\nexec "$root/runtime/bin/%s" "$@"\n' "$command" > "/artifact/runtime/java-home/bin/$command"; \
+      chmod +x "/artifact/runtime/java-home/bin/$command"; \
     done; \
     chmod +x /artifact/bin/*
 
