@@ -5,7 +5,10 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 output="${1:-$root/build/runner-artifact/runner.tar.gz}"
 revision="${APP_REVISION:-$(git -C "$root" rev-parse HEAD)}"
 staging="$(mktemp -d)"
-cleanup() { rm -rf "$staging"; }
+cleanup() {
+  chmod -R u+rwX "$staging" 2>/dev/null || true
+  rm -rf "$staging" 2>/dev/null || true
+}
 trap cleanup EXIT
 
 mkdir -p "$(dirname "$output")"
