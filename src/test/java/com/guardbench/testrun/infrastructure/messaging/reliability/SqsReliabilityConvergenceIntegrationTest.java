@@ -52,23 +52,18 @@ import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
  *   <li><b>Harness/infrastructure 계약</b> — 현재 코드에서도 항상 성립해야 한다.
  *       LocalStack redrive, 실제 claim 경합, duplicate delivery 관측,
  *       Provider invocation count 관측 등 이 테스트 도구 자체의 신뢰성이다.</li>
- *   <li><b>#149 regression 계약</b> — #149 production fix 전에는 실패할 수 있다.
+ *   <li><b>#149 regression 계약</b> — #157에서 production fix가 구현되었다.
  *       {@code AlreadyHeld}와 Provider attempt 분리, partial finalize ACK,
- *       retry exhaustion 후 terminal convergence, TestRun FINISHED 수렴이다.
- *       이 이슈는 #149 production code를 수정하지 않으므로, 아래 시나리오가 실패하면
- *       그 자체가 #149의 결함을 정확히 재현한 유효한 결과다.</li>
+ *       retry exhaustion 후 terminal convergence, TestRun FINISHED 수렴이다.</li>
  * </ul>
  *
- * <p><b>현재 관측된 실제 결과: Scenario 1/2/4/5 PASS, Scenario 3은 알려진 production
- * regression으로 {@code @Disabled} 처리.</b> Scenario 3은 partial finalization
- * 메시지가 실제로 ACK(삭제)되는지를 직접 검증하는데, 현재 {@code
+ * <p><b>#157 production fix 이후 결과: Scenario 1/2/3/4/5 모두 PASS.</b> Scenario 3은
+ * partial finalization 메시지가 실제로 ACK(삭제)되는지를 직접 검증한다. 이전에는 {@code
  * EvaluationFinalizationWorkerConfiguration}이 {@code FinalizationOutcome.NotReady}를
  * NACK(false)으로 처리해 메시지가 {@code maxReceiveCount(5)} 소진 후 finalize DLQ로
- * 실제 이동한다(#149와 동일 패턴). mutation testing(핸들러를 강제로 항상 false 반환하도록
- * 조작 → FAIL, 원복 후 원본 코드에서도 동일하게 FAIL)으로 이 실패가 테스트 결함이 아니라
- * 실제 결함임을 확인했다. 테스트 본문과 기대값은 수정 후 계약을 그대로 유지하며 완화하지
- * 않는다. #149 production fix 구현 시 {@code @Disabled}를 제거하고 PASS를 완료조건으로
- * 삼는다.
+ * 실제 이동했다(#149와 동일 패턴, 관측값: DLQ depth=1). #157에서 {@code NotReady}를
+ * ACK(true)로 매핑하도록 수정해 partial finalization이 정상적인 중간 상태로 처리되고
+ * source finalize queue/DLQ에 남지 않는다.
  *
  * <p>시간 기반 설정은 절대값보다 관계로 검증한다.
  * <ul>
@@ -246,28 +241,14 @@ class SqsReliabilityConvergenceIntegrationTest {
     // 처리되어 ACK되는지 검증한다. #149 장애의 핵심은 이 상태가 NACK/retry로
     // 잘못 해석되어 finalize DLQ로 누적된 것이었다.
     //
-    // 현재 알려진 결과: FAIL (production bug, #149와 동일 패턴)
-    //   EvaluationFinalizationWorkerConfiguration.handleTestExecutionCompletedPort()가
-    //   FinalizationOutcome.NotReady를 false(NACK)로 매핑한다. 그 결과 partial
-    //   finalization 메시지는 ACK되지 않고 visibility timeout(1s)마다 재전달되어
-    //   maxReceiveCount(5) 소진 후 finalize DLQ로 실제로 이동한다(관측값: DLQ depth=1).
-    //   mutation testing으로 이 테스트의 유효성을 확인했다: handleTestExecutionCompletedPort를
-    //   강제로 항상 false를 반환하도록 조작(mutant)해도 FAIL, 원본 프로덕션 코드로
-    //   되돌려도 동일하게 FAIL한다. 즉 이 실패는 테스트 결함이 아니라 실제 결함이다.
-    //
-    // 이 이슈(#153)는 #149 production fix를 구현하지 않으므로 테스트 본문과 기대값은
-    // 수정 후 계약(partial finalization -> ACK, source/DLQ 모두 empty)을 그대로 유지하고
-    // @Disabled로만 비활성화한다. #149 production fix 구현 시 이 @Disabled를 제거하고
-    // 이 시나리오가 PASS하는 것을 완료조건으로 삼는다.
+    // #157에서 EvaluationFinalizationWorkerConfiguration.handleTestExecutionCompletedPort()가
+    // FinalizationOutcome.NotReady를 true(ACK)로 매핑하도록 수정했다. FinalizeTestRunService
+    // .finalize()는 NotReady를 반환하기 전 같은 트랜잭션에서 이미 진행도(updateProgress)를
+    // 반영하므로, partial finalization 메시지는 정상 ACK되고 source finalize queue/DLQ에
+    // 남지 않는다.
     // ─────────────────────────────────────────────────────────────
 
     @Test
-    @org.junit.jupiter.api.Disabled(
-            "Known regression tracked by #149: EvaluationFinalizationWorkerConfiguration이 "
-                    + "FinalizationOutcome.NotReady를 NACK(false)으로 처리해 partial finalization 메시지가 "
-                    + "maxReceiveCount(5) 소진 후 finalize DLQ로 실제 이동한다(관측: DLQ depth=1). "
-                    + "이 테스트는 수정 후 기대 계약(ACK, DLQ 미도달)을 그대로 유지한다. "
-                    + "#149 production fix 후 이 애노테이션을 제거하고 PASS를 완료조건으로 삼는다.")
     @DisplayName("Scenario 3: 일부 TestExecution만 terminal이면 finalize 메시지는 실제로 ACK(삭제)되고 재전달되지 않으며 DLQ로도 이동하지 않는다")
     void partialCompletionFinalizeIsAcknowledgedWithoutReachingDlq() {
         stub.useAlwaysSucceed();
@@ -285,20 +266,18 @@ class SqsReliabilityConvergenceIntegrationTest {
         sendExecutionCompleted(testRunId, snapshotId1);
 
         // 1) 메시지가 최초 1회 이상 receive되어 처리 시도가 실제로 일어났는지 확인한다.
-        //    NotReady -> false 경로에서 partial finalization이 progress 갱신만 하고
-        //    ACK되는지가 이 시나리오의 핵심이므로, "처리됨"을 진행률 반영으로 확인한다.
+        //    NotReady -> true(ACK) 경로에서 partial finalization이 progress를 갱신하는지가
+        //    이 시나리오의 핵심이므로, "처리됨"을 진행률 반영으로 확인한다.
         await().atMost(Duration.ofSeconds(6))
                 .pollInterval(Duration.ofMillis(200))
                 .until(() -> processedTestCaseCount(testRunId) == 1);
 
         // 2) 메시지가 실제로 ACK(삭제)되었는지 직접 검증한다.
-        //    NotReady -> false로 처리되면 SqsInboundPollingAdapter는 메시지를 삭제하지
-        //    않고 방치하므로, visibility timeout(1s)마다 재전달되어 maxReceiveCount(5)
-        //    소진 후 DLQ로 이동한다. "큐 depth가 일시적으로 0으로 보이는 순간"은 메시지가
-        //    아직 in-flight(재전달 대기) 상태일 때도 관측될 수 있어 ACK의 증거가 될 수 없다.
-        //    따라서 maxReceiveCount(5) * visibility timeout(1s)을 충분히 넘는 시간만큼
-        //    실제로 기다린 뒤(방치되었다면 이 시간 안에 반드시 DLQ로 이동한다), 원본 큐와
-        //    DLQ를 한 번에 최종 스냅샷으로 확인한다.
+        //    "큐 depth가 일시적으로 0으로 보이는 순간"은 메시지가 아직 in-flight(재전달 대기)
+        //    상태일 때도 관측될 수 있어 ACK의 증거가 될 수 없다. 따라서 maxReceiveCount(5) *
+        //    visibility timeout(1s)을 충분히 넘는 시간만큼 실제로 기다린 뒤(ACK되지 않고
+        //    방치되었다면 이 시간 안에 반드시 DLQ로 이동한다), 원본 큐와 DLQ를 한 번에
+        //    최종 스냅샷으로 확인한다.
         await().atMost(Duration.ofSeconds(20))
                 .pollDelay(Duration.ofSeconds(15))
                 .pollInterval(Duration.ofMillis(500))
@@ -316,7 +295,7 @@ class SqsReliabilityConvergenceIntegrationTest {
                         + "충분한 시간이 지나도 원본 큐에 재전달되어 남아 있지 않아야 한다")
                 .isEmpty();
         assertThat(queueDepth(TestRunQueue.FINALIZE.deadLetterQueueName()))
-                .as("partial finalization은 정상 중간 상태이므로 방치(NACK)되어 DLQ로 누적되지 않아야 한다. "
+                .as("partial finalization은 정상 중간 상태이므로 ACK되어 DLQ로 누적되지 않아야 한다. "
                         + "DLQ에 메시지가 있다면 이 메시지가 ACK되지 않고 계속 재전달되다 maxReceiveCount를 "
                         + "소진했다는 뜻이다")
                 .isZero();
