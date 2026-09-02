@@ -13,12 +13,12 @@ import com.guardbench.testrun.application.port.out.ResolutionClaimPort;
 @Repository
 class PostgresResolutionClaimAdapter implements ResolutionClaimPort {
 
-    private static final int LEASE_SECONDS = 45;
-
     private final EntityManager entityManager;
+    private final int leaseSeconds;
 
-    PostgresResolutionClaimAdapter(EntityManager entityManager) {
+    PostgresResolutionClaimAdapter(EntityManager entityManager, ClaimProperties claimProperties) {
         this.entityManager = entityManager;
+        this.leaseSeconds = claimProperties.leaseSeconds();
     }
 
     @Override
@@ -36,7 +36,7 @@ class PostgresResolutionClaimAdapter implements ResolutionClaimPort {
                             updated_at = clock_timestamp()
                         WHERE test_run_resolution_claim.lease_until <= clock_timestamp()
                         RETURNING claim_token, attempt_count
-                        """.formatted(LEASE_SECONDS, LEASE_SECONDS))
+                        """.formatted(leaseSeconds, leaseSeconds))
                 .setParameter("testRunId", testRunId)
                 .setParameter("claimToken", newToken.toString())
                 .getResultList();
