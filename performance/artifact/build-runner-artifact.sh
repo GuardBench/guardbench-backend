@@ -14,10 +14,12 @@ docker build \
   --build-arg "APP_REVISION=$revision" \
   --file "$root/performance/artifact/Dockerfile" \
   --target artifact \
-  --output "type=local,dest=$staging" \
+  --output "type=tar,dest=$staging/artifact.tar" \
   "$root"
 
+mkdir -p "$staging/root"
+tar --extract --file "$staging/artifact.tar" --directory "$staging/root"
 tar --create --gzip --file "$output" \
-  --directory "$staging" \
+  --directory "$staging/root" \
   --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner .
 printf 'Created %s (Backend revision: %s)\n' "$output" "$revision"
