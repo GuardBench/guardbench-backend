@@ -231,15 +231,66 @@ class PerformanceRunnerTest(unittest.TestCase):
         self.assertIn("COPY gradle gradle", dockerfile)
         self.assertIn('ENTRYPOINT ["python3.11", "-m", "performance.runner.cli"]', dockerfile)
 
-    def test_image_build_and_publish_require_external_image_reference(self):
+    def test_image_build_derives_tag_and_revision_from_repository_head(self):
         build_script = (ROOT / "build-runner-image.sh").read_text(encoding="utf-8")
         publish_script = (ROOT.parent / "bin" / "publish-runner-image").read_text(encoding="utf-8")
 
         self.assertIn('[[ $# -ne 1 || -z "$1" ]]', build_script)
+        self.assertIn('repository="$1"', build_script)
+        self.assertIn('revision="$(git -C "$root" rev-parse HEAD)"', build_script)
+        self.assertIn('image_ref="${repository}:${revision}"', build_script)
+        self.assertNotIn('APP_REVISION:-', build_script)
         self.assertIn('"$root/performance/Dockerfile"', build_script)
         self.assertIn('--tag "$image_ref"', build_script)
         self.assertIn('docker push "$1"', publish_script)
         self.assertNotIn("guardbench", build_script)
+
+    def test_image_build_passes_one_git_sha_to_tag_and_revision(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fake_bin = Path(directory) / "bin"
+            fake_bin.mkdir()
+            docker_args = Path(directory) / "docker-args"
+            fake_docker = fake_bin / "docker"
+            fake_docker.write_text(
+                '#!/usr/bin/env bash\nprintf \'%s\\n\' "$@" > "$DOCKER_ARGS_FILE"\n',
+                encoding="utf-8",
+            )
+            fake_docker.chmod(0o755)
+            environment = dict(os.environ)
+            environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
+            environment["DOCKER_ARGS_FILE"] = str(docker_args)
+            environment["APP_REVISION"] = "caller-selected-revision"
+
+            completed = subprocess.run(
+                [str(ROOT / "build-runner-image.sh"), "registry.example/performance-runner"],
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            revision = subprocess.run(
+                ["git", "-C", str(ROOT.parent), "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            arguments = docker_args.read_text(encoding="utf-8").splitlines()
+            self.assertIn(f"registry.example/performance-runner:{revision}", arguments)
+            self.assertIn(f"APP_REVISION={revision}", arguments)
+            self.assertNotIn("caller-selected-revision", arguments)
+
+    def test_image_build_rejects_a_repository_with_a_caller_selected_tag(self):
+        completed = subprocess.run(
+            [str(ROOT / "build-runner-image.sh"), "registry.example/performance-runner:caller-tag"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(2, completed.returncode)
+        self.assertIn("must not include a tag", completed.stderr)
 
 
 if __name__ == "__main__":

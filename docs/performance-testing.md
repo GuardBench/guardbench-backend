@@ -110,14 +110,17 @@ Image repository와 URI는 배포 환경이 결정해 외부 입력으로 전달
 `APP_REVISION` 환경변수와 OCI revision label에 기록한다.
 
 ```bash
-APP_REVISION="$(git rev-parse HEAD)" \
-  performance/build-runner-image.sh \
-  <account>.dkr.ecr.<region>.amazonaws.com/<repository>:<backend-git-sha>
+repository=<account>.dkr.ecr.<region>.amazonaws.com/<repository>
+performance/build-runner-image.sh "$repository"
 
-# ECR login 후 외부에서 주입한 동일한 image reference를 publish한다.
+# Build script가 출력한 현재 Git SHA tag의 image reference를 ECR login 후 publish한다.
 bin/publish-runner-image \
-  <account>.dkr.ecr.<region>.amazonaws.com/<repository>:<backend-git-sha>
+  "$repository:$(git rev-parse HEAD)"
 ```
+
+Build script는 호출자가 전달한 repository URI에 현재 Backend Git SHA를 단 하나의 tag로 붙인다.
+따라서 image tag, `APP_REVISION`, OCI revision label은 항상 같은 revision을 가리키며, 호출자가
+서로 다른 tag/revision 조합을 지정할 수 없다.
 
 Container 시작점은 `python3.11 -m performance.runner.cli`이며 기존 `--dry-run`, `--reset`,
 `--profile`, `--dataset` 옵션을 그대로 사용한다. `/workspace/bin/verify-runtime`은 container
