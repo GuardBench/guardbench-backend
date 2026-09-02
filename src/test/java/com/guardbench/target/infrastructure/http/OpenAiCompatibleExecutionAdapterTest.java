@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.http.HttpClient;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -105,7 +106,7 @@ class OpenAiCompatibleExecutionAdapterTest {
     }
 
     private OpenAiCompatibleExecutionAdapter adapter() {
-        HttpEndpointProperties properties = new HttpEndpointProperties(1_000, 1_000, 1_024, true);
+        HttpEndpointProperties properties = new HttpEndpointProperties(1_000, 1_000, 1_024, true, List.of());
         return new OpenAiCompatibleExecutionAdapter(
                 HttpClient.newBuilder().connectTimeout(java.time.Duration.ofMillis(properties.connectTimeoutMs())).build(),
                 targetStore,
