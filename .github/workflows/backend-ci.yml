@@ -6,6 +6,15 @@ on:
   push:
     branches: [dev]
   workflow_dispatch:
+    inputs:
+      deployment_mode:
+        description: Select whether to deploy current dev source or only refresh infrastructure configuration.
+        required: true
+        default: infrastructure
+        type: choice
+        options:
+          - infrastructure
+          - source
 
 permissions:
   contents: read
@@ -78,7 +87,7 @@ jobs:
       ECS_CONTAINER_NAME: ${{ vars.ECS_CONTAINER_NAME }}
       ECS_TASK_DEFINITION_FAMILY: ${{ vars.ECS_TASK_DEFINITION_FAMILY }}
       IMAGE_TAG: ${{ github.sha }}
-      DEPLOYMENT_MODE: ${{ github.event_name == 'workflow_dispatch' && 'manual-infrastructure' || 'automatic-source' }}
+      DEPLOYMENT_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.deployment_mode == 'source' && 'manual-source' || github.event_name == 'workflow_dispatch' && 'manual-infrastructure' || 'automatic-source' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -91,9 +100,9 @@ jobs:
         with:
           role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Resolve automatic deployment image
-        id: automatic-image
-        if: github.event_name == 'push'
+      - name: Resolve source deployment image
+        id: source-image
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deployment_mode == 'source')
         shell: bash
         run: |
           set -euo pipefail
@@ -102,9 +111,9 @@ jobs:
           echo "uri=${image_uri}" >> "$GITHUB_OUTPUT"
           echo "Deploying commit ${IMAGE_TAG} as ${image_uri}" >> "$GITHUB_STEP_SUMMARY"
       - name: Build and push image when the commit tag is new
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deployment_mode == 'source')
         env:
-          IMAGE_URI: ${{ steps.automatic-image.outputs.uri }}
+          IMAGE_URI: ${{ steps.source-image.outputs.uri }}
         shell: bash
         run: |
           set -euo pipefail
@@ -123,7 +132,7 @@ jobs:
           echo "Pushed immutable ECR image ${IMAGE_URI}" >> "$GITHUB_STEP_SUMMARY"
       - name: Resolve current service application image for manual deployment
         id: manual-image
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.deployment_mode == 'infrastructure'
         shell: bash
         run: |
           set -euo pipefail
@@ -156,7 +165,7 @@ jobs:
       - name: Register revision from the latest active task definition
         id: task-definition
         env:
-          IMAGE_URI: ${{ github.event_name == 'workflow_dispatch' && steps.manual-image.outputs.uri || steps.automatic-image.outputs.uri }}
+          IMAGE_URI: ${{ github.event_name == 'workflow_dispatch' && inputs.deployment_mode == 'infrastructure' && steps.manual-image.outputs.uri || steps.source-image.outputs.uri }}
         shell: bash
         run: |
           set -euo pipefail
@@ -219,7 +228,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Deploy and verify target revision
         env:
-          IMAGE_URI: ${{ github.event_name == 'workflow_dispatch' && steps.manual-image.outputs.uri || steps.automatic-image.outputs.uri }}
+          IMAGE_URI: ${{ github.event_name == 'workflow_dispatch' && inputs.deployment_mode == 'infrastructure' && steps.manual-image.outputs.uri || steps.source-image.outputs.uri }}
           TARGET_TASK_DEFINITION: ${{ steps.task-definition.outputs.arn }}
         shell: bash
         run: |
@@ -252,7 +261,7 @@ jobs:
           echo "$service_state" | jq '{taskDefinition, deployments, events: .events[0:10]}'
           {
             echo "Deployment mode: ${DEPLOYMENT_MODE}"
-            if [[ "$DEPLOYMENT_MODE" == "automatic-source" ]]; then
+            if [[ "$DEPLOYMENT_MODE" == *"-source" ]]; then
               echo "Commit: ${IMAGE_TAG}"
             else
               echo "Image source: current ECS Service"
