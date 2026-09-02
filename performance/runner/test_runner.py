@@ -207,9 +207,22 @@ class PerformanceRunnerTest(unittest.TestCase):
         self.assertIn("runtime/bin/k6", verify_runtime)
         self.assertIn("runtime/bin/psql", verify_runtime)
         self.assertIn("runtime/bin/java", verify_runtime)
+        self.assertIn("bin/run-performance", verify_runtime)
         self.assertIn("src/main/resources/db/migration", verify_runtime)
         self.assertIn("performance/profiles/small.yaml", verify_runtime)
         self.assertIn("performance/datasets/baseline-v1.yaml", verify_runtime)
+
+    def test_artifact_launcher_uses_only_bundled_runtime_paths(self):
+        launcher = (ROOT.parent / "bin" / "run-performance").read_text(encoding="utf-8")
+        gradle = (ROOT.parent / "bin" / "gradle").read_text(encoding="utf-8")
+
+        self.assertIn('PATH="$root/runtime/bin:$PATH"', launcher)
+        self.assertIn('PYTHONPATH="$root/runtime/python', launcher)
+        self.assertIn('JAVA_HOME="$root/runtime/root/usr/lib/jvm/java-21-amazon-corretto"', launcher)
+        self.assertIn('K6_BIN="$root/runtime/bin/k6"', launcher)
+        self.assertIn('exec "$root/runtime/bin/python3" -m performance.runner.cli "$@"', launcher)
+        self.assertIn('JAVA_HOME="$root/runtime/root/usr/lib/jvm/java-21-amazon-corretto"', gradle)
+        self.assertIn('--offline', gradle)
 
 
 if __name__ == "__main__":

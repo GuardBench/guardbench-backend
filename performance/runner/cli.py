@@ -46,7 +46,7 @@ def reset_database(environment: dict[str, str]) -> None:
     database_url = environment.get("PERFORMANCE_DATABASE_URL")
     validate_reset_safety(environment, database_url)
     command = [
-        "psql", "--no-psqlrc", "--dbname", database_url, "--no-align", "--tuples-only",
+        os.environ.get("PSQL_BIN", "psql"), "--no-psqlrc", "--dbname", database_url, "--no-align", "--tuples-only",
         "--set", "ON_ERROR_STOP=1", "--command",
         "SELECT current_database(); "
         "DO $$ BEGIN "

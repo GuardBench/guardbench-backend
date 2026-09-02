@@ -25,7 +25,7 @@ COPY bin bin
 
 RUN mkdir -p runtime/python runtime/gradle-user-home \
     && python3.11 -m pip install --no-cache-dir --target runtime/python -r performance/requirements.txt \
-    && GRADLE_USER_HOME=/workspace/runtime/gradle-user-home ./gradlew --no-daemon classes
+    && GRADLE_USER_HOME=/workspace/runtime/gradle-user-home ./gradlew --no-daemon classes resolvePerformanceRuntime
 
 # Native command dependencies are copied next to the artifact. AL2023 keeps the
 # dynamic-loader ABI stable for this runner contract; launchers below point all
