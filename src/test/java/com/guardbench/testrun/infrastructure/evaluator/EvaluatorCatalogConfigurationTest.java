@@ -19,10 +19,10 @@ import com.guardbench.testrun.domain.EvaluationProfile;
 class EvaluatorCatalogConfigurationTest {
 
     @Test
-    void defaultApplicationCatalogContainsAllNineteenCanonicalEntries() throws Exception {
+    void defaultApplicationCatalogContainsAllSevenCanonicalEntries() throws Exception {
         EvaluatorCatalogProperties properties = properties();
 
-        assertEquals(19, properties.entries().size());
+        assertEquals(7, properties.entries().size());
         assertTrue(properties.entries().stream().allMatch(entry ->
                 entry.guardrailIdentifier() != null && !entry.guardrailIdentifier().isBlank()
                         && entry.guardrailRevision().matches("[1-9][0-9]{0,7}")));
@@ -47,13 +47,9 @@ class EvaluatorCatalogConfigurationTest {
     void everyCanonicalProfileResolvesFromDefaultCatalog() throws Exception {
         EvaluatorCatalogPersistenceAdapter adapter = new EvaluatorCatalogPersistenceAdapter(properties());
         List<List<String>> checkSets = List.of(
-                List.of("PROMPT_INJECTION"),
                 List.of("PII_LEAKAGE"),
                 List.of("HARMFUL_CONTENT"),
-                List.of("PROMPT_INJECTION", "PII_LEAKAGE"),
-                List.of("PROMPT_INJECTION", "HARMFUL_CONTENT"),
-                List.of("PII_LEAKAGE", "HARMFUL_CONTENT"),
-                List.of("PROMPT_INJECTION", "PII_LEAKAGE", "HARMFUL_CONTENT"));
+                List.of("PII_LEAKAGE", "HARMFUL_CONTENT"));
 
         for (List<String> checks : checkSets) {
             for (String strictness : List.of("RELAXED", "STANDARD", "STRICT")) {

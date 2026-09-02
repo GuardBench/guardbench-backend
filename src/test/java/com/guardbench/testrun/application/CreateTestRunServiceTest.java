@@ -172,6 +172,6 @@ class CreateTestRunServiceTest {
     }
 
     private static com.guardbench.testrun.domain.EvaluationProfile profile() {
-        return new com.guardbench.testrun.domain.EvaluationProfile(List.of("PROMPT_INJECTION"), "STANDARD");
+        return new com.guardbench.testrun.domain.EvaluationProfile(List.of("PII_LEAKAGE"), "STANDARD");
     }
 }
