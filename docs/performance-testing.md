@@ -99,6 +99,43 @@ python3 -m performance.runner.cli --reset
 `k6-summary.json`, `aws-metrics.json`, `result.json`, `report.md`로 저장한다. `report.md`의
 Application/Infrastructure revision은 `APP_REVISION`, `INFRA_REVISION` 환경변수로 주입한다.
 
+## Spot Runner image와 결과 보존
+
+Performance Runner는 private Spot host의 container runtime에서 직접 실행하는 Docker image다.
+Image에는 Python dependency, k6, PostgreSQL client, Java 21, Gradle dependency cache, backend
+migration과 canonical HTTP fixture를 함께 포함하므로 host의 실행 도구나 실행 중 Git clone/package
+download에 의존하지 않는다.
+
+Image repository와 URI는 배포 환경이 결정해 외부 입력으로 전달한다. Backend Git SHA는 image의
+`APP_REVISION` 환경변수와 OCI revision label에 기록한다.
+
+```bash
+repository=<account>.dkr.ecr.<region>.amazonaws.com/<repository>
+performance/build-runner-image.sh "$repository"
+
+# Build script가 출력한 현재 Git SHA tag의 image reference를 ECR login 후 publish한다.
+bin/publish-runner-image \
+  "$repository:$(git rev-parse HEAD)"
+```
+
+Build script는 호출자가 전달한 repository URI에 현재 Backend Git SHA를 단 하나의 tag로 붙인다.
+따라서 image tag, `APP_REVISION`, OCI revision label은 항상 같은 revision을 가리키며, 호출자가
+서로 다른 tag/revision 조합을 지정할 수 없다.
+
+Container 시작점은 `python3.11 -m performance.runner.cli`이며 기존 `--dry-run`, `--reset`,
+`--profile`, `--dataset` 옵션을 그대로 사용한다. `/workspace/bin/verify-runtime`은 container
+내부의 Python, k6, psql, Java, Gradle/Flyway 입력, profile, dataset, canonical fixture와
+`performance.runner` import를 확인하고 하나라도 없으면 non-zero로 종료한다.
+
+실제 Runner는 `PERFORMANCE_RESULTS_BUCKET`이 설정된 경우, 결과 파일을 모두 만든 뒤 다음
+prefix에 업로드한다. 따라서 PASS와 acceptance FAIL(k6 exit 99 포함)은 모두 보존된다. S3 upload
+실패는 정상 성능 판정과 구분되는 Runner 오류이며, 로컬 결과는 남긴다. 환경변수가 없는 로컬
+실행은 기존처럼 결과를 로컬에만 보존한다.
+
+```text
+s3://<PERFORMANCE_RESULTS_BUCKET>/performance/results/<run-id>/
+```
+
 로컬 API에 대한 입력 검증은 `--dry-run`으로 수행할 수 있다. 실제 비동기 Smoke 실행은
 SQS와 Worker가 동작하는 로컬 또는 dev 배포가 필요하다. LocalStack을 사용할 때는
 `PERF_SOURCE_QUEUE_URLS`와 `PERF_DLQ_URLS`에 LocalStack URL을 지정하고

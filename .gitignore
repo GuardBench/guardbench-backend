@@ -37,6 +37,8 @@ credentials
 bin/
 !**/src/main/**/bin/
 !**/src/test/**/bin/
+!/bin/
+!/bin/**
 
 # OS
 .DS_Store

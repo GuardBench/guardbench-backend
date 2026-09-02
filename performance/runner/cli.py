@@ -20,6 +20,7 @@ from .aws import CloudWatchMetricCollector, QueueInspector, queue_urls_from_envi
 from .config import ConfigurationError, load_dataset, load_profile
 from .dataset import load_seed_payload
 from .safety import EXPECTED_DATABASE_NAME, migration_jdbc_url, validate_reset_safety
+from .storage import ResultUploadError, upload_result_directory
 
 
 class RunnerError(RuntimeError):
@@ -45,7 +46,7 @@ def reset_database(environment: dict[str, str]) -> None:
     database_url = environment.get("PERFORMANCE_DATABASE_URL")
     validate_reset_safety(environment, database_url)
     command = [
-        "psql", "--no-psqlrc", "--dbname", database_url, "--no-align", "--tuples-only",
+        os.environ.get("PSQL_BIN", "psql"), "--no-psqlrc", "--dbname", database_url, "--no-align", "--tuples-only",
         "--set", "ON_ERROR_STOP=1", "--command",
         "SELECT current_database(); "
         "DO $$ BEGIN "
@@ -81,7 +82,8 @@ def apply_migrations(environment: dict[str, str], migration_dir: Path) -> None:
     else:
         # The application owns Flyway history/checksums. A non-web Boot run applies
         # the same migrations and exits, rather than replaying SQL outside Flyway.
-        command = ["./gradlew", "bootRun", "--args=--spring.main.web-application-type=none"]
+        gradle_command = environment.get("PERFORMANCE_GRADLE_COMMAND", "./gradlew")
+        command = [gradle_command, "bootRun", "--args=--spring.main.web-application-type=none"]
     migration_environment = dict(environment)
     migration_environment.update({
         "SPRING_DATASOURCE_URL": jdbc_url,
@@ -307,6 +309,14 @@ def execute(args: argparse.Namespace) -> int:
     }
     (result_dir / "result.json").write_text(json.dumps(result, indent=2, default=str) + "\n", encoding="utf-8")
     (result_dir / "report.md").write_text(_report(result), encoding="utf-8")
+    bucket = os.environ.get("PERFORMANCE_RESULTS_BUCKET")
+    if bucket:
+        try:
+            upload_result_directory(result_dir, bucket, run_id)
+        except ResultUploadError as exc:
+            raise RunnerError("Performance 결과 S3 보존에 실패했습니다. 로컬 결과는 유지됩니다.") from exc
+    else:
+        print("PERFORMANCE_RESULTS_BUCKET이 없어 S3 결과 업로드를 건너뜁니다.", file=sys.stderr)
     print(f"{acceptance['status']}: {result_dir}")
     return 0 if acceptance["status"] == "PASS" else 1
 
