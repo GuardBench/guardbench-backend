@@ -1,0 +1,8 @@
+.git
+.gradle
+build
+performance/results
+__pycache__
+*.pyc
+.env
+.env.*

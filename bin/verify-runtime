@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export PYTHONPATH="$root/runtime/python${PYTHONPATH:+:$PYTHONPATH}"
+export GRADLE_USER_HOME="$root/runtime/gradle-user-home"
+
+"$root/runtime/bin/python3" --version
+"$root/runtime/bin/k6" version
+"$root/runtime/bin/psql" --version
+"$root/runtime/bin/java" -version
+test -x "$root/bin/gradle"
+test -f "$root/gradlew"
+test -d "$root/gradle/wrapper"
+test -d "$root/src/main/resources/db/migration"
+test -d "$root/runtime/gradle-user-home"
+test -f "$root/performance/profiles/small.yaml"
+test -f "$root/performance/datasets/baseline-v1.yaml"
+test -f "$root/http/testsets/notion-testset-import.http"
+cd "$root"
+"$root/runtime/bin/python3" -c 'import performance.runner'
+echo "GuardBench Performance Runner runtime verification passed."
