@@ -112,7 +112,7 @@ class FinalizeTestRunServiceTest {
                 assertEquals(QualityGateStatus.FAIL, result.status());
                 assertEquals(1.0, result.metrics().executionSuccessRate());
 
-                String completedLog = logCapture.firstMessageContaining("finalization completed");
+                String completedLog = logCapture.firstMessageContaining("finalization을 완료했습니다");
                 assertEquals(true, completedLog.contains("qualityGateStatus=FAIL"));
                 assertEquals(true, completedLog.contains("failureDimension=assertion"));
                 assertEquals(true, completedLog.contains("truePositive=0"));

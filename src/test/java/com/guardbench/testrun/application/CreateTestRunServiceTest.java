@@ -60,7 +60,7 @@ class CreateTestRunServiceTest {
 
             TestRunCreateResult result = service.create(command);
 
-            String acceptedLog = logCapture.firstMessageContaining("TestRun accepted");
+            String acceptedLog = logCapture.firstMessageContaining("TestRun을 접수했습니다");
             assertTrue(acceptedLog.contains("testRunId=" + result.id()));
             assertTrue(acceptedLog.contains("testCaseCount=2"));
             assertTrue(acceptedLog.contains("targetType=HTTP_ENDPOINT"));
