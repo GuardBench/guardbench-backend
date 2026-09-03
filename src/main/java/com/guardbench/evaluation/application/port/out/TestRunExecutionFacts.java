@@ -15,11 +15,13 @@ public record TestRunExecutionFacts(
         long testRunId,
         String testRunStatus,
         int testCaseCount,
+        String evaluatorReference,
         List<SnapshotExecutionFact> snapshotFacts
 ) {
 
     public TestRunExecutionFacts {
         Objects.requireNonNull(testRunStatus, "testRunStatus must not be null");
+        Objects.requireNonNull(evaluatorReference, "evaluatorReference must not be null");
         Objects.requireNonNull(snapshotFacts, "snapshotFacts must not be null");
         if (testCaseCount <= 0) {
             throw new IllegalArgumentException("testCaseCount must be positive");

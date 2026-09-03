@@ -58,6 +58,7 @@ class TestRunFinalizationIntegrationAdapter implements LoadTestRunExecutionFacts
                 source.testRunId(),
                 source.testRunStatus(),
                 source.testCaseCount(),
+                source.evaluatorReference(),
                 snapshotFacts
         );
     }

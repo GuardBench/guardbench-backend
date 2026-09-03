@@ -179,8 +179,15 @@ public class CreateTestRunService {
             ));
         }
 
-        log.info("TestRun accepted. testRunId={} testCaseCount={} eventId={} eventType={}",
-                testRunId.value(), sources.size(), requestedEvent.eventId(), requestedEvent.eventType());
+        log.info("TestRun accepted. testRunId={} testCaseCount={} targetType={} targetIdentifier={} "
+                        + "targetRevision={} targetModel={} evaluatorReferenceId={} evaluatorTypeCode={} "
+                        + "evaluatorIdentifier={} evaluatorRevision={} evaluationChecks={} evaluationStrictness={} "
+                        + "eventId={} eventType={}",
+                testRunId.value(), sources.size(), command.targetType(), command.targetIdentifier(),
+                command.targetRevision(), command.targetModel(), evaluatorReference.value(),
+                evaluatorRegistration.typeCode(), evaluatorRegistration.identifier(), evaluatorRegistration.revision(),
+                command.evaluationProfile().checks(), command.evaluationProfile().strictness(),
+                requestedEvent.eventId(), requestedEvent.eventType());
         return toResult(testRun, command);
     }
 

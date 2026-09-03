@@ -94,6 +94,7 @@ public class TestRunFinalizationFacade {
                 testRunId,
                 testRun.status().name(),
                 testRun.testCaseCount(),
+                testRun.evaluatorReference().value(),
                 facts
         ));
     }
