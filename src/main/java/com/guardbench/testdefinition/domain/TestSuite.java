@@ -7,7 +7,7 @@ import java.util.Objects;
  * 관련 TestCase를 묶는 정책 테스트 자산이며 Aggregate Root다.
  *
  * <p>{@code TestCase}와는 별도 Aggregate Root이므로 TestCase 컬렉션을 내부에 보유하지 않는다. 소속
- * 관계는 {@code TestCase}가 {@link TestSuiteId}로 가리킨다. 덕분에 TestCase의 독립 조회·수정·논리
+ * 관계는 {@code TestCase}가 {@link TestSuiteId}로 가리킨다. 덕분에 TestCase의 독립 조회·수정·영구
  * 삭제와 페이지 조회가 이 Aggregate를 경합 지점으로 만들지 않는다.
  *
  * <p>{@code testCaseCount}처럼 TestCase 집합에서 파생되는 값은 이 Aggregate가 관리하지 않는다.

@@ -44,4 +44,7 @@ public interface TestSuiteRepository {
     Optional<TestSuite> findById(TestSuiteId id);
 
     boolean existsById(TestSuiteId id);
+
+    /** TestSuite를 물리 삭제한다. */
+    void deleteById(TestSuiteId id);
 }

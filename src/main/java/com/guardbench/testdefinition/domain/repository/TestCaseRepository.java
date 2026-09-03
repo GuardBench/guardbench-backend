@@ -13,11 +13,8 @@ import com.guardbench.testdefinition.domain.TestSuiteId;
  * <p>Domain이 정의하고 {@code testdefinition/infrastructure/persistence}가 구현한다. Domain은 JPA와
  * Spring Data 타입을 알지 않는다.
  *
- * <p>삭제는 논리 삭제이므로 물리 삭제 method를 두지 않는다. 삭제는 Aggregate의 상태 변경을
- * {@link #save(TestCase)}로 반영해 수행한다.
- *
- * <p>승인된 유스케이스는 삭제된 TestCase를 찾지 못한 것으로 처리하므로 조회 method는 활성
- * TestCase만 반환한다. 페이지 조회와 검색·필터·정렬이 필요한 목록 조회는 이 Port가 아니라
+ * <p>TestCase 삭제는 물리 삭제로 수행하며 과거 실행 Snapshot은 별도로 보존한다. 페이지 조회와
+ * 검색·필터·정렬이 필요한 목록 조회는 이 Port가 아니라
  * Application 경계의 조회 전용 계약에 둔다.
  *
  * <p>근거: {@code docs/decisions/0001-domain-type-ownership-and-aggregate-boundaries.md},
@@ -51,16 +48,22 @@ public interface TestCaseRepository {
     /**
      * 삭제되지 않은 TestCase만 식별자로 조회한다.
      */
-    Optional<TestCase> findActiveById(TestCaseId id);
+    Optional<TestCase> findById(TestCaseId id);
 
     /**
-     * TestSuite에 현재 소속된 활성 TestCase를 모두 조회한다. TestRun 접수 시점의 실행 대상 집합을
+     * TestSuite에 현재 소속된 TestCase를 모두 조회한다. TestRun 접수 시점의 실행 대상 집합을
      * 만드는 데 사용한다.
      */
-    List<TestCase> findActiveByTestSuiteId(TestSuiteId testSuiteId);
+    List<TestCase> findByTestSuiteId(TestSuiteId testSuiteId);
 
     /**
-     * TestSuite에 현재 소속된 활성 TestCase 수를 센다.
+     * TestSuite에 소속된 TestCase 수를 센다.
      */
-    long countActiveByTestSuiteId(TestSuiteId testSuiteId);
+    long countByTestSuiteId(TestSuiteId testSuiteId);
+
+    /** TestSuite 삭제 전에 해당 Suite의 현재 TestCase를 모두 물리 삭제한다. */
+    void deleteAllByTestSuiteId(TestSuiteId testSuiteId);
+
+    /** TestCase를 물리 삭제한다. */
+    void deleteById(TestCaseId id);
 }

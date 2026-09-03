@@ -12,7 +12,7 @@ import com.guardbench.testdefinition.domain.Severity;
  * <p>소속 {@code TestSuiteId}를 담지 않는다. 승인된 API 계약이 부모 TestSuite를 경로로 식별하므로 항목마다
  * 중복해서 반환하지 않는다.
  *
- * <p>{@code deletedAt}도 담지 않는다. 이 Projection은 활성 TestCase만 표현한다.
+ * <p>삭제된 TestCase는 물리적으로 존재하지 않으므로 삭제 상태를 담지 않는다.
  *
  * <p>근거: {@code docs/api/openapi.yaml}
  */
