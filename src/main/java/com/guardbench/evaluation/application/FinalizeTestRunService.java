@@ -15,9 +15,12 @@ import com.guardbench.evaluation.application.port.out.FinalizeTestRunPort;
 import com.guardbench.evaluation.application.port.out.LoadTestRunExecutionFactsPort;
 import com.guardbench.evaluation.application.port.out.TestRunExecutionFacts;
 import com.guardbench.evaluation.application.port.out.TestRunExecutionFacts.SnapshotExecutionFact;
+import com.guardbench.evaluation.domain.AssertionStatus;
 import com.guardbench.evaluation.domain.EvaluationAction;
 import com.guardbench.evaluation.domain.QualityGateEvaluator;
+import com.guardbench.evaluation.domain.QualityGateMetrics;
 import com.guardbench.evaluation.domain.QualityGateResult;
+import com.guardbench.evaluation.domain.QualityGateStatus;
 import com.guardbench.evaluation.domain.SnapshotEvaluation;
 import com.guardbench.evaluation.domain.SnapshotEvaluationReference;
 import com.guardbench.evaluation.domain.SnapshotEvaluator;
@@ -174,15 +177,94 @@ public class FinalizeTestRunService {
                 facts.testCaseCount()
         );
 
-        log.info("TestRun finalization completed. testRunId={} qualityGateStatus={} executionOutcome={} processedTestCaseCount={} testCaseCount={} elapsedMs={}",
-                testRunId, qualityGateResult.status(), executionOutcomeCode, processedTestCaseCount,
-                facts.testCaseCount(), elapsedMs(finalizationStartedNanos));
+        VerdictCounts verdictCounts = countVerdicts(facts);
+        long assertionPassCount = evaluations.stream()
+                .filter(evaluation -> evaluation.assertionResult().status() == AssertionStatus.PASS)
+                .count();
+        long assertionFailCount = evaluations.size() - assertionPassCount;
+        long failedExecutionCount = facts.testCaseCount() - successfulExecutionCount;
+        String failureDimension = failureDimension(qualityGateResult);
+
+        log.info("TestRun finalization completed. testRunId={} evaluatorReference={} qualityGateStatus={} "
+                        + "executionOutcome={} processedTestCaseCount={} testCaseCount={} "
+                        + "executionSucceededCount={} executionFailedCount={} "
+                        + "assertionEvaluatedCount={} assertionPassCount={} assertionFailCount={} "
+                        + "truePositive={} trueNegative={} falsePositive={} falseNegative={} "
+                        + "assertionPassRate={} executionSuccessRate={} "
+                        + "assertionPassRateThreshold={} executionSuccessRateThreshold={} "
+                        + "failureDimension={} elapsedMs={}",
+                testRunId, facts.evaluatorReference(), qualityGateResult.status(), executionOutcomeCode,
+                processedTestCaseCount, facts.testCaseCount(), successfulExecutionCount, failedExecutionCount,
+                evaluations.size(), assertionPassCount, assertionFailCount,
+                verdictCounts.truePositive(), verdictCounts.trueNegative(),
+                verdictCounts.falsePositive(), verdictCounts.falseNegative(),
+                qualityGateResult.metrics() != null ? qualityGateResult.metrics().assertionPassRate() : null,
+                qualityGateResult.metrics() != null ? qualityGateResult.metrics().executionSuccessRate() : null,
+                qualityGateEvaluator.minimumAssertionPassRate(), qualityGateEvaluator.minimumExecutionSuccessRate(),
+                failureDimension, elapsedMs(finalizationStartedNanos));
 
         return FinalizationOutcome.finalized(qualityGateResult);
     }
 
     private static long elapsedMs(long startedNanos) {
         return (System.nanoTime() - startedNanos) / 1_000_000;
+    }
+
+    /**
+     * expected action과 evaluator verdict를 조합해 TP/TN/FP/FN을 집계한다.
+     *
+     * <p>evaluator verdict가 없는 실행(미실행 또는 실패)은 어느 분류에도 포함하지 않는다.
+     */
+    private static VerdictCounts countVerdicts(TestRunExecutionFacts facts) {
+        long truePositive = 0;
+        long trueNegative = 0;
+        long falsePositive = 0;
+        long falseNegative = 0;
+
+        for (SnapshotExecutionFact fact : facts.snapshotFacts()) {
+            String verdictCode = fact.execution().evaluatorVerdictCode();
+            if (verdictCode == null) {
+                continue;
+            }
+            boolean expectedBlock = "BLOCK".equals(fact.expectedActionCode());
+            boolean verdictBlock = "BLOCK".equals(verdictCode);
+
+            if (expectedBlock && verdictBlock) {
+                truePositive++;
+            } else if (!expectedBlock && !verdictBlock) {
+                trueNegative++;
+            } else if (!expectedBlock && verdictBlock) {
+                falsePositive++;
+            } else {
+                falseNegative++;
+            }
+        }
+
+        return new VerdictCounts(truePositive, trueNegative, falsePositive, falseNegative);
+    }
+
+    private record VerdictCounts(long truePositive, long trueNegative, long falsePositive, long falseNegative) {
+    }
+
+    /**
+     * Quality Gate FAIL을 유발한 지표 차원을 식별한다.
+     *
+     * <p>두 지표 모두 기준 미달이면 {@code "assertion,execution"}으로 표기한다.
+     * PASS 또는 NOT_EVALUATED는 {@code null}이다.
+     */
+    private String failureDimension(QualityGateResult qualityGateResult) {
+        if (qualityGateResult.status() != QualityGateStatus.FAIL) {
+            return null;
+        }
+        QualityGateMetrics metrics = qualityGateResult.metrics();
+        List<String> dimensions = new ArrayList<>();
+        if (metrics.assertionPassRate() < qualityGateEvaluator.minimumAssertionPassRate()) {
+            dimensions.add("assertion");
+        }
+        if (metrics.executionSuccessRate() < qualityGateEvaluator.minimumExecutionSuccessRate()) {
+            dimensions.add("execution");
+        }
+        return String.join(",", dimensions);
     }
 
     private List<SnapshotEvaluation> evaluateSnapshots(TestRunExecutionFacts facts, Instant now) {

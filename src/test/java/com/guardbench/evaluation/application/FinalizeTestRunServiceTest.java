@@ -90,6 +90,42 @@ class FinalizeTestRunServiceTest {
             assertEquals(1, qualityGateResultRepo.savedResults().size());
             assertEquals(2, snapshotEvaluationRepo.savedEvaluations().size());
         }
+
+        @Test
+        @DisplayName("Run 301 재현: 실행은 100% 성공했지만 assertion 미달로 FAIL이면 "
+                + "최종화 로그에 failureDimension=assertion과 TP/TN/FP/FN이 남는다")
+        void run301StyleAssertionFailureIsObservableInApplicationLog() {
+            com.guardbench.common.support.fixture.LogCapture logCapture =
+                    com.guardbench.common.support.fixture.LogCapture.attach(FinalizeTestRunService.class);
+            try {
+                loadFactsPort.setFacts(TEST_RUN_ID, runningFacts(4, List.of(
+                        succeededExecution(10L, "BLOCK", "ALLOW"),
+                        succeededExecution(20L, "BLOCK", "ALLOW"),
+                        succeededExecution(30L, "BLOCK", "ALLOW"),
+                        succeededExecution(40L, "ALLOW", "ALLOW")
+                )));
+
+                FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
+
+                assertInstanceOf(FinalizationOutcome.Finalized.class, outcome);
+                QualityGateResult result = ((FinalizationOutcome.Finalized) outcome).result();
+                assertEquals(QualityGateStatus.FAIL, result.status());
+                assertEquals(1.0, result.metrics().executionSuccessRate());
+
+                String completedLog = logCapture.firstMessageContaining("finalization completed");
+                assertEquals(true, completedLog.contains("qualityGateStatus=FAIL"));
+                assertEquals(true, completedLog.contains("failureDimension=assertion"));
+                assertEquals(true, completedLog.contains("truePositive=0"));
+                assertEquals(true, completedLog.contains("trueNegative=1"));
+                assertEquals(true, completedLog.contains("falsePositive=0"));
+                assertEquals(true, completedLog.contains("falseNegative=3"));
+                assertEquals(true, completedLog.contains("executionSucceededCount=4"));
+                assertEquals(true, completedLog.contains("executionFailedCount=0"));
+                assertEquals(true, completedLog.contains("evaluatorReference=evaluator-ref"));
+            } finally {
+                logCapture.detach();
+            }
+        }
     }
 
     @Nested
@@ -223,7 +259,7 @@ class FinalizeTestRunServiceTest {
             );
             qualityGateResultRepo.preStore(existing);
             loadFactsPort.setFacts(TEST_RUN_ID, new TestRunExecutionFacts(
-                    TEST_RUN_ID, "FINISHED", 2, List.of(
+                    TEST_RUN_ID, "FINISHED", 2, "evaluator-ref", List.of(
                     succeededExecution(10L, "BLOCK", "BLOCK"),
                     succeededExecution(20L, "BLOCK", "BLOCK"))));
 
@@ -282,7 +318,7 @@ class FinalizeTestRunServiceTest {
         @DisplayName("RUNNING이 아닌 상태에서는 NotReady")
         void notReadyWhenNotRunning() {
             loadFactsPort.setFacts(TEST_RUN_ID, new TestRunExecutionFacts(
-                    TEST_RUN_ID, "PREPARING", 2, List.of()));
+                    TEST_RUN_ID, "PREPARING", 2, "evaluator-ref", List.of()));
 
             FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
             assertInstanceOf(FinalizationOutcome.NotReady.class, outcome);
@@ -292,7 +328,7 @@ class FinalizeTestRunServiceTest {
         @DisplayName("FINISHED인데 QualityGateResult가 없으면 InvariantViolation")
         void invariantViolationWhenFinishedWithoutResult() {
             loadFactsPort.setFacts(TEST_RUN_ID, new TestRunExecutionFacts(
-                    TEST_RUN_ID, "FINISHED", 2, List.of()));
+                    TEST_RUN_ID, "FINISHED", 2, "evaluator-ref", List.of()));
 
             FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
             assertInstanceOf(FinalizationOutcome.InvariantViolation.class, outcome);
@@ -302,7 +338,7 @@ class FinalizeTestRunServiceTest {
     // ─── Fixture Helper ───────────────────────────────────────────────────────
 
     private static TestRunExecutionFacts runningFacts(int testCaseCount, List<SnapshotExecutionFact> facts) {
-        return new TestRunExecutionFacts(TEST_RUN_ID, "RUNNING", testCaseCount, facts);
+        return new TestRunExecutionFacts(TEST_RUN_ID, "RUNNING", testCaseCount, "evaluator-ref", facts);
     }
 
     private static SnapshotExecutionFact succeededExecution(

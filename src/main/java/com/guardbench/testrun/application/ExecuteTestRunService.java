@@ -108,10 +108,12 @@ public class ExecuteTestRunService {
         TargetExecutionNormalization targetNormalization = callTarget(context);
         if (!targetNormalization.isSuccess()) {
             TestExecutionError error = targetNormalization.error();
-            if (isRetryable(error.code()) && attemptCount < MAX_EXECUTION_ATTEMPTS) {
-                log.warn("Application target failure will be retried. testRunId={} snapshotId={} attemptCount={} failureCode={} elapsedMs={}",
-                        context.testRunId(), snapshotId, attemptCount, error.code(),
-                        elapsedMs(executionStartedNanos));
+            boolean retryable = isRetryable(error.code());
+            if (retryable && attemptCount < MAX_EXECUTION_ATTEMPTS) {
+                log.warn("Application target failure will be retried. testRunId={} snapshotId={} attemptCount={} "
+                                + "errorStage={} errorCode={} retryable={} reason={} elapsedMs={}",
+                        context.testRunId(), snapshotId, attemptCount, error.stage(), error.code(), retryable,
+                        error.message(), elapsedMs(executionStartedNanos));
                 return ExecutionOutcome.PROVIDER_FAILED_RETRYABLE;
             }
         }
@@ -122,10 +124,12 @@ public class ExecuteTestRunService {
             evaluatorNormalization = callEvaluator(context, response);
             if (!evaluatorNormalization.isSuccess()) {
                 TestExecutionError error = evaluatorNormalization.error();
-                if (isRetryable(error.code()) && attemptCount < MAX_EXECUTION_ATTEMPTS) {
-                    log.warn("Evaluator failure will be retried. testRunId={} snapshotId={} attemptCount={} failureCode={} elapsedMs={}",
-                            context.testRunId(), snapshotId, attemptCount, error.code(),
-                            elapsedMs(executionStartedNanos));
+                boolean retryable = isRetryable(error.code());
+                if (retryable && attemptCount < MAX_EXECUTION_ATTEMPTS) {
+                    log.warn("Evaluator failure will be retried. testRunId={} snapshotId={} attemptCount={} "
+                                    + "errorStage={} errorCode={} retryable={} reason={} elapsedMs={}",
+                            context.testRunId(), snapshotId, attemptCount, error.stage(), error.code(), retryable,
+                            error.message(), elapsedMs(executionStartedNanos));
                     return ExecutionOutcome.PROVIDER_FAILED_RETRYABLE;
                 }
             }
@@ -146,8 +150,13 @@ public class ExecuteTestRunService {
             outboxPort.save(completedEvent);
         });
 
-        log.info("TestExecution terminal result saved. testRunId={} snapshotId={} attemptCount={} status={} eventId={} elapsedMs={}",
+        log.info("TestExecution terminal result saved. testRunId={} snapshotId={} attemptCount={} status={} "
+                        + "evaluatorVerdict={} errorStage={} errorCode={} retryable={} eventId={} elapsedMs={}",
                 context.testRunId(), snapshotId, attemptCount, terminalExecution.status(),
+                terminalExecution.evaluationResult() != null ? terminalExecution.evaluationResult().action() : null,
+                terminalExecution.error() != null ? terminalExecution.error().stage() : null,
+                terminalExecution.error() != null ? terminalExecution.error().code() : null,
+                terminalExecution.error() != null && isRetryable(terminalExecution.error().code()),
                 completedEvent.eventId(), elapsedMs(executionStartedNanos));
         return ExecutionOutcome.EXECUTED;
     }

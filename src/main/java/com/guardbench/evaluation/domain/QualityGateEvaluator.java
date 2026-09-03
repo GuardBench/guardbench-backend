@@ -9,6 +9,16 @@ public final class QualityGateEvaluator {
     private static final double MINIMUM_PASS_RATE = 0.95;
     private static final double MINIMUM_EXECUTION_SUCCESS_RATE = 0.95;
 
+    /** Quality Gate PASS에 필요한 assertion pass rate 최소 기준이다. */
+    public double minimumAssertionPassRate() {
+        return MINIMUM_PASS_RATE;
+    }
+
+    /** Quality Gate PASS에 필요한 execution success rate 최소 기준이다. */
+    public double minimumExecutionSuccessRate() {
+        return MINIMUM_EXECUTION_SUCCESS_RATE;
+    }
+
     /**
      * 현재 TestRun의 생성된 Assertion과 전체 실행 결과를 집계한다.
      *

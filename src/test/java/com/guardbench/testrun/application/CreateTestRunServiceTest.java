@@ -1,6 +1,7 @@
 package com.guardbench.testrun.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -8,6 +9,7 @@ import java.util.List;
 
 import com.guardbench.common.error.ApplicationErrorCode;
 import com.guardbench.common.error.ApplicationException;
+import com.guardbench.common.support.fixture.LogCapture;
 import com.guardbench.testrun.application.port.out.OutboxEventRecord;
 import com.guardbench.testrun.application.port.out.TestCaseSnapshotSource;
 
@@ -42,6 +44,39 @@ class CreateTestRunServiceTest {
         assertEquals("TestRunRequested", event.eventType());
         assertEquals("TestRunRequested:" + result.id(), event.deduplicationKey());
         assertTrue(event.payload().contains("\"testRunId\":" + result.id()));
+    }
+
+    @Test
+    @DisplayName("TestRun 접수 시 target/evaluator reference와 evaluation profile이 구조화 로그에 남고 "
+            + "prompt/response/credential은 남지 않는다")
+    void logsTestRunAcceptanceWithTargetAndEvaluatorDetailsWithoutSensitiveData() {
+        LogCapture logCapture = LogCapture.attach(CreateTestRunService.class);
+        try {
+            CreateTestRunFakeAdapters adapters = new CreateTestRunFakeAdapters();
+            adapters.givenTestSuite(1L, List.of(SOURCE, SOURCE));
+            CreateTestRunService service = newService(adapters);
+            TestRunCreateCommand command = new TestRunCreateCommand(
+                    1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, profile(), null);
+
+            TestRunCreateResult result = service.create(command);
+
+            String acceptedLog = logCapture.firstMessageContaining("TestRun accepted");
+            assertTrue(acceptedLog.contains("testRunId=" + result.id()));
+            assertTrue(acceptedLog.contains("testCaseCount=2"));
+            assertTrue(acceptedLog.contains("targetType=HTTP_ENDPOINT"));
+            assertTrue(acceptedLog.contains("targetIdentifier=https://example.com/v1/chat/completions"));
+            assertTrue(acceptedLog.contains("targetRevision=v1"));
+            assertTrue(acceptedLog.contains("targetModel=" + MODEL));
+            assertTrue(acceptedLog.contains("evaluatorTypeCode=BEDROCK_GUARDRAIL"));
+            assertTrue(acceptedLog.contains("evaluatorIdentifier=guardrail-123"));
+            assertTrue(acceptedLog.contains("evaluatorRevision=1"));
+            assertTrue(acceptedLog.contains("evaluationChecks=[PII_LEAKAGE]"));
+            assertTrue(acceptedLog.contains("evaluationStrictness=STANDARD"));
+            assertFalse(acceptedLog.toLowerCase(java.util.Locale.ROOT).contains("authorization"));
+            assertFalse(acceptedLog.toLowerCase(java.util.Locale.ROOT).contains("bearer"));
+        } finally {
+            logCapture.detach();
+        }
     }
 
     @Test
