@@ -55,7 +55,7 @@ class SqsPollingScheduler {
         try {
             adapter.poll();
         } catch (Exception exception) {
-            log.error("Unexpected error polling {}. Will retry next cycle.", queue.queueName(), exception);
+            log.error("{} polling 중 예상하지 못한 오류가 발생했습니다. 다음 주기에 재시도합니다.", queue.queueName(), exception);
         }
     }
 }

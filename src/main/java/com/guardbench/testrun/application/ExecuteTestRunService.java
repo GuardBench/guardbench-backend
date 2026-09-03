@@ -82,14 +82,14 @@ public class ExecuteTestRunService {
         TestExecutionId executionId = new TestExecutionId(new TestCaseSnapshotId(snapshotId));
 
         if (testExecutionRepository.findById(executionId).isPresent()) {
-            log.info("TestExecution already terminal. snapshotId={} elapsedMs={}",
+            log.info("TestExecution이 이미 terminal 상태입니다. snapshotId={} elapsedMs={}",
                     snapshotId, elapsedMs(executionStartedNanos));
             return ExecutionOutcome.ALREADY_TERMINAL;
         }
 
         ClaimResult claimResult = executionClaimPort.tryAcquire(snapshotId);
         if (claimResult instanceof ClaimResult.AlreadyHeld) {
-            log.warn("TestExecution claim held by another worker. snapshotId={} elapsedMs={}",
+            log.warn("다른 Worker가 TestExecution claim을 보유 중입니다. snapshotId={} elapsedMs={}",
                     snapshotId, elapsedMs(executionStartedNanos));
             return ExecutionOutcome.CLAIM_HELD_BY_OTHER;
         }
@@ -99,7 +99,7 @@ public class ExecuteTestRunService {
         int attemptCount = acquired.attemptCount();
         ExecutionContext context = loadExecutionContextPort.load(snapshotId).orElse(null);
         if (context == null) {
-            log.warn("TestExecution context not found. snapshotId={} attemptCount={} elapsedMs={}",
+            log.warn("TestExecution context를 찾을 수 없습니다. snapshotId={} attemptCount={} elapsedMs={}",
                     snapshotId, attemptCount, elapsedMs(executionStartedNanos));
             return ExecutionOutcome.CONTEXT_NOT_FOUND;
         }
@@ -110,7 +110,7 @@ public class ExecuteTestRunService {
             TestExecutionError error = targetNormalization.error();
             boolean retryable = isRetryable(error.code());
             if (retryable && attemptCount < MAX_EXECUTION_ATTEMPTS) {
-                log.warn("Application target failure will be retried. testRunId={} snapshotId={} attemptCount={} "
+                log.warn("Application target 실패로 재시도합니다. testRunId={} snapshotId={} attemptCount={} "
                                 + "errorStage={} errorCode={} retryable={} reason={} elapsedMs={}",
                         context.testRunId(), snapshotId, attemptCount, error.stage(), error.code(), retryable,
                         error.message(), elapsedMs(executionStartedNanos));
@@ -126,7 +126,7 @@ public class ExecuteTestRunService {
                 TestExecutionError error = evaluatorNormalization.error();
                 boolean retryable = isRetryable(error.code());
                 if (retryable && attemptCount < MAX_EXECUTION_ATTEMPTS) {
-                    log.warn("Evaluator failure will be retried. testRunId={} snapshotId={} attemptCount={} "
+                    log.warn("Evaluator 실패로 재시도합니다. testRunId={} snapshotId={} attemptCount={} "
                                     + "errorStage={} errorCode={} retryable={} reason={} elapsedMs={}",
                             context.testRunId(), snapshotId, attemptCount, error.stage(), error.code(), retryable,
                             error.message(), elapsedMs(executionStartedNanos));
@@ -136,7 +136,7 @@ public class ExecuteTestRunService {
         }
 
         if (!executionClaimPort.isHeldBy(snapshotId, claimToken)) {
-            log.warn("TestExecution claim lost after provider calls. testRunId={} snapshotId={} attemptCount={} elapsedMs={}",
+            log.warn("Provider 호출 이후 TestExecution claim을 상실했습니다. testRunId={} snapshotId={} attemptCount={} elapsedMs={}",
                     context.testRunId(), snapshotId, attemptCount, elapsedMs(executionStartedNanos));
             return ExecutionOutcome.CLAIM_LOST_AFTER_EXECUTION;
         }
@@ -150,7 +150,7 @@ public class ExecuteTestRunService {
             outboxPort.save(completedEvent);
         });
 
-        log.info("TestExecution terminal result saved. testRunId={} snapshotId={} attemptCount={} status={} "
+        log.info("TestExecution terminal 결과를 저장했습니다. testRunId={} snapshotId={} attemptCount={} status={} "
                         + "evaluatorVerdict={} errorStage={} errorCode={} retryable={} eventId={} elapsedMs={}",
                 context.testRunId(), snapshotId, attemptCount, terminalExecution.status(),
                 terminalExecution.evaluationResult() != null ? terminalExecution.evaluationResult().action() : null,

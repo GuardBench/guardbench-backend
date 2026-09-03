@@ -111,7 +111,7 @@ public class CreateTestRunService {
         }
         TestRun testRun = testRunRepository.findById(new TestRunId(existing.testRunId()))
                 .orElseThrow(() -> new ApplicationException(ApplicationErrorCode.INTERNAL_SERVER_ERROR));
-        log.info("TestRun creation reused existing request. testRunId={} testCaseCount={} status={}",
+        log.info("동일한 요청으로 기존 TestRun 생성을 재사용했습니다. testRunId={} testCaseCount={} status={}",
                 testRun.id().value(), testRun.testCaseCount(), testRun.status());
         return toResult(testRun, command);
     }
@@ -179,7 +179,7 @@ public class CreateTestRunService {
             ));
         }
 
-        log.info("TestRun accepted. testRunId={} testCaseCount={} targetType={} targetIdentifier={} "
+        log.info("TestRun을 접수했습니다. testRunId={} testCaseCount={} targetType={} targetIdentifier={} "
                         + "targetRevision={} targetModel={} evaluatorReferenceId={} evaluatorTypeCode={} "
                         + "evaluatorIdentifier={} evaluatorRevision={} evaluationChecks={} evaluationStrictness={} "
                         + "eventId={} eventType={}",

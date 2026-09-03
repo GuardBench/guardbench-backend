@@ -43,7 +43,7 @@ class OutboxPublishScheduler {
             outboxPublisher.publishPending(batchSize);
         } catch (Exception exception) {
             // 발행 실패 event는 PENDING으로 남아 다음 주기에 같은 eventId로 재발행된다.
-            log.error("Unexpected error publishing pending outbox events. Will retry next cycle.", exception);
+            log.error("Pending outbox event 발행 중 예상하지 못한 오류가 발생했습니다. 다음 주기에 재시도합니다.", exception);
         }
     }
 }

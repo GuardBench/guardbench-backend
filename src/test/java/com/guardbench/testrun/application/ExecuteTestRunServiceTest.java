@@ -369,7 +369,7 @@ class ExecuteTestRunServiceTest {
                 ExecuteTestRunService.ExecutionOutcome retryOutcome = service.execute(SNAPSHOT_ID);
                 assertEquals(ExecuteTestRunService.ExecutionOutcome.PROVIDER_FAILED_RETRYABLE, retryOutcome);
 
-                String retryLog = logCapture.firstMessageContaining("will be retried");
+                String retryLog = logCapture.firstMessageContaining("실패로 재시도합니다");
                 assertTrue(retryLog.contains("errorCode=PROVIDER_UNAVAILABLE"));
                 assertTrue(retryLog.contains("retryable=true"));
                 assertTrue(retryLog.contains("testRunId=" + TEST_RUN_ID));
@@ -379,7 +379,7 @@ class ExecuteTestRunServiceTest {
                 ExecuteTestRunService.ExecutionOutcome terminalOutcome = service.execute(SNAPSHOT_ID);
                 assertEquals(ExecuteTestRunService.ExecutionOutcome.EXECUTED, terminalOutcome);
 
-                String terminalLog = logCapture.firstMessageContaining("terminal result saved");
+                String terminalLog = logCapture.firstMessageContaining("terminal 결과를 저장했습니다");
                 assertTrue(terminalLog.contains("errorCode=PROVIDER_UNAVAILABLE"));
                 assertTrue(terminalLog.contains("errorStage=APPLICATION_TARGET"));
                 assertTrue(terminalLog.contains("retryable=true"));
@@ -454,9 +454,9 @@ class ExecuteTestRunServiceTest {
                 ExecuteTestRunService.ExecutionOutcome outcome = service.execute(SNAPSHOT_ID);
 
                 assertEquals(ExecuteTestRunService.ExecutionOutcome.EXECUTED, outcome);
-                assertFalse(logCapture.hasMessageContaining("will be retried"));
+                assertFalse(logCapture.hasMessageContaining("실패로 재시도합니다"));
 
-                String terminalLog = logCapture.firstMessageContaining("terminal result saved");
+                String terminalLog = logCapture.firstMessageContaining("terminal 결과를 저장했습니다");
                 assertTrue(terminalLog.contains("testRunId=" + TEST_RUN_ID));
                 assertTrue(terminalLog.contains("snapshotId=" + SNAPSHOT_ID));
                 assertTrue(terminalLog.contains("errorStage=APPLICATION_TARGET"));
