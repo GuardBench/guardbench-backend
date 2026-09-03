@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.time.Instant;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,7 @@ import com.guardbench.testdefinition.application.query.TestCaseSummary;
 import com.guardbench.testdefinition.domain.Action;
 import com.guardbench.testdefinition.domain.Severity;
 import com.guardbench.testsupport.PostgresTestConfiguration;
+import com.guardbench.testrun.support.fixture.TestRunPersistenceFixture;
 
 @SpringBootTest
 @Import(PostgresTestConfiguration.class)
@@ -33,6 +35,9 @@ class TestCaseServiceIntegrationTest {
 
     @Autowired
     private TestSuiteService testSuiteService;
+
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     @Test
     @DisplayName("TestCase를 생성하고 상세 조회한 뒤 정의를 원자적으로 수정한다")
@@ -50,7 +55,7 @@ class TestCaseServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("논리 삭제 후 상세 조회는 404이고 현재 목록에서 제외된다")
+    @DisplayName("물리 삭제 후 상세 조회는 404이고 현재 목록에서 제외된다")
     void deletionReturnsNotFoundAndExcludesCurrentList() {
         long suiteId = createSuite();
         TestCaseDetail created = service.create(suiteId, createCommand());
@@ -64,6 +69,27 @@ class TestCaseServiceIntegrationTest {
                 TestCaseListCriteria.firstPage(new com.guardbench.testdefinition.domain.TestSuiteId(suiteId)));
         assertEquals(ApplicationErrorCode.TEST_CASE_NOT_FOUND, exception.errorCode());
         assertTrue(result.items().isEmpty());
+    }
+
+    @Test
+    @DisplayName("TestCase 삭제 후에도 과거 TestRun과 Snapshot을 보존한다")
+    void deletionPreservesHistoricalRunAndSnapshot() {
+        long suiteId = createSuite();
+        TestCaseDetail created = service.create(suiteId, createCommand());
+        TestRunPersistenceFixture fixture = new TestRunPersistenceFixture(jdbcTemplate);
+        fixture.insertQueuedTestRun(
+                910_001L, suiteId, 1, Instant.parse("2026-08-26T00:00:00Z"));
+        fixture.insertSnapshot(
+                920_001L, 910_001L, created.id(), Instant.parse("2026-08-26T00:00:00Z"));
+
+        service.delete(created.id());
+
+        assertEquals(1L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM test_run WHERE id = 910001", Long.class));
+        assertEquals(1L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM test_case_snapshot WHERE id = 920001", Long.class));
+        assertEquals(created.id(), jdbcTemplate.queryForObject(
+                "SELECT source_test_case_id FROM test_case_snapshot WHERE id = 920001", Long.class));
     }
 
     @Test

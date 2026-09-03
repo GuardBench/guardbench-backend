@@ -44,15 +44,14 @@ class TestSuiteListQueryAdapterIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     @Test
-    @DisplayName("활성 TestCase 수를 집계해 filter와 정렬한 뒤 페이지를 자른다")
-    void filtersAndSortsByActiveTestCaseCountBeforePagination() {
+    @DisplayName("TestCase 수를 집계해 filter와 정렬한 뒤 페이지를 자른다")
+    void filtersAndSortsByTestCaseCountBeforePagination() {
         insertSuite(10_001L, "빈 Suite", T0, T0);
         insertSuite(10_002L, "한 건 Suite", T0, T1);
         insertSuite(10_003L, "두 건 Suite", T1, T1);
-        insertCase(20_001L, 10_002L, "활성 1", null);
-        insertCase(20_002L, 10_003L, "활성 2-1", null);
-        insertCase(20_003L, 10_003L, "활성 2-2", null);
-        insertCase(20_004L, 10_003L, "삭제", T1);
+        insertCase(20_001L, 10_002L, "첫 번째");
+        insertCase(20_002L, 10_003L, "두 번째");
+        insertCase(20_003L, 10_003L, "세 번째");
 
         TestSuiteListCriteria criteria = new TestSuiteListCriteria(
                 null, null, null, 1L, 2L,
@@ -107,14 +106,12 @@ class TestSuiteListQueryAdapterIntegrationTest {
                 """, id, name, Timestamp.from(createdAt), Timestamp.from(updatedAt));
     }
 
-    private void insertCase(long id, long suiteId, String name, Instant deletedAt) {
+    private void insertCase(long id, long suiteId, String name) {
         jdbcTemplate.update("""
                 INSERT INTO test_case (
                     id, test_suite_id, name, input, expected_action, severity, category,
-                    created_at, updated_at, deleted_at)
-                VALUES (?, ?, ?, 'input', 'BLOCK', 'LOW', 'PII', ?, ?, ?)
-                """, id, suiteId, name, Timestamp.from(T0),
-                Timestamp.from(deletedAt == null ? T0 : deletedAt),
-                deletedAt == null ? null : Timestamp.from(deletedAt));
+                    created_at, updated_at)
+                VALUES (?, ?, ?, 'input', 'BLOCK', 'LOW', 'PII', ?, ?)
+                """, id, suiteId, name, Timestamp.from(T0), Timestamp.from(T0));
     }
 }

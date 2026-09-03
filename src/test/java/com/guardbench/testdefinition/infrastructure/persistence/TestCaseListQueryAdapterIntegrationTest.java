@@ -29,7 +29,7 @@ import com.guardbench.testdefinition.domain.TestSuiteId;
 import com.guardbench.testsupport.PostgresTestConfiguration;
 
 /**
- * 활성 TestCase 목록 filter, 의미 정렬과 Offset Pagination을 실제 PostgreSQL에서 검증한다.
+ * TestCase 목록 filter, 의미 정렬과 Offset Pagination을 실제 PostgreSQL에서 검증한다.
  *
  * @see <a href="file:../docs/decisions/0002-postgresql-persistence-contract.md">ADR 0002</a>
  */
@@ -57,19 +57,18 @@ class TestCaseListQueryAdapterIntegrationTest {
     }
 
     @Test
-    @DisplayName("severity는 LOW부터 CRITICAL 의미 순서로 정렬하고 삭제 행은 전체 건수에서도 제외한다")
-    void sortsSeverityByMeaningAndExcludesDeletedRows() {
-        insertCase(21_001L, "critical", "input", Action.BLOCK, Severity.CRITICAL, "PII", T0, null);
-        insertCase(21_002L, "low", "input", Action.BLOCK, Severity.LOW, "PII", T0, null);
-        insertCase(21_003L, "high", "input", Action.BLOCK, Severity.HIGH, "PII", T0, null);
-        insertCase(21_004L, "medium", "input", Action.BLOCK, Severity.MEDIUM, "PII", T0, null);
-        insertCase(21_005L, "deleted", "input", Action.BLOCK, Severity.LOW, "PII", T0, T1);
+    @DisplayName("severity는 LOW부터 CRITICAL 의미 순서로 정렬한다")
+    void sortsSeverityByMeaning() {
+        insertCase(21_001L, "critical", "input", Action.BLOCK, Severity.CRITICAL, "PII", T0);
+        insertCase(21_002L, "low", "input", Action.BLOCK, Severity.LOW, "PII", T0);
+        insertCase(21_003L, "high", "input", Action.BLOCK, Severity.HIGH, "PII", T0);
+        insertCase(21_004L, "medium", "input", Action.BLOCK, Severity.MEDIUM, "PII", T0);
 
         TestCaseListCriteria criteria = new TestCaseListCriteria(
                 new TestSuiteId(SUITE_ID), null, null, null, null, null, null, null,
                 List.of(SortOrder.asc(TestCaseSortField.SEVERITY)), new PageCriteria(1, 3));
 
-        PageResult<TestCaseSummary> result = query.findActive(criteria);
+        PageResult<TestCaseSummary> result = query.find(criteria);
 
         assertEquals(
                 List.of(Severity.LOW, Severity.MEDIUM, Severity.HIGH),
@@ -82,18 +81,18 @@ class TestCaseListQueryAdapterIntegrationTest {
     @DisplayName("모든 TestCase filter를 AND로 결합하고 생성 끝 시각은 제외한다")
     void combinesAllFiltersWithHalfOpenCreatedRange() {
         insertCase(21_011L, "PII_100% 차단", "SECRET token", Action.BLOCK,
-                Severity.CRITICAL, "PII", T0, null);
+                Severity.CRITICAL, "PII", T0);
         insertCase(21_012L, "PII_100% 허용", "secret token", Action.ALLOW,
-                Severity.CRITICAL, "PII", T0, null);
+                Severity.CRITICAL, "PII", T0);
         insertCase(21_013L, "PII_100% 차단", "secret token", Action.BLOCK,
-                Severity.CRITICAL, "PII", T1, null);
+                Severity.CRITICAL, "PII", T1);
 
         TestCaseListCriteria criteria = new TestCaseListCriteria(
                 new TestSuiteId(SUITE_ID), "_100% 차단", "secret", "PII",
                 Action.BLOCK, Severity.CRITICAL, T0, T1,
                 List.of(SortOrder.asc(TestCaseSortField.NAME)), PageCriteria.firstPage());
 
-        PageResult<TestCaseSummary> result = query.findActive(criteria);
+        PageResult<TestCaseSummary> result = query.find(criteria);
 
         assertEquals(List.of(21_011L), result.items().stream().map(TestCaseSummary::id).toList());
         assertEquals(1L, result.totalElements());
@@ -102,12 +101,12 @@ class TestCaseListQueryAdapterIntegrationTest {
     @Test
     @DisplayName("같은 정렬 값에는 id 보조 정렬을 적용해 연속 페이지가 중복되지 않는다")
     void appliesStableIdentifierSortAcrossPages() {
-        insertCase(21_021L, "same", "input", Action.ALLOW, Severity.LOW, "A", T0, null);
-        insertCase(21_022L, "same", "input", Action.ALLOW, Severity.LOW, "A", T0, null);
-        insertCase(21_023L, "same", "input", Action.ALLOW, Severity.LOW, "A", T0, null);
+        insertCase(21_021L, "same", "input", Action.ALLOW, Severity.LOW, "A", T0);
+        insertCase(21_022L, "same", "input", Action.ALLOW, Severity.LOW, "A", T0);
+        insertCase(21_023L, "same", "input", Action.ALLOW, Severity.LOW, "A", T0);
 
-        PageResult<TestCaseSummary> first = query.findActive(criteriaForPage(1));
-        PageResult<TestCaseSummary> second = query.findActive(criteriaForPage(2));
+        PageResult<TestCaseSummary> first = query.find(criteriaForPage(1));
+        PageResult<TestCaseSummary> second = query.find(criteriaForPage(2));
 
         assertEquals(List.of(21_021L, 21_022L), first.items().stream().map(TestCaseSummary::id).toList());
         assertEquals(List.of(21_023L), second.items().stream().map(TestCaseSummary::id).toList());
@@ -127,15 +126,13 @@ class TestCaseListQueryAdapterIntegrationTest {
             Action action,
             Severity severity,
             String category,
-            Instant createdAt,
-            Instant deletedAt) {
+            Instant createdAt) {
         jdbcTemplate.update("""
                 INSERT INTO test_case (
                     id, test_suite_id, name, input, expected_action, severity, category,
-                    created_at, updated_at, deleted_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, id, SUITE_ID, name, input, action.name(), severity.name(), category,
-                Timestamp.from(createdAt), Timestamp.from(deletedAt == null ? createdAt : deletedAt),
-                deletedAt == null ? null : Timestamp.from(deletedAt));
+                Timestamp.from(createdAt), Timestamp.from(createdAt));
     }
 }
