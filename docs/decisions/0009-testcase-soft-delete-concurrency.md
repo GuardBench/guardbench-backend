@@ -1,10 +1,14 @@
 # 0009. TestCase 논리 삭제의 동시 요청 처리
 
-> Status: APPROVED
+> Status: SUPERSEDED
 > Owner: Backend
 > Last reviewed: 2026-08-25
 > Canonical source: GitHub
 > Origin: [GitHub Issue #60](https://github.com/GuardBench/guardbench-backend/issues/60)
+
+> 이 ADR의 TestCase soft-delete 정책은 [ADR 0012](0012-testdefinition-hard-delete-and-historical-identity.md)와
+> [GitHub Issue #171](https://github.com/GuardBench/guardbench-backend/issues/171)에 의해 대체되었다.
+
 
 - ADR Status: ACCEPTED
 - Decision date: 2026-08-25

@@ -22,7 +22,7 @@ GuardBench가 검증하려는 System Under Test는 AI Application이다. Guardra
 ### 실행과 평가
 
 1. GuardBench의 SUT와 Target은 **AI Application**이다. 하나의 TestRun은 하나의 Application Target만 실행하며 MVP 공개 Target type은 `HTTP_ENDPOINT`다.
-2. TestRun 접수 시 활성 TestCase 정의를 `TestCaseSnapshot`으로 불변 복제한다. 이후 TestCase 수정·삭제는 해당 Run의 실행과 판정 의미를 바꾸지 않는다.
+2. TestRun 접수 시 현재 TestCase 정의를 `TestCaseSnapshot`으로 불변 복제한다. 이후 TestCase 수정·삭제는 해당 Run의 실행과 판정 의미를 바꾸지 않는다.
 3. Application Target은 Snapshot input을 받아 자연어 `ApplicationResponse`를 반환한다. `ALLOW`와 `BLOCK`은 Application 응답 값이 아니다.
 4. ApplicationResponse는 내부 Evaluator 입력이며 frontend-facing 결과 DTO에 노출하지 않는다.
 5. Evaluator는 ApplicationResponse를 평가해 GuardBench 공통 `EvaluationResult(ALLOW | BLOCK)`를 만든다. AWS Bedrock Guardrail은 첫 번째 Guardrail Evaluator 구현이다.
