@@ -94,7 +94,7 @@ public class OutboxPublisher {
 
     private static void logPublishStart(TestRunQueue queue, OutboxEventRecord event) {
         OutboxEventRecord.ObservabilityContext context = event.observabilityContext();
-        log.info("Outbox event publish started. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
+        log.info("Outbox event publish를 시작합니다. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
                 queue.queueName(), event.eventId(), event.eventType(), context.testRunId(),
                 context.snapshotId());
     }
@@ -102,12 +102,12 @@ public class OutboxPublisher {
     private static void logPublishResult(TestRunQueue queue, OutboxEventRecord event, boolean succeeded) {
         OutboxEventRecord.ObservabilityContext context = event.observabilityContext();
         if (succeeded) {
-            log.info("Outbox event published. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
+            log.info("Outbox event를 발행했습니다. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
                     queue.queueName(), event.eventId(), event.eventType(), context.testRunId(),
                     context.snapshotId());
             return;
         }
-        log.warn("Outbox event publish deferred for retry. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
+        log.warn("Outbox event 발행을 재시도로 보류했습니다. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
                 queue.queueName(), event.eventId(), event.eventType(), context.testRunId(),
                 context.snapshotId());
     }

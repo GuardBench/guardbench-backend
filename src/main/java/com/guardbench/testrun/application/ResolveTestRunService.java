@@ -93,18 +93,18 @@ public class ResolveTestRunService {
      */
     public ResolutionOutcome resolve(long testRunId) {
         long resolutionStartedNanos = System.nanoTime();
-        log.info("TestRun resolution started. testRunId={}", testRunId);
+        log.info("TestRun resolution을 시작합니다. testRunId={}", testRunId);
         TestRun testRun = testRunRepository.findById(new TestRunId(testRunId))
                 .orElse(null);
         if (testRun == null) {
-            log.warn("TestRun resolution skipped because TestRun was not found. testRunId={} elapsedMs={}",
+            log.warn("TestRun을 찾을 수 없어 resolution을 건너뜁니다. testRunId={} elapsedMs={}",
                     testRunId, elapsedMs(resolutionStartedNanos));
             return ResolutionOutcome.NOT_FOUND;
         }
 
         // 이미 RUNNING 또는 FINISHED면 멱등 성공
         if (testRun.status() == TestRunStatus.RUNNING || testRun.status() == TestRunStatus.FINISHED) {
-            log.info("TestRun resolution already complete. testRunId={} status={} elapsedMs={}",
+            log.info("TestRun resolution이 이미 완료되었습니다. testRunId={} status={} elapsedMs={}",
                     testRunId, testRun.status(), elapsedMs(resolutionStartedNanos));
             return ResolutionOutcome.ALREADY_RESOLVED;
         }
@@ -112,7 +112,7 @@ public class ResolveTestRunService {
         // claim 선점
         ClaimResult claimResult = resolutionClaimPort.tryAcquire(testRunId);
         if (claimResult instanceof ClaimResult.AlreadyHeld) {
-            log.warn("TestRun resolution claim held by another worker. testRunId={} elapsedMs={}",
+            log.warn("다른 Worker가 TestRun resolution claim을 보유 중입니다. testRunId={} elapsedMs={}",
                     testRunId, elapsedMs(resolutionStartedNanos));
             return ResolutionOutcome.CLAIM_HELD_BY_OTHER;
         }
@@ -120,7 +120,7 @@ public class ResolveTestRunService {
         ClaimResult.Acquired acquired = (ClaimResult.Acquired) claimResult;
         UUID claimToken = acquired.claimToken();
         int attemptCount = acquired.attemptCount();
-        log.info("TestRun resolution claim acquired. testRunId={} attemptCount={}", testRunId, attemptCount);
+        log.info("TestRun resolution claim을 획득했습니다. testRunId={} attemptCount={}", testRunId, attemptCount);
 
         // QUEUED → PREPARING 전환 (persistence phase 트랜잭션)
         if (testRun.status() == TestRunStatus.QUEUED) {
@@ -134,22 +134,22 @@ public class ResolveTestRunService {
         // Materialization (DB 트랜잭션 밖, 외부 호출)
         try {
             long materializationStartedNanos = System.nanoTime();
-            log.info("Target preparation started. testRunId={} attemptCount={}", testRunId, attemptCount);
+            log.info("Target 준비를 시작합니다. testRunId={} attemptCount={}", testRunId, attemptCount);
             TargetPreparationRequest request = new TargetPreparationRequest(
                     testRun.targetReference(),
                     testRunId);
             preparationPort.prepare(request);
-            log.info("Target preparation completed. testRunId={} attemptCount={} elapsedMs={}",
+            log.info("Target 준비를 완료했습니다. testRunId={} attemptCount={} elapsedMs={}",
                     testRunId, attemptCount, elapsedMs(materializationStartedNanos));
         } catch (TargetProviderException exception) {
-            log.warn("Target preparation failed. testRunId={} attemptCount={} failureCode={} elapsedMs={}",
+            log.warn("Target 준비에 실패했습니다. testRunId={} attemptCount={} failureCode={} elapsedMs={}",
                     testRunId, attemptCount, exception.failureCode(), elapsedMs(resolutionStartedNanos));
             return handleMaterializationFailure(testRun, attemptCount);
         }
 
         // claim 소유 재검증
         if (!resolutionClaimPort.isHeldBy(testRunId, claimToken)) {
-            log.warn("TestRun resolution claim lost after materialization. testRunId={} attemptCount={} elapsedMs={}",
+            log.warn("Materialization 이후 TestRun resolution claim을 상실했습니다. testRunId={} attemptCount={} elapsedMs={}",
                     testRunId, attemptCount, elapsedMs(resolutionStartedNanos));
             return ResolutionOutcome.CLAIM_LOST_AFTER_MATERIALIZATION;
         }
@@ -168,7 +168,7 @@ public class ResolveTestRunService {
             }
         });
 
-        log.info("TestRun execution fan-out completed. testRunId={} snapshotCount={} executionEventCount={} elapsedMs={}",
+        log.info("TestRun execution fan-out을 완료했습니다. testRunId={} snapshotCount={} executionEventCount={} elapsedMs={}",
                 testRunId, snapshotCount[0], snapshotCount[0], elapsedMs(resolutionStartedNanos));
 
         return ResolutionOutcome.RESOLVED;
@@ -176,7 +176,7 @@ public class ResolveTestRunService {
 
     private ResolutionOutcome handleMaterializationFailure(TestRun testRun, int attemptCount) {
         if (attemptCount < MAX_RESOLUTION_ATTEMPTS) {
-            log.warn("Target preparation will be retried. testRunId={} attemptCount={}",
+            log.warn("Target 준비 실패로 재시도합니다. testRunId={} attemptCount={}",
                     testRun.id().value(), attemptCount);
             return ResolutionOutcome.MATERIALIZATION_FAILED_RETRYABLE;
         }
@@ -201,7 +201,7 @@ public class ResolveTestRunService {
             testRunRepository.save(testRun);
         });
 
-        log.error("TestRun finished after terminal target preparation failure. testRunId={} attemptCount={}",
+        log.error("Target 준비 영구 실패로 TestRun을 종료했습니다. testRunId={} attemptCount={}",
                 testRunId, attemptCount);
 
         return ResolutionOutcome.MATERIALIZATION_FAILED_TERMINAL;

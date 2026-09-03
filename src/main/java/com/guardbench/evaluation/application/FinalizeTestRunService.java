@@ -87,7 +87,7 @@ public class FinalizeTestRunService {
     @Transactional
     public FinalizationOutcome finalize(long testRunId) {
         long finalizationStartedNanos = System.nanoTime();
-        log.info("TestRun finalization started. testRunId={}", testRunId);
+        log.info("TestRun finalization을 시작합니다. testRunId={}", testRunId);
         TestRunEvaluationReference reference = new TestRunEvaluationReference(testRunId);
 
         // ADR 0005: 판정과 저장을 직렬화하기 위해 TestRun 행 잠금을 먼저 획득한다.
@@ -96,7 +96,7 @@ public class FinalizeTestRunService {
         TestRunExecutionFacts facts = loadExecutionFactsPort.lockAndLoad(testRunId)
                 .orElse(null);
         if (facts == null) {
-            log.warn("TestRun finalization skipped because TestRun was not found. testRunId={} elapsedMs={}",
+            log.warn("TestRun을 찾을 수 없어 finalization을 건너뜁니다. testRunId={} elapsedMs={}",
                     testRunId, elapsedMs(finalizationStartedNanos));
             return FinalizationOutcome.notFound();
         }
@@ -104,21 +104,21 @@ public class FinalizeTestRunService {
         // 이미 완료된 최종화의 재호출: 멱등 성공
         Optional<QualityGateResult> existing = qualityGateResultRepository.findById(reference);
         if (existing.isPresent()) {
-            log.info("TestRun finalization already completed. testRunId={} qualityGateStatus={} elapsedMs={}",
+            log.info("TestRun finalization이 이미 완료되었습니다. testRunId={} qualityGateStatus={} elapsedMs={}",
                     testRunId, existing.get().status(), elapsedMs(finalizationStartedNanos));
             return FinalizationOutcome.alreadyFinalized(existing.get());
         }
 
         // FINISHED인데 QualityGateResult가 없으면 불변식 위반
         if ("FINISHED".equals(facts.testRunStatus())) {
-            log.error("TestRun finalization invariant violation. testRunId={} status={} elapsedMs={}",
+            log.error("TestRun finalization 불변식을 위반했습니다. testRunId={} status={} elapsedMs={}",
                     testRunId, facts.testRunStatus(), elapsedMs(finalizationStartedNanos));
             return FinalizationOutcome.invariantViolation();
         }
 
         // RUNNING이 아니면 최종화 불가 (QUEUED, PREPARING은 불가)
         if (!"RUNNING".equals(facts.testRunStatus())) {
-            log.info("TestRun finalization not ready. testRunId={} status={} elapsedMs={}",
+            log.info("TestRun finalization이 아직 준비되지 않았습니다. testRunId={} status={} elapsedMs={}",
                     testRunId, facts.testRunStatus(), elapsedMs(finalizationStartedNanos));
             return FinalizationOutcome.notReady();
         }
@@ -130,14 +130,14 @@ public class FinalizeTestRunService {
         boolean snapshotsReady = facts.snapshotFacts().size() == facts.testCaseCount();
         boolean allExecutionsTerminal = facts.snapshotFacts().stream().allMatch(SnapshotExecutionFact::terminal);
         long terminalExecutionCount = facts.snapshotFacts().stream().filter(SnapshotExecutionFact::terminal).count();
-        log.info("TestRun finalization readiness checked. testRunId={} snapshots={} expected={} terminalExecutions={} snapshotsReady={} allExecutionsTerminal={}",
+        log.info("TestRun finalization readiness를 확인했습니다. testRunId={} snapshots={} expected={} terminalExecutions={} snapshotsReady={} allExecutionsTerminal={}",
                 testRunId, facts.snapshotFacts().size(), facts.testCaseCount(), terminalExecutionCount,
                 snapshotsReady, allExecutionsTerminal);
         if (!snapshotsReady || !allExecutionsTerminal) {
             if (snapshotsReady) {
                 finalizeTestRunPort.updateProgress(testRunId);
             }
-            log.info("TestRun finalization not ready after readiness check. testRunId={} snapshots={} expected={} terminalExecutions={} snapshotsReady={} allExecutionsTerminal={} elapsedMs={}",
+            log.info("Readiness 확인 후에도 TestRun finalization이 준비되지 않았습니다. testRunId={} snapshots={} expected={} terminalExecutions={} snapshotsReady={} allExecutionsTerminal={} elapsedMs={}",
                     testRunId, facts.snapshotFacts().size(), facts.testCaseCount(), terminalExecutionCount,
                     snapshotsReady, allExecutionsTerminal, elapsedMs(finalizationStartedNanos));
             return FinalizationOutcome.notReady();
@@ -185,7 +185,7 @@ public class FinalizeTestRunService {
         long failedExecutionCount = facts.testCaseCount() - successfulExecutionCount;
         String failureDimension = failureDimension(qualityGateResult);
 
-        log.info("TestRun finalization completed. testRunId={} evaluatorReference={} qualityGateStatus={} "
+        log.info("TestRun finalization을 완료했습니다. testRunId={} evaluatorReference={} qualityGateStatus={} "
                         + "executionOutcome={} processedTestCaseCount={} testCaseCount={} "
                         + "executionSucceededCount={} executionFailedCount={} "
                         + "assertionEvaluatedCount={} assertionPassCount={} assertionFailCount={} "

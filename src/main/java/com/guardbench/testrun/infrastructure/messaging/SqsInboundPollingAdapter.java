@@ -93,38 +93,38 @@ public class SqsInboundPollingAdapter {
             decoded = codec.decode(message.body());
         } catch (InvalidTestRunMessageException exception) {
             // malformed 메시지: 삭제하지 않음 → SQS maxReceiveCount 소진 후 DLQ로 이동
-            log.warn("Malformed message on {}. messageId={}, error={}",
+            log.warn("{}에서 잘못된 형식의 메시지를 수신했습니다. messageId={}, error={}",
                     queueType.queueName(), message.messageId(), exception.getMessage());
             return;
         }
 
         Long snapshotId = snapshotId(decoded);
-        log.info("SQS message received. queue={} messageId={} eventId={} eventType={} testRunId={} snapshotId={}",
+        log.info("SQS 메시지를 수신했습니다. queue={} messageId={} eventId={} eventType={} testRunId={} snapshotId={}",
                 queueType.queueName(), message.messageId(), decoded.eventId(), decoded.eventType(),
                 decoded.testRunId(), snapshotId);
 
         boolean shouldAck;
         try {
-            log.info("SQS message processing started. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
+            log.info("SQS 메시지 처리를 시작합니다. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
                     queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId);
             shouldAck = dispatch(decoded);
         } catch (Exception exception) {
-            log.error("SQS message processing failed. queue={} eventId={} eventType={} testRunId={} snapshotId={} failureType={}",
+            log.error("SQS 메시지 처리에 실패했습니다. queue={} eventId={} eventType={} testRunId={} snapshotId={} failureType={}",
                     queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId,
                     exception.getClass().getSimpleName());
             return;
         }
 
         if (shouldAck) {
-            log.info("SQS message processing completed. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
+            log.info("SQS 메시지 처리를 완료했습니다. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
                     queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId);
             if (deleteMessage(message)) {
-                log.info("SQS message deleted. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
+                log.info("SQS 메시지를 삭제했습니다. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
                         queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId);
             }
             return;
         }
-        log.warn("SQS message processing deferred for retry. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
+        log.warn("SQS 메시지 처리를 재시도로 보류했습니다. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
                 queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId);
         // nack: 삭제하지 않아 visibility timeout 후 재전달됨
     }

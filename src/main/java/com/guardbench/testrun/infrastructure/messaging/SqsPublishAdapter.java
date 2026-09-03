@@ -66,12 +66,12 @@ public final class SqsPublishAdapter implements SqsPublishPort {
             Set<UUID> succeeded = response.successful().stream()
                     .map(entry -> UUID.fromString(entry.id()))
                     .collect(Collectors.toCollection(HashSet::new));
-            log.info("SQS batch publish completed. queue={} requestedCount={} succeededCount={} failedCount={}",
+            log.info("SQS batch publish를 완료했습니다. queue={} requestedCount={} succeededCount={} failedCount={}",
                     queue.queueName(), entries.size(), succeeded.size(), entries.size() - succeeded.size());
             return new PublishBatchResult(succeeded);
         } catch (SdkException exception) {
             // 요청 자체가 실패하면 batch 전체를 PENDING으로 남긴다.
-            log.error("SQS batch publish failed. queue={} requestedCount={} failureType={}",
+            log.error("SQS batch publish에 실패했습니다. queue={} requestedCount={} failureType={}",
                     queue.queueName(), entries.size(), exception.getClass().getSimpleName());
             return new PublishBatchResult(Set.of());
         }
