@@ -9,6 +9,8 @@ import com.guardbench.testdefinition.domain.TestSuite;
 import com.guardbench.testdefinition.domain.TestSuiteId;
 import com.guardbench.testdefinition.domain.repository.TestSuiteRepository;
 
+import jakarta.persistence.EntityManager;
+
 /**
  * Domain의 {@link TestSuiteRepository}를 PostgreSQL로 구현한다.
  *
@@ -28,9 +30,11 @@ import com.guardbench.testdefinition.domain.repository.TestSuiteRepository;
 class TestSuiteRepositoryAdapter implements TestSuiteRepository {
 
     private final TestSuiteJpaRepository jpaRepository;
+    private final EntityManager entityManager;
 
-    TestSuiteRepositoryAdapter(TestSuiteJpaRepository jpaRepository) {
+    TestSuiteRepositoryAdapter(TestSuiteJpaRepository jpaRepository, EntityManager entityManager) {
         this.jpaRepository = jpaRepository;
+        this.entityManager = entityManager;
     }
 
     @Override
@@ -59,5 +63,13 @@ class TestSuiteRepositoryAdapter implements TestSuiteRepository {
         Objects.requireNonNull(id, "TestSuiteId must not be null");
 
         return jpaRepository.existsById(id.value());
+    }
+
+    @Override
+    public void deleteById(TestSuiteId id) {
+        Objects.requireNonNull(id, "TestSuiteId must not be null");
+        jpaRepository.deleteById(id.value());
+        entityManager.flush();
+        entityManager.clear();
     }
 }

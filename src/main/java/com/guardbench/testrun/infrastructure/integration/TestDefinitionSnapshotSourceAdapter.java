@@ -42,7 +42,7 @@ class TestDefinitionSnapshotSourceAdapter implements ExistsTestSuitePort, LoadTe
     @Override
     public List<TestCaseSnapshotSource> loadBySourceTestSuiteId(long sourceTestSuiteId) {
         List<TestCase> activeTestCases =
-                testCaseRepository.findActiveByTestSuiteId(new TestSuiteId(sourceTestSuiteId));
+                testCaseRepository.findByTestSuiteId(new TestSuiteId(sourceTestSuiteId));
         return activeTestCases.stream().map(this::toSource).toList();
     }
 

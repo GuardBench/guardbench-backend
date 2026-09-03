@@ -19,8 +19,6 @@ import jakarta.persistence.Table;
  * 스키마가 두 컬럼을 {@code VARCHAR}와 {@code CHECK}로 정의하므로, 저장되는 값을 Enum 이름에 암묵적으로
  * 묶지 않고 {@link TestCaseEntityMapper}가 명시적으로 변환한다.
  *
- * <p>논리 삭제는 nullable {@code deleted_at}으로 표현한다. 활성 행은 {@code deleted_at IS NULL}이다.
- *
  * <p>근거: {@code docs/decisions/0001-domain-type-ownership-and-aggregate-boundaries.md},
  * {@code docs/decisions/0002-postgresql-persistence-contract.md}
  */
@@ -56,9 +54,6 @@ class TestCaseEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    @Column(name = "deleted_at")
-    private Instant deletedAt;
-
     protected TestCaseEntity() {
     }
 
@@ -71,8 +66,7 @@ class TestCaseEntity {
             String severity,
             String category,
             Instant createdAt,
-            Instant updatedAt,
-            Instant deletedAt) {
+            Instant updatedAt) {
         this.id = id;
         this.testSuiteId = testSuiteId;
         this.name = name;
@@ -82,7 +76,6 @@ class TestCaseEntity {
         this.category = category;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
-        this.deletedAt = deletedAt;
     }
 
     Long id() {
@@ -121,7 +114,4 @@ class TestCaseEntity {
         return updatedAt;
     }
 
-    Instant deletedAt() {
-        return deletedAt;
-    }
 }

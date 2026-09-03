@@ -16,9 +16,6 @@ import com.guardbench.testdefinition.domain.TestSuiteId;
  * 지점이다. 저장 값이 물리 스키마의 {@code CHECK} 목록에 묶여 있으므로, Enum 이름이 바뀌면 저장 값이
  * 조용히 함께 바뀌는 대신 이 지점에서 드러나게 한다.
  *
- * <p>{@code deletedAt}이 {@code null}이 아니면 논리 삭제된 TestCase로 복원한다. 삭제 여부와 무관하게
- * 다섯 정의 값은 그대로 보존한다.
- *
  * <p>근거: {@code docs/decisions/0002-postgresql-persistence-contract.md}
  */
 final class TestCaseEntityMapper {
@@ -38,8 +35,7 @@ final class TestCaseEntityMapper {
                 testCase.severity().name(),
                 testCase.category(),
                 testCase.createdAt(),
-                testCase.updatedAt(),
-                testCase.deletedAt());
+                testCase.updatedAt());
     }
 
     static TestCase toDomain(TestCaseEntity entity) {
@@ -54,7 +50,6 @@ final class TestCaseEntityMapper {
                 Severity.valueOf(entity.severity()),
                 entity.category(),
                 entity.createdAt(),
-                entity.updatedAt(),
-                entity.deletedAt());
+                entity.updatedAt());
     }
 }
