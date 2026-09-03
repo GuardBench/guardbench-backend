@@ -194,8 +194,8 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
         jdbcTemplate.update("""
                 INSERT INTO test_case (
                     id, test_suite_id, name, input, expected_action, severity, category,
-                    created_at, updated_at, deleted_at)
-                VALUES (?, ?, 'case', 'input', 'BLOCK', 'LOW', 'PII', ?, ?, NULL)
+                    created_at, updated_at)
+                VALUES (?, ?, 'case', 'input', 'BLOCK', 'LOW', 'PII', ?, ?)
                 """, id, suiteId, Timestamp.from(T0), Timestamp.from(T0));
     }
 

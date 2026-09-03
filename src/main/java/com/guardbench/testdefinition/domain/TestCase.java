@@ -10,11 +10,11 @@ import java.util.Objects;
  * 다른 TestSuite로 옮기는 동작은 승인된 API 계약이 허용하지 않으므로 제공하지 않는다.
  *
  * <p>이 객체는 <b>현재 정의만</b> 보유한다. 과거 실행 기준은 TestRun이 접수 시점에 만든 불변 Snapshot이
- * 보존하므로, 이 객체의 수정과 논리 삭제는 이미 만들어진 Snapshot과 실행·판정 결과에 전파되지 않는다.
+ * 보존하므로, 이 객체의 수정과 삭제는 이미 만들어진 Snapshot과 실행·판정 결과에 전파되지 않는다.
  * 그 격리는 Snapshot이 값을 복제해 보관하는 구조로 보장되며 이 Aggregate가 Snapshot을 알지 않는다.
  *
- * <p>삭제는 물리 삭제가 아닌 논리 삭제다. 삭제된 TestCase는 현재 조회와 이후 TestRun 대상에서 제외되며
- * 재삭제와 삭제 후 수정을 거부한다.
+ * <p>삭제는 Application이 Repository를 통해 수행하는 물리 삭제다. 과거 실행 기준은 별도 Snapshot에
+ * 보존되므로 원본 행을 삭제해도 실행·판정 결과에는 영향을 주지 않는다.
  *
  * <p>{@code category}는 승인된 API 계약과 같이 고정 Enum이 아닌 비어 있지 않은 문자열로 둔다.
  *
@@ -40,7 +40,6 @@ public final class TestCase {
     private Severity severity;
     private String category;
     private Instant updatedAt;
-    private Instant deletedAt;
 
     private TestCase(
             TestCaseId id,
@@ -51,8 +50,7 @@ public final class TestCase {
             Severity severity,
             String category,
             Instant createdAt,
-            Instant updatedAt,
-            Instant deletedAt) {
+            Instant updatedAt) {
         this.id = id;
         this.testSuiteId = testSuiteId;
         this.name = name;
@@ -62,7 +60,6 @@ public final class TestCase {
         this.category = category;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
-        this.deletedAt = deletedAt;
     }
 
     /**
@@ -90,8 +87,7 @@ public final class TestCase {
                 requireSeverity(severity),
                 requireNonBlank(category, "category"),
                 createdAt,
-                createdAt,
-                null);
+                createdAt);
     }
 
     /**
@@ -101,8 +97,6 @@ public final class TestCase {
      * 정규화는 하지 않는다. 문자열 인자의 순서는 {@code name}, {@code input}, {@code category}이며,
      * Persistence Adapter가 이 순서대로 전달한 복원 값은 저장된 값과 같다.
      *
-     * <p>{@code deletedAt}이 {@code null}이 아니면 논리 삭제된 TestCase로 복원한다.
-     * 이때 영속성 계약에 따라 {@code deletedAt}과 {@code updatedAt}은 같아야 한다.
      */
     public static TestCase restore(
             TestCaseId id,
@@ -113,19 +107,10 @@ public final class TestCase {
             Severity severity,
             String category,
             Instant createdAt,
-            Instant updatedAt,
-            Instant deletedAt) {
+            Instant updatedAt) {
         Instant restoredCreatedAt = requireInstant(createdAt, "생성 시각");
         Instant restoredUpdatedAt = requireInstant(updatedAt, "수정 시각");
         requireNotBefore(restoredUpdatedAt, restoredCreatedAt, "수정 시각");
-        if (deletedAt != null) {
-            requireNotBefore(deletedAt, restoredCreatedAt, "삭제 시각");
-            if (!deletedAt.equals(restoredUpdatedAt)) {
-                throw new IllegalArgumentException(
-                        "TestCase 삭제 시각과 수정 시각은 같아야 합니다.");
-            }
-        }
-
         return new TestCase(
                 requireId(id),
                 requireTestSuiteId(testSuiteId),
@@ -135,15 +120,13 @@ public final class TestCase {
                 requireSeverity(severity),
                 requireNonBlank(category, "category"),
                 restoredCreatedAt,
-                restoredUpdatedAt,
-                deletedAt);
+                restoredUpdatedAt);
     }
 
     /**
      * 현재 정의를 수정한다. {@code null}인 인자는 기존 값 유지를 뜻한다.
      *
-     * <p>전달된 값은 먼저 모두 검증한 뒤 반영해 일부만 적용된 상태를 만들지 않는다. 논리 삭제된
-     * TestCase는 수정할 수 없다.
+     * <p>전달된 값은 먼저 모두 검증한 뒤 반영해 일부만 적용된 상태를 만들지 않는다.
      *
      * <p>반영할 값이 현재 값과 모두 같으면 아무 상태도 바꾸지 않고 {@code updatedAt}도 유지한다.
      * 승인된 API 계약이 no-op 수정에 현재 상태를 그대로 반환하도록 요구하고 영속성 계약이
@@ -163,8 +146,6 @@ public final class TestCase {
             Severity severity,
             String category,
             Instant now) {
-        requireNotDeleted("수정");
-
         if (name == null && input == null && expectedResult == null
                 && severity == null && category == null) {
             throw new IllegalArgumentException("수정할 값이 최소 하나 필요합니다.");
@@ -193,39 +174,6 @@ public final class TestCase {
         this.severity = changedSeverity;
         this.category = changedCategory;
         this.updatedAt = changedAt;
-    }
-
-    /**
-     * TestCase를 논리 삭제한다.
-     *
-     * <p>삭제 시각과 수정 시각을 같은 값으로 기록한다. 승인된 영속성 계약이 논리 삭제를 상태 변경으로
-     * 취급해 {@code deleted_at}과 {@code updated_at}을 같은 시각으로 요구하며, 삭제 후에는 수정을
-     * 거부하므로 이 method가 두 시각을 함께 확정한다.
-     *
-     * <p>이미 삭제된 TestCase를 다시 삭제하면 {@link IllegalStateException}을 던진다. 삭제는 이미
-     * 만들어진 Snapshot과 실행·판정 결과에 전파되지 않는다.
-     *
-     * <p>근거: {@code docs/decisions/0002-postgresql-persistence-contract.md}
-     */
-    public void delete(Instant now) {
-        requireNotDeleted("삭제");
-
-        Instant deletedInstant = requireInstant(now, "삭제 시각");
-        requireNotBefore(deletedInstant, createdAt, "삭제 시각");
-
-        this.deletedAt = deletedInstant;
-        this.updatedAt = deletedInstant;
-    }
-
-    /**
-     * 현재 조회와 이후 TestRun 대상에 포함되는지 여부다.
-     */
-    public boolean isActive() {
-        return deletedAt == null;
-    }
-
-    public boolean isDeleted() {
-        return deletedAt != null;
     }
 
     public TestCaseId id() {
@@ -264,10 +212,6 @@ public final class TestCase {
         return updatedAt;
     }
 
-    public Instant deletedAt() {
-        return deletedAt;
-    }
-
     @Override
     public boolean equals(Object object) {
         if (this == object) {
@@ -282,12 +226,6 @@ public final class TestCase {
     @Override
     public int hashCode() {
         return Objects.hash(id);
-    }
-
-    private void requireNotDeleted(String operation) {
-        if (isDeleted()) {
-            throw new IllegalStateException("논리 삭제된 TestCase는 " + operation + "할 수 없습니다.");
-        }
     }
 
     private Instant requireUpdateInstant(Instant now) {

@@ -61,8 +61,8 @@ class TestDefinitionSnapshotSourceAdapterIntegrationTest {
     }
 
     @Test
-    @DisplayName("활성 TestCase만 TestCaseSnapshotSource로 변환해 반환한다")
-    void loadsOnlyActiveTestCasesAsSnapshotSources(
+    @DisplayName("TestCase를 TestCaseSnapshotSource로 변환해 반환한다")
+    void loadsTestCasesAsSnapshotSources(
             @Autowired LoadTestCaseSnapshotSourcesPort port,
             @Autowired JdbcTemplate jdbcTemplate) {
         fixture.insertTestSuite(701L, CREATED_AT);
@@ -70,17 +70,14 @@ class TestDefinitionSnapshotSourceAdapterIntegrationTest {
         jdbcTemplate.update(
                 """
                 INSERT INTO test_case(id, test_suite_id, name, input, expected_action, severity, category,
-                    created_at, updated_at, deleted_at)
-                VALUES (802, 701, 'deleted case', 'input', 'BLOCK', 'LOW', 'category', ?, ?, ?)
+                    created_at, updated_at)
+                VALUES (802, 701, 'second case', 'input', 'BLOCK', 'LOW', 'category', ?, ?)
                 """,
-                java.sql.Timestamp.from(CREATED_AT),
-                java.sql.Timestamp.from(CREATED_AT),
-                java.sql.Timestamp.from(CREATED_AT)
-        );
+                java.sql.Timestamp.from(CREATED_AT), java.sql.Timestamp.from(CREATED_AT));
 
         var sources = port.loadBySourceTestSuiteId(701L);
 
-        assertEquals(1, sources.size());
+        assertEquals(2, sources.size());
         TestCaseSnapshotSource source = sources.getFirst();
         assertEquals(701L, source.sourceTestSuiteId());
         assertEquals(801L, source.sourceTestCaseId());

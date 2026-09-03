@@ -24,7 +24,7 @@ import com.guardbench.testdefinition.domain.TestSuiteId;
  * <p>정렬은 이 타입이 정규화한다. 비어 있으면 승인된 기본값을 적용하고, {@code ID}가 없으면 마지막
  * 조건으로 덧붙여 Offset Pagination이 흔들리지 않게 한다.
  *
- * <p>논리 삭제된 TestCase는 조회 대상이 아니다. 그 조건은 filter가 아니라 Port가 보장한다.
+ * <p>삭제된 TestCase는 물리적으로 존재하지 않으므로 별도 삭제 filter가 필요하지 않다.
  *
  * <p>근거: {@code docs/api/openapi.yaml},
  * {@code docs/decisions/0006-independent-domain-contract-boundaries.md}

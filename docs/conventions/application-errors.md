@@ -33,7 +33,7 @@ Validation을 제외한 오류는 다음 구조를 사용한다.
 | --- | ---: | --- |
 | `VALIDATION_ERROR` | 400 | Path·Query·Header·Body의 형식이나 값이 잘못됨 |
 | `TEST_SUITE_NOT_FOUND` | 404 | 유효한 양의 ID에 해당하는 TestSuite가 없음 |
-| `TEST_CASE_NOT_FOUND` | 404 | TestCase가 없거나 논리 삭제됨 |
+| `TEST_CASE_NOT_FOUND` | 404 | 유효한 양의 ID에 해당하는 TestCase가 없음 |
 | `TEST_RUN_NOT_FOUND` | 404 | 유효한 양의 ID에 해당하는 TestRun이 없음 |
 | `TEST_SUITE_EMPTY` | 409 | TestRun 생성 시 활성 TestCase가 없음 |
 | `EVALUATION_PROFILE_NOT_SUPPORTED` | 409 | 운영 Evaluator catalog에 요청한 canonical Evaluation Profile이 없음 |
@@ -113,7 +113,7 @@ TestRun 목록의 `testSuiteId`는 검색 Filter다. 유효한 양의 ID지만 �
 
 ### TEST_CASE_NOT_FOUND
 
-TestCase 상세·수정·삭제 대상이 없거나 논리 삭제되었을 때 사용한다. 같은 TestCase를 다시 삭제하는 경우도 같다. 리소스가 원래 없었는지 논리 삭제되었는지는 외부에 구분해서 노출하지 않는다.
+TestCase 상세·수정·삭제 대상이 없을 때 사용한다. 삭제된 TestCase는 물리적으로 존재하지 않으므로 같은 ID를 다시 삭제해도 같다.
 
 ### TEST_RUN_NOT_FOUND
 
@@ -123,7 +123,7 @@ TestRun 상세 또는 개별 결과 조회의 양의 ID가 존재하지 않을 �
 
 ### TEST_SUITE_EMPTY
 
-TestSuite는 존재하지만 활성 TestCase가 0개여서 TestRun을 생성할 수 없을 때 사용한다. 논리 삭제된 TestCase는 활성 개수에 포함하지 않는다.
+TestSuite는 존재하지만 TestCase가 0개여서 TestRun을 생성할 수 없을 때 사용한다.
 
 ### EVALUATION_PROFILE_NOT_SUPPORTED
 
@@ -176,7 +176,7 @@ TestRun 재전송은 Validation 후 Idempotency 기록을 먼저 확인한다.
 
 1. 같은 Key와 같은 요청이면 기존 TestRun 반환
 2. 같은 Key와 다른 요청이면 `409`
-3. 새로운 요청이면 TestSuite 존재 여부와 활성 TestCase를 검사
+3. 새로운 요청이면 TestSuite 존재 여부와 TestCase를 검사
 
 ## Application Error가 아닌 상태
 

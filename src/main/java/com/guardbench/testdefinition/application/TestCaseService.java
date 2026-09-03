@@ -47,7 +47,7 @@ public class TestCaseService {
         if (!criteria.testSuiteId().equals(id)) {
             throw new IllegalArgumentException("조회 조건의 TestSuite 식별자가 일치하지 않습니다.");
         }
-        return testCaseListQuery.findActive(criteria);
+        return testCaseListQuery.find(criteria);
     }
 
     @Transactional
@@ -69,13 +69,13 @@ public class TestCaseService {
     }
 
     public TestCaseDetail get(long testCaseId) {
-        return TestCaseDetail.from(findActive(testCaseId));
+        return TestCaseDetail.from(find(testCaseId));
     }
 
     @Transactional
     public TestCaseDetail update(long testCaseId, TestCaseUpdateCommand command) {
         Objects.requireNonNull(command, "command must not be null");
-        TestCase testCase = findActive(testCaseId);
+        TestCase testCase = find(testCaseId);
         testCase.changeDefinition(
                 command.namePresent() ? command.name() : null,
                 command.inputPresent() ? command.input() : null,
@@ -89,9 +89,11 @@ public class TestCaseService {
 
     @Transactional
     public void delete(long testCaseId) {
-        TestCase testCase = findActive(testCaseId);
-        testCase.delete(clock.instant());
-        testCaseRepository.save(testCase);
+        TestCaseId id = new TestCaseId(testCaseId);
+        if (testCaseRepository.findById(id).isEmpty()) {
+            throw new ApplicationException(ApplicationErrorCode.TEST_CASE_NOT_FOUND);
+        }
+        testCaseRepository.deleteById(id);
     }
 
     private void requireSuite(TestSuiteId id) {
@@ -100,8 +102,8 @@ public class TestCaseService {
         }
     }
 
-    private TestCase findActive(long testCaseId) {
-        return testCaseRepository.findActiveById(new TestCaseId(testCaseId))
+    private TestCase find(long testCaseId) {
+        return testCaseRepository.findById(new TestCaseId(testCaseId))
                 .orElseThrow(() -> new ApplicationException(
                         ApplicationErrorCode.TEST_CASE_NOT_FOUND));
     }

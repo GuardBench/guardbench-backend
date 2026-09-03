@@ -28,7 +28,7 @@
 ## 핵심 불변식
 
 - TestCase는 현재 정의만 보유하고 과거 실행 기준은 TestCaseSnapshot이 보존한다.
-- TestCase 삭제는 논리 삭제이며 기존 Snapshot과 실행·판정 결과에 전파하지 않는다.
+- TestCase 삭제는 물리 삭제이며 기존 Snapshot과 실행·판정 결과에 전파하지 않는다.
 - 하나의 TestRun은 하나의 Application Target만 실행한다.
 - MVP Application Target type은 `HTTP_ENDPOINT`다.
 - MVP의 `HTTP_ENDPOINT`는 OpenAI-compatible chat completions 계약만 지원한다.

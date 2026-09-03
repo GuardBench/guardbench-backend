@@ -25,7 +25,7 @@ class PersistenceFoundationIntegrationTest {
     void appliesApprovedSchemaToPostgreSql(@Autowired Flyway flyway, @Autowired JdbcTemplate jdbcTemplate) {
         MigrationInfo current = flyway.info().current();
         assertNotNull(current);
-        assertEquals("11", current.getVersion().getVersion());
+        assertEquals("12", current.getVersion().getVersion());
         Integer tableCount = jdbcTemplate.queryForObject("""
                 SELECT count(*) FROM information_schema.tables
                 WHERE table_schema = 'public' AND table_name IN (
@@ -36,6 +36,16 @@ class PersistenceFoundationIntegrationTest {
                     'evaluator_reference', 'bedrock_guardrail_evaluator')
                 """, Integer.class);
         assertEquals(17, tableCount);
+        assertEquals(0, jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'test_case'
+                  AND column_name = 'deleted_at'
+                """, Integer.class));
+        assertEquals(0, jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM information_schema.table_constraints
+                WHERE table_schema = 'public'
+                  AND constraint_name IN ('fk_snapshot_source_test_case', 'fk_test_run_suite')
+                """, Integer.class));
     }
 
     @Test

@@ -16,7 +16,7 @@
 | --- | --- | --- |
 | 도메인 타입 소유권, 기본 Aggregate, 패키지 의존 방향 | [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md), [ADR 0006](0006-independent-domain-contract-boundaries.md) | 실행·평가 결과 경계도 바꾸면 [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), 최종화 경계도 바꾸면 [ADR 0004](0004-testrun-finalization-atomicity.md) |
 | PostgreSQL, JPA, Flyway, 물리 스키마 | [ADR 0002](0002-postgresql-persistence-contract.md), [ADR 0006](0006-independent-domain-contract-boundaries.md) | 결과 테이블과 Repository 매핑은 [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), 최종화 제약은 [ADR 0004](0004-testrun-finalization-atomicity.md), Outbox·idempotency·claim DDL은 [ADR 0008](0008-async-testrun-persistence-contract.md) |
-| TestCase 논리 삭제와 동시 DELETE | [ADR 0002](0002-postgresql-persistence-contract.md), [ADR 0009](0009-testcase-soft-delete-concurrency.md) | Domain·Port 경계를 바꾸면 [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md)과 [ADR 0006](0006-independent-domain-contract-boundaries.md) |
+| TestSuite/TestCase 영구 삭제와 historical identity | [ADR 0012](0012-testdefinition-hard-delete-and-historical-identity.md), [ADR 0002](0002-postgresql-persistence-contract.md) | Domain·Port 경계를 바꾸면 [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md)과 [ADR 0006](0006-independent-domain-contract-boundaries.md) |
 | TestRun Target HTTP 입력 | [ADR 0010](0010-single-target-test-run-model.md), [API 안내](../api/README.md) | 접수+Outbox 원자 저장은 ADR 0005와 ADR 0008을 추가한다. |
 | AI Application Target, Evaluator, Quality Gate와 Regression 역할 | [ADR 0011](0011-ai-application-target-and-guardrail-evaluator.md) | 현재 API·DB 구현 확인은 [API 안내](../api/README.md)와 [TestRun Persistence 인덱스](../architecture/testrun-persistence.md)를 추가한다. |
 | TestExecution·SnapshotEvaluation·QualityGateResult Aggregate와 write-side Repository | [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md), [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), [ADR 0006](0006-independent-domain-contract-boundaries.md) | 물리 매핑은 [ADR 0002](0002-postgresql-persistence-contract.md), TestRun 최종화는 [ADR 0004](0004-testrun-finalization-atomicity.md), Worker 중복 처리는 [ADR 0005](0005-async-test-run-execution-contract.md) |
@@ -42,6 +42,7 @@ ADR 0005  ADR 0002·0003·0004를 전제로 비동기 실행·Worker·메시지 
 ADR 0007  Candidate HTTP 입력을 DRAFT 전용으로 확정
 
 ADR 0009  ADR 0002의 활성 행 조건을 동시 TestCase 논리 삭제의 원자 저장 조건으로 구체화
+└─ ADR 0012  TestSuite/TestCase 영구 삭제와 historical identity로 대체
 
 ADR 0010  ADR 0002·0003·0005·0007·0008의 Baseline/Candidate 부분을 단일 Target 모델로 대체
 └─ ADR 0011  단일 Target은 유지하고 SUT를 AI Application으로, Guardrail을 Evaluator로 재정의

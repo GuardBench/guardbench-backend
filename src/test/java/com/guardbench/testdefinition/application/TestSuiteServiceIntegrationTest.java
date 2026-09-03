@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.List;
+import java.time.Instant;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,9 +17,13 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.guardbench.testdefinition.application.query.TestSuiteSummary;
+import com.guardbench.common.error.ApplicationException;
 import com.guardbench.testdefinition.domain.Action;
 import com.guardbench.testdefinition.domain.Severity;
 import com.guardbench.testsupport.PostgresTestConfiguration;
+import com.guardbench.testrun.support.fixture.TestRunPersistenceFixture;
+
+import jakarta.persistence.EntityManager;
 
 @SpringBootTest
 @Import(PostgresTestConfiguration.class)
@@ -30,6 +35,9 @@ class TestSuiteServiceIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private EntityManager entityManager;
 
     @Test
     @DisplayName("TestSuite와 초기 TestCase를 한 트랜잭션에서 생성하고 활성 개수를 조회한다")
@@ -80,6 +88,44 @@ class TestSuiteServiceIntegrationTest {
 
         assertNull(updated.description());
         assertEquals(1L, updated.testCaseCount());
+    }
+
+    @Test
+    @DisplayName("TestSuite 삭제는 소속 TestCase와 함께 영구 삭제한다")
+    void deletesSuiteAndItsTestCases() {
+        TestSuiteSummary created = service.create(new TestSuiteCreateCommand(
+                "삭제 Suite", null, List.of(testCase(
+                        "Case", "입력", Action.ALLOW, Severity.MEDIUM, "GENERAL"))));
+
+        service.delete(created.id());
+
+        assertThrows(ApplicationException.class,
+                () -> service.get(created.id()));
+        assertEquals(0L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM test_case WHERE test_suite_id = ?", Long.class, created.id()));
+    }
+
+    @Test
+    @DisplayName("TestSuite 삭제 후에도 과거 TestRun과 Snapshot을 보존한다")
+    void preservesHistoricalRunAndSnapshotWhenSuiteIsDeleted() {
+        TestSuiteSummary created = service.create(new TestSuiteCreateCommand(
+                "historical Suite", null, List.of(testCase(
+                        "Case", "input", Action.BLOCK, Severity.HIGH, "PII"))));
+        entityManager.flush();
+        TestRunPersistenceFixture fixture = new TestRunPersistenceFixture(jdbcTemplate);
+        long testCaseId = jdbcTemplate.queryForObject(
+                "SELECT id FROM test_case WHERE test_suite_id = ?", Long.class, created.id());
+        fixture.insertQueuedTestRun(930_001L, created.id(), 1, Instant.parse("2026-08-26T00:00:00Z"));
+        fixture.insertSnapshot(940_001L, 930_001L, testCaseId, Instant.parse("2026-08-26T00:00:00Z"));
+
+        service.delete(created.id());
+
+        assertEquals(1L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM test_run WHERE id = 930001", Long.class));
+        assertEquals(1L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM test_case_snapshot WHERE id = 940001", Long.class));
+        assertEquals(created.id(), jdbcTemplate.queryForObject(
+                "SELECT test_suite_id FROM test_run WHERE id = 930001", Long.class));
     }
 
     private static TestCaseCreateCommand testCase(

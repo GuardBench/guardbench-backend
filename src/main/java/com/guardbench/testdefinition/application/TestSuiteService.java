@@ -75,7 +75,7 @@ public class TestSuiteService {
 
     public TestSuiteSummary get(long suiteId) {
         TestSuite suite = findSuite(suiteId);
-        return summary(suite, testCaseRepository.countActiveByTestSuiteId(suite.id()));
+        return summary(suite, testCaseRepository.countByTestSuiteId(suite.id()));
     }
 
     @Transactional
@@ -90,7 +90,17 @@ public class TestSuiteService {
             suite.changeDescription(command.description(), now);
         }
         TestSuite saved = testSuiteRepository.save(suite);
-        return summary(saved, testCaseRepository.countActiveByTestSuiteId(saved.id()));
+        return summary(saved, testCaseRepository.countByTestSuiteId(saved.id()));
+    }
+
+    @Transactional
+    public void delete(long suiteId) {
+        TestSuiteId id = new TestSuiteId(suiteId);
+        if (!testSuiteRepository.existsById(id)) {
+            throw new ApplicationException(ApplicationErrorCode.TEST_SUITE_NOT_FOUND);
+        }
+        testCaseRepository.deleteAllByTestSuiteId(id);
+        testSuiteRepository.deleteById(id);
     }
 
     private TestSuite findSuite(long suiteId) {

@@ -23,7 +23,7 @@ import com.guardbench.testdefinition.application.query.TestSuiteSummary;
 /**
  * TestSuite 목록 조회 Port를 PostgreSQL query로 구현한다.
  *
- * <p>활성 TestCase 수는 중복 저장하지 않고 상관 subquery로 집계한다. 같은 집계식을 Projection과
+ * <p>TestCase 수는 중복 저장하지 않고 상관 subquery로 집계한다. 같은 집계식을 Projection과
  * count filter 양쪽에서 사용하고, 전체 filter와 정렬이 끝난 뒤 LIMIT/OFFSET을 적용한다.
  *
  * <p>정렬 SQL은 문자열 입력이 아니라 {@link TestSuiteSortField}의 고정 mapping으로만 조립한다.
@@ -38,7 +38,7 @@ class TestSuiteListQueryAdapter implements TestSuiteListQuery {
             (SELECT COUNT(*)
                FROM test_case tc
               WHERE tc.test_suite_id = s.id
-                AND tc.deleted_at IS NULL)
+                )
             """;
 
     private final JdbcTemplate jdbcTemplate;

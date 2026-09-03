@@ -75,8 +75,8 @@ class TestRunRegressionPersistenceAdapterIntegrationTest {
         jdbcTemplate.update("""
                 INSERT INTO test_case (
                     id, test_suite_id, name, input, expected_action, severity, category,
-                    created_at, updated_at, deleted_at)
-                VALUES (11, ?, 'case', 'input', 'BLOCK', 'HIGH', 'PII', ?, ?, NULL)
+                    created_at, updated_at)
+                VALUES (11, ?, 'case', 'input', 'BLOCK', 'HIGH', 'PII', ?, ?)
                 """, id, Timestamp.from(T0), Timestamp.from(T0));
     }
 

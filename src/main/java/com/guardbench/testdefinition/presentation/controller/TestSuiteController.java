@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -81,5 +82,13 @@ public class TestSuiteController {
                 HttpStatus.OK,
                 "TestSuite가 수정되었습니다.",
                 TestSuiteUpdateRes.from(testSuiteService.update(suiteId, request.toCommand())));
+    }
+
+    @DeleteMapping("/{suiteId}")
+    public ResponseEntity<Void> delete(
+            @PathVariable("suiteId")
+            @Min(value = 1, message = "TestSuite 식별자는 1 이상이어야 합니다.") long suiteId) {
+        testSuiteService.delete(suiteId);
+        return ResponseEntity.noContent().build();
     }
 }

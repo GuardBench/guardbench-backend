@@ -3,11 +3,14 @@ package com.guardbench.testdefinition.presentation.controller;
 import static org.hamcrest.Matchers.hasItem;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -191,6 +194,16 @@ class TestSuiteControllerTest {
                             .content("{\"name\":null}"))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.data.errors[*].field").value(hasItem("name")));
+        }
+
+        @Test
+        @DisplayName("TestSuite 삭제는 Body 없이 204를 반환한다")
+        void deletesWithoutBody() throws Exception {
+            doNothing().when(testSuiteService).delete(1L);
+
+            mockMvc.perform(delete(BASE + "/1"))
+                    .andExpect(status().isNoContent())
+                    .andExpect(content().string(""));
         }
     }
 

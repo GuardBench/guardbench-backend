@@ -40,7 +40,7 @@ import com.guardbench.testrun.domain.repository.TestRunRepository;
 /**
  * TestRun을 멱등하게 접수하는 Application Service다.
  *
- * <p>ADR 0010에 따라 Idempotency 판정, TestSuite/활성 TestCase 확인, TestRun 접수, Target reference·Snapshot
+ * <p>ADR 0010에 따라 Idempotency 판정, TestSuite/TestCase 확인, TestRun 접수, Target reference·Snapshot
  * 고정과 {@code TestRunRequested} Outbox 저장을 하나의 트랜잭션에서 조율한다. Target
  * preparation, resolution/execution claim과 fan-out은 이 Service의 책임이 아니다.
  */

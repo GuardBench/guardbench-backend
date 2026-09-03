@@ -23,10 +23,9 @@ import com.guardbench.testdefinition.domain.Action;
 import com.guardbench.testdefinition.domain.Severity;
 
 /**
- * 활성 TestCase 목록 조회 Port를 PostgreSQL query로 구현한다.
+ * TestCase 목록 조회 Port를 PostgreSQL query로 구현한다.
  *
- * <p>논리 삭제 조건은 호출자가 선택하는 filter가 아니라 모든 select와 count query에 항상 적용한다.
- * Severity는 저장 code의 사전순 대신 승인된 LOW, MEDIUM, HIGH, CRITICAL 의미 순서로 정렬한다.
+ * <p>Severity는 저장 code의 사전순 대신 승인된 LOW, MEDIUM, HIGH, CRITICAL 의미 순서로 정렬한다.
  *
  * <p>근거: {@code docs/api/openapi.yaml},
  * {@code docs/decisions/0002-postgresql-persistence-contract.md}
@@ -51,7 +50,7 @@ class TestCaseListQueryAdapter implements TestCaseListQuery {
     }
 
     @Override
-    public PageResult<TestCaseSummary> findActive(TestCaseListCriteria criteria) {
+    public PageResult<TestCaseSummary> find(TestCaseListCriteria criteria) {
         Objects.requireNonNull(criteria, "TestCaseListCriteria must not be null");
 
         QueryParts query = queryParts(criteria);
@@ -82,8 +81,6 @@ class TestCaseListQueryAdapter implements TestCaseListQuery {
 
         predicates.add("tc.test_suite_id = ?");
         arguments.add(criteria.testSuiteId().value());
-        predicates.add("tc.deleted_at IS NULL");
-
         addContains(predicates, arguments, "tc.name", criteria.nameContains());
         addContains(predicates, arguments, "tc.input", criteria.inputContains());
         addEquals(predicates, arguments, "tc.category", criteria.category());

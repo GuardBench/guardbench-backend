@@ -144,6 +144,19 @@ paths:
                   updatedAt: '2026-08-24T11:00:00Z'
         '400': { $ref: '#/components/responses/ValidationError' }
         '404': { $ref: '#/components/responses/TestSuiteNotFound' }
+    delete:
+      tags: [TestSuite]
+      operationId: deleteTestSuite
+      summary: TestSuite 삭제
+      description: |
+        TestSuite와 현재 소속된 TestCase를 함께 영구 삭제한다.
+        과거 TestRun, TestCaseSnapshot, 실행·평가·비교 결과는 삭제하지 않는다.
+        응답 Body는 없다. 존재하지 않는 TestSuite는 404 TEST_SUITE_NOT_FOUND로 응답한다.
+      responses:
+        '204':
+          description: 영구 삭제됨. 응답 Body가 없다.
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/TestSuiteNotFound' }
   /api/v1/test-suites/{suiteId}/test-cases:
     parameters:
       - $ref: '#/components/parameters/SuiteId'
@@ -311,12 +324,12 @@ paths:
       operationId: deleteTestCase
       summary: TestCase 삭제
       description: |
-        TestCase를 논리 삭제하여 현재 조회와 이후 TestRun에서 제외한다.
+        TestCase를 영구 삭제한다.
         기존 TestCaseSnapshot과 과거 실행·판정 결과는 삭제하지 않는다.
         응답 Body는 없으며 같은 ID를 다시 삭제하면 404 TEST_CASE_NOT_FOUND로 응답한다.
       responses:
         '204':
-          description: 논리 삭제됨. 응답 Body가 없다.
+          description: 영구 삭제됨. 응답 Body가 없다.
         '400': { $ref: '#/components/responses/ValidationError' }
         '404': { $ref: '#/components/responses/TestCaseNotFound' }
   /api/v1/test-runs:
@@ -328,7 +341,7 @@ paths:
         실행 완료가 아니라 TestRun 실행 요청을 안전하게 접수한다.
         요청은 하나의 OpenAI-compatible HTTP AI Application Target과 inline Evaluation Profile을 포함한다.
         사용자는 Evaluator type, provider 또는 Guardrail identifier/version을 제출하지 않는다.
-        GuardBench가 profile을 실제 Evaluator 설정으로 해석하고 실행 조건과 현재 활성 TestCase의
+        GuardBench가 profile을 실제 Evaluator 설정으로 해석하고 실행 조건과 현재 TestCase의
         불변 Snapshot을 고정한다. HTTP Target의 identifier와 model도 실행 조건으로 고정한다.
         커밋 후 발생한 SQS 발행·Application 실행·Evaluator 오류는 이 HTTP 요청의 실패로 바꾸지 않고 TestRun 결과로 기록한다.
       parameters:
@@ -1203,8 +1216,8 @@ components:
     TestRunCreateReq:
       type: object
       description: |
-        TestSuite의 활성 TestCase 전체를 실행 대상으로 사용하며 TestCase ID 목록은 받지 않는다.
-        논리 삭제된 TestCase는 제외하고 활성 TestCase가 없으면 409 TEST_SUITE_EMPTY로 응답한다.
+        TestSuite의 현재 TestCase 전체를 실행 대상으로 사용하며 TestCase ID 목록은 받지 않는다.
+        TestCase가 없으면 409 TEST_SUITE_EMPTY로 응답한다.
         evaluationProfile은 독립 영속 리소스 ID가 아닌 inline 값이며 서버가 실제 Evaluator 설정으로 해석한다.
       required: [testSuiteId, target, evaluationProfile]
       additionalProperties: false
@@ -1232,7 +1245,7 @@ components:
         testCaseCount:
           type: integer
           minimum: 1
-          description: 접수 트랜잭션에서 고정된 활성 TestCaseSnapshot 개수
+          description: 접수 트랜잭션에서 고정된 TestCaseSnapshot 개수
         target: { $ref: '#/components/schemas/TargetReferenceRes' }
         evaluationProfile: { $ref: '#/components/schemas/EvaluationProfileRes' }
         createdAt: { type: string, format: date-time, description: UTC 기준 ISO 8601 접수 시각 }
@@ -1454,7 +1467,7 @@ components:
       description: |
         실행 당시 Snapshot, Evaluator verdict와 Assertion의 public 결과다.
         Application의 자연어 응답은 포함하지 않는다.
-        현재 TestCase 수정·논리 삭제와 무관하게 값이 유지된다.
+        현재 TestCase 수정·삭제와 무관하게 값이 유지된다.
         EvaluationResult가 없으면 assertionStatus와 evaluationOutcome은 null이다.
       required:
         - testCaseSnapshotId

@@ -7,7 +7,7 @@ import java.util.Objects;
  * TestSuite 목록 한 항목의 읽기 Projection이다.
  *
  * <p>Domain의 {@code TestSuite} Aggregate가 아니다. {@code testCaseCount}는 Aggregate가 관리하지 않고
- * 조회 시점에 활성 TestCase를 집계한 값이므로, 그 값을 함께 담을 수 있는 별도 타입을 둔다.
+ * 조회 시점에 TestCase를 집계한 값이므로, 그 값을 함께 담을 수 있는 별도 타입을 둔다.
  *
  * <p>{@code description}은 값이 없을 수 있다. 빈 문자열과 공백만 있는 값은 저장 시점에 이미 값이 없는
  * 것으로 정규화되므로 여기서는 {@code null}로만 표현된다.

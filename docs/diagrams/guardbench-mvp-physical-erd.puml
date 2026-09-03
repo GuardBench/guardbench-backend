@@ -32,13 +32,12 @@ entity "test_case" as test_case {
   * category : TEXT
   * created_at : TIMESTAMPTZ(6)
   * updated_at : TIMESTAMPTZ(6)
-    deleted_at : TIMESTAMPTZ(6)
 }
 
 entity "test_run" as test_run {
   * id : BIGINT <<PK, sequence>>
   --
-  * test_suite_id : BIGINT <<FK>>
+  * test_suite_id : BIGINT <<historical identity>>
   * status : VARCHAR(16)
   * test_case_count : INTEGER
   * processed_test_case_count : INTEGER
@@ -92,7 +91,7 @@ entity "test_case_snapshot" as snapshot {
   * id : BIGINT <<PK, sequence>>
   --
   * test_run_id : BIGINT <<FK>>
-  * source_test_case_id : BIGINT <<FK>>
+  * source_test_case_id : BIGINT <<historical identity>>
   * name : TEXT
   * input : TEXT
   * expected_action : VARCHAR(16)
@@ -182,14 +181,14 @@ entity "outbox_event" as outbox {
 }
 
 test_suite ||--o{ test_case : contains
-test_suite ||--o{ test_run : selected by
+test_suite ||..o{ test_run : historical identity
 target_reference ||--o| test_run : referenced by
 target_reference ||--o| bedrock_target : provider detail
 target_reference ||--o| http_endpoint_target : provider detail
 evaluator_reference ||--o| bedrock_evaluator : provider detail
 evaluator_reference ||--o{ test_run : immutable evaluator snapshot
 test_run ||--|{ snapshot : fixes
-test_case ||--o{ snapshot : source of
+test_case ||..o{ snapshot : historical identity
 snapshot ||--o| execution : single target
 snapshot ||--o| execution_claim : technical lease
 test_run ||--o| idempotency : request replay
@@ -224,8 +223,8 @@ note right of http_endpoint_target
 end note
 
 note right of test_case
-  Active row: deleted_at IS NULL
-  Public DELETE is logical only.
+  Public DELETE is physical.
+  Historical Snapshot values remain independent.
 end note
 
 note bottom of execution
@@ -244,12 +243,13 @@ note bottom of quality_gate
 end note
 
 legend left
-  Every FK uses ON DELETE RESTRICT.
+  Current TestCase → TestSuite uses ON DELETE RESTRICT.
+  Snapshot source and TestRun suite IDs are historical scalars without FKs.
   Outbox has no test_run_id column; its payload
   carries the immutable event identifiers.
   Claim relations are technical leases, not Domain IDs
   or Aggregate Repositories.
-  Diagram reflects Flyway V1 through V8.
+  Diagram reflects Flyway V1 through V12.
 endlegend
 
 @enduml
