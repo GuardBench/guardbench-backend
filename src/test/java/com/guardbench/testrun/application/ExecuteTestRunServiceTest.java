@@ -1,6 +1,7 @@
 package com.guardbench.testrun.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import com.guardbench.common.support.fixture.LogCapture;
 import com.guardbench.testrun.application.port.out.ClaimResult;
 import com.guardbench.testrun.application.port.out.ExecutionClaimPort;
 import com.guardbench.testrun.application.port.out.ExecutionContext;
@@ -355,6 +357,39 @@ class ExecuteTestRunServiceTest {
         }
 
         @Test
+        @DisplayName("Run 201 재현: PROVIDER_UNAVAILABLE 재시도 중에는 WARN으로, attempt 소진 후 최종 저장 시 "
+                + "errorCode/retryable=true가 구조화 로그에 남는다")
+        void providerUnavailableRetryIsObservableInApplicationLog() {
+            LogCapture logCapture = LogCapture.attach(ExecuteTestRunService.class);
+            try {
+                claimPort.willAcquireWithAttempt(SNAPSHOT_ID, 1);
+                contextPort.setContext(SNAPSHOT_ID, defaultContext());
+                guardrailPort.willThrow(TargetFailureCode.PROVIDER_UNAVAILABLE);
+
+                ExecuteTestRunService.ExecutionOutcome retryOutcome = service.execute(SNAPSHOT_ID);
+                assertEquals(ExecuteTestRunService.ExecutionOutcome.PROVIDER_FAILED_RETRYABLE, retryOutcome);
+
+                String retryLog = logCapture.firstMessageContaining("will be retried");
+                assertTrue(retryLog.contains("errorCode=PROVIDER_UNAVAILABLE"));
+                assertTrue(retryLog.contains("retryable=true"));
+                assertTrue(retryLog.contains("testRunId=" + TEST_RUN_ID));
+                assertTrue(retryLog.contains("snapshotId=" + SNAPSHOT_ID));
+
+                claimPort.willAcquireWithAttempt(SNAPSHOT_ID, 3);
+                ExecuteTestRunService.ExecutionOutcome terminalOutcome = service.execute(SNAPSHOT_ID);
+                assertEquals(ExecuteTestRunService.ExecutionOutcome.EXECUTED, terminalOutcome);
+
+                String terminalLog = logCapture.firstMessageContaining("terminal result saved");
+                assertTrue(terminalLog.contains("errorCode=PROVIDER_UNAVAILABLE"));
+                assertTrue(terminalLog.contains("errorStage=APPLICATION_TARGET"));
+                assertTrue(terminalLog.contains("retryable=true"));
+                assertFalse(terminalLog.contains("Hello, block this content"));
+            } finally {
+                logCapture.detach();
+            }
+        }
+
+        @Test
         @DisplayName("영구 오류(TARGET_NOT_FOUND)는 첫 시도에서 FAILED로 저장한다")
         void permanentFailureFirstAttempt() {
             claimPort.willAcquireWithAttempt(SNAPSHOT_ID, 1);
@@ -404,6 +439,33 @@ class ExecuteTestRunServiceTest {
             TestExecution saved = executionRepository.savedExecutions().getFirst();
             assertEquals(TestExecutionStatus.FAILED, saved.status());
             assertEquals(TestExecutionErrorCode.TARGET_CONFIGURATION_INVALID, saved.error().code());
+        }
+
+        @Test
+        @DisplayName("Run 101 재현: TARGET_CONFIGURATION_INVALID는 재시도 없이 첫 시도에서 terminal 로그에 "
+                + "errorStage/errorCode/retryable=false로 남는다")
+        void targetConfigurationInvalidIsObservableInApplicationLogWithoutRetry() {
+            LogCapture logCapture = LogCapture.attach(ExecuteTestRunService.class);
+            try {
+                claimPort.willAcquireWithAttempt(SNAPSHOT_ID, 1);
+                contextPort.setContext(SNAPSHOT_ID, defaultContext());
+                guardrailPort.willThrow(TargetFailureCode.TARGET_CONFIGURATION_INVALID);
+
+                ExecuteTestRunService.ExecutionOutcome outcome = service.execute(SNAPSHOT_ID);
+
+                assertEquals(ExecuteTestRunService.ExecutionOutcome.EXECUTED, outcome);
+                assertFalse(logCapture.hasMessageContaining("will be retried"));
+
+                String terminalLog = logCapture.firstMessageContaining("terminal result saved");
+                assertTrue(terminalLog.contains("testRunId=" + TEST_RUN_ID));
+                assertTrue(terminalLog.contains("snapshotId=" + SNAPSHOT_ID));
+                assertTrue(terminalLog.contains("errorStage=APPLICATION_TARGET"));
+                assertTrue(terminalLog.contains("errorCode=TARGET_CONFIGURATION_INVALID"));
+                assertTrue(terminalLog.contains("retryable=false"));
+                assertFalse(terminalLog.contains("Hello, block this content"));
+            } finally {
+                logCapture.detach();
+            }
         }
 
         @Test
