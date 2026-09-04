@@ -42,7 +42,7 @@ class SageMakerEvaluatorConfigurationTest {
     class CallLimitTest {
 
         @Test
-        @DisplayName("기본 설정은 전체 15초, 개별 시도 5초, 최대 4회를 적용한다")
+        @DisplayName("기본 설정은 전체 15초, 개별 시도 5초, 재시도 없음(1회)을 적용한다")
         void appliesApprovedCallLimits() {
             SageMakerProperties properties = new SageMakerProperties(null, null, 0L, 0L, 0);
 
@@ -55,7 +55,7 @@ class SageMakerEvaluatorConfigurationTest {
                     .isPresent()
                     .get()
                     .extracting(RetryStrategy::maxAttempts)
-                    .isEqualTo(4);
+                    .isEqualTo(1);
         }
 
         @Test

@@ -197,6 +197,20 @@ class SageMakerClassifierEvaluatorAdapterTest {
         assertEquals(EvaluatorFailureCode.EVALUATOR_CONFIGURATION_INVALID, result.failureCode());
     }
 
+    @Test
+    @DisplayName("classifier user-prompt-template이 actualResponse placeholder를 누락하면 "
+            + "SDK를 호출하지 않고 EVALUATOR_CONFIGURATION_INVALID로 실패한다")
+    void malformedUserPromptTemplateFailsWithoutCallingProvider() {
+        SageMakerClassifierEvaluatorAdapter malformed = new SageMakerClassifierEvaluatorAdapter(
+                client, evaluatorStore,
+                new SageMakerClassifierProperties(ENDPOINT_NAME, SYSTEM_PROMPT, "REQUEST=%s"),
+                OBJECT_MAPPER);
+
+        EvaluatorExecutionResult result = malformed.evaluate(executionRequest());
+
+        assertEquals(EvaluatorFailureCode.EVALUATOR_CONFIGURATION_INVALID, result.failureCode());
+    }
+
     private SageMakerClassifierEvaluatorAdapter adapter() {
         when(evaluatorStore.findByReference("evaluator-ref"))
                 .thenReturn(Optional.of(new SageMakerClassifierEvaluatorStore.SageMakerClassifierEvaluator(
