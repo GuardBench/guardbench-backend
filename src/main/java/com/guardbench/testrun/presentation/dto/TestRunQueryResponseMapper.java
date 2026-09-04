@@ -11,6 +11,7 @@ import com.guardbench.testrun.application.port.out.TestRunDetail;
 import com.guardbench.testrun.application.port.out.TestRunListItem;
 import com.guardbench.testrun.application.port.out.TestRunProgress;
 import com.guardbench.testrun.application.port.out.TestRunResultItem;
+import com.guardbench.testrun.application.port.out.TestRunResultListView;
 import com.guardbench.testrun.application.port.out.TestRunComparison;
 import com.guardbench.testrun.application.port.out.TestRunRegressionView;
 import com.guardbench.common.presentation.dto.PageMetaRes;
@@ -49,10 +50,20 @@ public final class TestRunQueryResponseMapper {
                 toIso(detail.updatedAt()));
     }
 
-    public static TestRunResultListRes toResultListRes(PageResult<TestRunResultItem> page) {
+    public static TestRunResultListRes toResultListRes(TestRunResultListView result) {
+        PageResult<TestRunResultItem> page = result.page();
         return new TestRunResultListRes(
                 page.items().stream().map(TestRunQueryResponseMapper::toResultItemRes).toList(),
-                toPageMetaRes(page));
+                toPageMetaRes(page),
+                result.facets() == null ? null : new TestRunResultFacetsRes(
+                        result.facets().allResults(),
+                        result.facets().attentionTotal(),
+                        new TestRunResultAttentionTypeCountsRes(
+                                result.facets().falseNegative(),
+                                result.facets().falsePositive(),
+                                result.facets().executionFailed(),
+                                result.facets().timedOut(),
+                                result.facets().notStarted())));
     }
 
     public static EvaluatorMetricsRes toEvaluatorMetricsRes(EvaluatorMetricsView metrics) {
@@ -120,6 +131,7 @@ public final class TestRunQueryResponseMapper {
                         ? item.execution().evaluatorVerdict().name() : null,
                 item.assertionStatusCode(),
                 item.evaluationOutcomeCode(),
+                item.attentionType() == null ? null : item.attentionType().name(),
                 toErrorRes(item.execution()));
     }
 

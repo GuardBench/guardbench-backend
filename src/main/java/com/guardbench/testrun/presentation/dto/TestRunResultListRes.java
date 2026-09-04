@@ -10,5 +10,8 @@ import com.guardbench.common.presentation.dto.PageMetaRes;
  *
  * @see <a href="../../../../../../../../docs/api/openapi.yaml">GuardBench API V1 - TestRunResultListRes</a>
  */
-public record TestRunResultListRes(List<TestRunResultListItemRes> items, PageMetaRes page) {
+public record TestRunResultListRes(
+        List<TestRunResultListItemRes> items,
+        PageMetaRes page,
+        TestRunResultFacetsRes facets) {
 }
