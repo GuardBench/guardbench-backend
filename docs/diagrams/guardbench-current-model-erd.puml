@@ -1,0 +1,133 @@
+@startuml
+!pragma layout smetana
+title GuardBench Current Active Model ERD
+
+hide methods
+hide stereotypes
+skinparam linetype ortho
+skinparam shadowing false
+skinparam entity {
+  BackgroundColor White
+  BorderColor #374151
+  HeaderBackgroundColor #E5E7EB
+}
+
+entity "test_suite" as test_suite {
+  * id : BIGINT <<PK>>
+  --
+  * name : TEXT
+    description : TEXT
+}
+
+entity "test_case" as test_case {
+  * id : BIGINT <<PK>>
+  --
+  * test_suite_id : BIGINT <<FK>>
+  * name : TEXT
+  * input : TEXT
+  * expected_action : ALLOW | BLOCK
+  * severity : VARCHAR
+  * category : TEXT
+}
+
+entity "test_run" as test_run {
+  * id : BIGINT <<PK>>
+  --
+  * test_suite_id : BIGINT <<historical identity>>
+  * target_reference_id : TEXT <<FK>>
+  * evaluator_reference_id : TEXT <<FK>>
+  * status : VARCHAR
+  * test_case_count : INTEGER
+  * processed_test_case_count : INTEGER
+}
+
+entity "target_reference" as target_reference {
+  * reference_id : TEXT <<PK>>
+  --
+  * target_type : HTTP_ENDPOINT
+}
+
+entity "http_endpoint_target" as http_endpoint_target {
+  * reference_id : TEXT <<PK, FK>>
+  --
+  * endpoint_url : TEXT
+  * model : TEXT
+    requested_revision : TEXT
+}
+
+entity "evaluator_reference" as evaluator_reference {
+  * reference_id : TEXT <<PK>>
+  --
+  * provider_code : VARCHAR
+  * model_id : TEXT
+}
+
+entity "test_case_snapshot" as snapshot {
+  * id : BIGINT <<PK>>
+  --
+  * test_run_id : BIGINT <<FK>>
+  * source_test_case_id : BIGINT <<historical identity>>
+  * input : TEXT
+  * expected_action : ALLOW | BLOCK
+  * severity : VARCHAR
+  * category : TEXT
+}
+
+entity "test_execution" as execution {
+  * snapshot_id : BIGINT <<PK, FK>>
+  --
+  * result_status : VARCHAR
+    application_response : TEXT
+    evaluator_verdict : ALLOW | BLOCK
+    error_stage : VARCHAR
+    error_code : TEXT
+}
+
+entity "assertion_result" as assertion {
+  * snapshot_id : BIGINT <<PK, FK>>
+  --
+  * assertion_status : PASS | FAIL
+}
+
+entity "quality_gate_result" as quality_gate {
+  * test_run_id : BIGINT <<PK, FK>>
+  --
+  * gate_status : VARCHAR
+    assertion_pass_rate : DOUBLE PRECISION
+    execution_success_rate : DOUBLE PRECISION
+}
+
+test_suite ||--o{ test_case : contains
+test_suite ||..o{ test_run : historical identity
+target_reference ||--o| test_run : referenced by
+target_reference ||--|| http_endpoint_target : current target detail
+evaluator_reference ||--o{ test_run : classifier snapshot
+test_run ||--|{ snapshot : fixes
+test_case ||..o{ snapshot : historical identity
+snapshot ||--o| execution : executes once
+snapshot ||--o| assertion : expected vs verdict
+test_run ||--o| quality_gate : final evaluation
+
+note right of target_reference
+  New TestRuns accept HTTP_ENDPOINT only.
+  Legacy provider tables are intentionally omitted.
+end note
+
+note right of evaluator_reference
+  Response Behavior Classifier identity.
+  Current adapter uses SageMaker Runtime.
+end note
+
+note bottom of execution
+  AI Application response is classified into
+  ALLOW or BLOCK before Assertion.
+end note
+
+legend left
+  This diagram shows the active GuardBench runtime/domain model.
+  It intentionally excludes historical Flyway-only artifacts,
+  technical Outbox/claim tables, and legacy provider tables.
+  See guardbench-mvp-physical-erd.puml for the full physical schema.
+endlegend
+
+@enduml
