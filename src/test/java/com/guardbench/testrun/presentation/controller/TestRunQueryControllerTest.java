@@ -314,6 +314,33 @@ class TestRunQueryControllerTest {
         }
 
         @Test
+        @DisplayName("반복 attentionType에 빈 값이 섞이면 400 VALIDATION_ERROR를 반환한다")
+        void returnsValidationErrorForEmptyRepeatedAttentionType() throws Exception {
+            mockMvc.perform(get(BASE + "/901/results")
+                            .queryParam("attentionType", "FALSE_NEGATIVE", ""))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.data.code").value("VALIDATION_ERROR"));
+        }
+
+        @Test
+        @DisplayName("facet 미요청 시 facets는 생략하고 정상 결과의 attentionType은 null로 반환한다")
+        void omitsUnrequestedFacetsAndKeepsNullAttentionType() throws Exception {
+            TestRunResultItem item = new TestRunResultItem(
+                    1001L, 10L, "normal", "input", Action.ALLOW, Severity.LOW, "PII",
+                    new TestExecutionView(TestExecutionStatus.SUCCEEDED, Action.ALLOW, null, null, null),
+                    "PASS", "TRUE_NEGATIVE", null);
+            when(getTestRunResultListService.getResults(anyLong(), any()))
+                    .thenReturn(new TestRunResultListView(
+                            PageResult.of(List.of(item), new PageCriteria(1, 20), 1L), null));
+
+            mockMvc.perform(get(BASE + "/901/results"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.facets").doesNotHaveJsonPath())
+                    .andExpect(jsonPath("$.data.items[0].attentionType").hasJsonPath())
+                    .andExpect(jsonPath("$.data.items[0].attentionType").value(org.hamcrest.Matchers.nullValue()));
+        }
+
+        @Test
         @DisplayName("허용되지 않은 attentionType은 400 VALIDATION_ERROR를 반환한다")
         void returnsValidationErrorForUnsupportedAttentionType() throws Exception {
             mockMvc.perform(get(BASE + "/901/results").queryParam("attentionType", "UNKNOWN"))

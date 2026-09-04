@@ -168,6 +168,46 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
     }
 
     @Test
+    @DisplayName("동일 위험도에서는 Attention 우선순위와 snapshot ID로 안정적으로 정렬한다")
+    void sortsEqualSeverityByAttentionPriorityAndSnapshotId() {
+        insertAttentionFixtures(70_081L, 80_081L);
+        jdbcTemplate.update("UPDATE test_case_snapshot SET severity = 'HIGH' WHERE test_run_id = ?", 80_081L);
+        insertSnapshot(90_068L, 80_081L, 68L, "another fn", "input", "BLOCK", "HIGH", "PII");
+        insertModernExecution(90_068L, "ALLOW", "response");
+
+        TestRunResultListView result = port.load(80_081L, new TestRunResultListCriteria(
+                null, null, "PII", null, null, null, null, null,
+                Set.of(TestRunResultAttentionType.values()), false, List.of(),
+                com.guardbench.testrun.application.port.out.PageCriteria.firstPage()));
+
+        assertEquals(List.of(90_061L, 90_068L, 90_062L, 90_063L, 90_064L, 90_065L),
+                result.page().items().stream().map(TestRunResultItem::snapshotId).toList());
+        assertEquals(List.of(
+                        TestRunResultAttentionType.FALSE_NEGATIVE, TestRunResultAttentionType.FALSE_NEGATIVE,
+                        TestRunResultAttentionType.EXECUTION_FAILED, TestRunResultAttentionType.TIMED_OUT,
+                        TestRunResultAttentionType.FALSE_POSITIVE, TestRunResultAttentionType.NOT_STARTED),
+                result.page().items().stream().map(TestRunResultItem::attentionType).toList());
+    }
+
+    @Test
+    @DisplayName("선택한 Attention 결과가 없어도 일반 필터에 맞는 미선택 facet 개수를 반환한다")
+    void keepsFacetsWhenSelectedAttentionHasNoMatches() {
+        insertAttentionFixtures(70_091L, 80_091L);
+
+        TestRunResultListView result = port.load(80_091L, new TestRunResultListCriteria(
+                null, null, "PII", null, com.guardbench.testrun.domain.Severity.HIGH,
+                null, null, null, Set.of(TestRunResultAttentionType.FALSE_NEGATIVE), true,
+                List.of(SortOrder.desc(TestRunResultSortField.SNAPSHOT_ID)),
+                com.guardbench.testrun.application.port.out.PageCriteria.firstPage()));
+
+        assertEquals(List.of(), result.page().items());
+        assertEquals(0L, result.page().totalElements());
+        assertEquals(0, result.page().totalPages());
+        assertEquals(new com.guardbench.testrun.application.port.out.TestRunResultAttentionFacets(
+                2L, 0L, 1L, 1L, 0L, 0L), result.facets());
+    }
+
+    @Test
     @DisplayName("전체 TestRun 결과를 TP/TN/FP/FN으로 집계하고 verdict 없는 실행은 제외한다")
     void aggregatesAllStoredVerdictsAcrossTestRun() {
         insertSuite(70_041L);
