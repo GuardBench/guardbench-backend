@@ -1,6 +1,6 @@
 @startuml
 !pragma layout smetana
-title GuardBench MVP Current PostgreSQL ERD
+title GuardBench MVP PostgreSQL Physical ERD
 
 hide methods
 hide stereotypes
@@ -54,6 +54,14 @@ entity "target_reference" as target_reference {
   * reference_id : TEXT <<PK>>
   --
   * target_type : VARCHAR(32)
+}
+
+entity "bedrock_guardrail_target" as bedrock_target {
+  * reference_id : TEXT <<PK, FK>>
+  --
+  * guardrail_identifier : TEXT
+  * requested_revision : TEXT
+    resolved_revision : TEXT
 }
 
 entity "http_endpoint_target" as http_endpoint_target {
@@ -167,7 +175,8 @@ entity "outbox_event" as outbox {
 test_suite ||--o{ test_case : contains
 test_suite ||..o{ test_run : historical identity
 target_reference ||--o| test_run : referenced by
-target_reference ||--o| http_endpoint_target : current provider detail
+target_reference ||--o| bedrock_target : provider detail
+target_reference ||--o| http_endpoint_target : provider detail
 evaluator_reference ||--o{ test_run : immutable evaluator snapshot
 test_run ||--|{ snapshot : fixes
 test_case ||..o{ snapshot : historical identity
@@ -175,16 +184,18 @@ snapshot ||--o| execution : single target
 snapshot ||--o| execution_claim : technical lease
 test_run ||--o| idempotency : request replay
 test_run ||--o| resolution_claim : technical lease
-snapshot ||--o| assertion : expected vs evaluated behavior
-snapshot ||--o| change_result : historical comparison result
+snapshot ||--o| assertion : expected vs actual
+snapshot ||--o| change_result : legacy, no new writes
 test_run ||--o| quality_gate : final evaluation
 outbox ..> test_run : payload reference only
 
 note right of target_reference
-  Current contract: HTTP_ENDPOINT AI Application Target only.
-  Public TestRun creation does not expose provider-specific target types.
+  target_type: BEDROCK_GUARDRAIL | HTTP_ENDPOINT
+  Provider detail is stored in the matching table.
   test_run.target_reference_id is NOT NULL with a UNIQUE
   constraint, so at most one TestRun per target_reference.
+  New TestRuns register HTTP_ENDPOINT only;
+  bedrock_guardrail_target is retained V3 legacy data.
 end note
 
 note right of evaluator_reference
@@ -196,7 +207,9 @@ note right of evaluator_reference
 end note
 
 note right of http_endpoint_target
-  Current AI Application Target persistence.
+  V4 adds HTTP_ENDPOINT persistence; V6 adds requested revision.
+  V5 requires an http/https URL with host-like text.
+  V7 adds the OpenAI-compatible model; V8 makes it NOT NULL.
   Public API accepts HTTP_ENDPOINT only.
 end note
 
@@ -207,13 +220,12 @@ end note
 
 note bottom of execution
   PK limits each Snapshot to one row.
-  Application response and evaluator verdict belong to
-  the single-target Response Behavior Classifier flow.
   Only terminal result states are stored.
 end note
 
 note bottom of change_result
-  Current regression comparison can reuse compatible historical Run results.
+  V3 removes existing rows.
+  Single-target TestRun creates no new rows.
 end note
 
 note bottom of quality_gate
@@ -222,15 +234,14 @@ note bottom of quality_gate
 end note
 
 legend left
-  This diagram documents the current GuardBench model,
-  not every historical table introduced by past Flyway migrations.
-
   Current TestCase → TestSuite uses ON DELETE RESTRICT.
   Snapshot source and TestRun suite IDs are historical scalars without FKs.
   Outbox has no test_run_id column; its payload
   carries the immutable event identifiers.
   Claim relations are technical leases, not Domain IDs
   or Aggregate Repositories.
+  Diagram reflects Flyway V1 through V13, including legacy physical tables.
+  See guardbench-current-model-erd.puml for the active model without legacy artifacts.
 endlegend
 
 @enduml
