@@ -354,7 +354,7 @@ fail twice then succeed
 permanent failure
 ```
 
-이 테스트의 목적은 Bedrock이나 실제 AI Application의 동작을 검증하는 것이 아니라 GuardBench 내부 비동기 orchestration의 신뢰성을 검증하는 것이기 때문이다.
+이 테스트의 목적은 SageMaker classifier나 실제 AI Application의 동작을 검증하는 것이 아니라 GuardBench 내부 비동기 orchestration의 신뢰성을 검증하는 것이기 때문이다.
 
 ## 9. 필수 convergence scenarios
 

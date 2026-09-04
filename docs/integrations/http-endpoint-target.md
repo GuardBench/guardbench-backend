@@ -4,7 +4,7 @@
 > Owner: Backend
 > Last reviewed: 2026-09-01
 > Related Issue: #115, #125, #128
-> Target architecture: [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)
+> Target architecture: [ADR 0013](../decisions/0013-response-behavior-classifier.md)
 
 ## 역할
 

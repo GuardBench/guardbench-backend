@@ -17,12 +17,12 @@
 | `refactor` | 기능 변화 없는 구조 개선 | `refactor(testrun): 실행 준비 책임 분리` |
 | `test` | 테스트 추가·수정 | `test(evaluation): 회귀 분류 테스트 추가` |
 | `perf` | 성능 개선 | `perf(testrun): 목록 조회 쿼리 최적화` |
-| `build` | 빌드·의존성 | `build: Bedrock SDK 의존성 추가` |
+| `build` | 빌드·의존성 | `build: SageMaker Runtime SDK 의존성 추가` |
 | `ci` | CI/CD | `ci: OpenAPI 검증 추가` |
 | `chore` | 기타 유지보수 | `chore: 사용하지 않는 설정 제거` |
 | `revert` | 이전 변경 되돌림 | `revert: 응답 캐시 적용 취소` |
 
-scope는 현재 패키지·도메인 용어와 맞춘다. 예: `testdefinition`, `testrun`, `evaluation`, `guardrail`, `api`, `infra`.
+scope는 현재 패키지·도메인 용어와 맞춘다. 예: `testdefinition`, `testrun`, `evaluation`, `classifier`, `api`, `infra`.
 
 ## 리뷰 가능한 커밋 분리 원칙
 

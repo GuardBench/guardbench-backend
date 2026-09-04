@@ -2,9 +2,9 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Last reviewed: 2026-09-01
+> Last reviewed: 2026-09-04
 > Canonical source: GitHub
-> Related: [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)
+> Related: [ADR 0013](../decisions/0013-response-behavior-classifier.md)
 
 ## 목표 도메인 계약
 
@@ -13,17 +13,16 @@
 | `TestSuite` | 관련 TestCase를 묶는 정책 테스트 자산 |
 | `TestCase` | 현재 편집 가능한 input, ExpectedResult, severity, category 정의 |
 | `TestCaseSnapshot` | TestRun 접수 시 TestCase 이름과 실행 정의를 불변 복제한 실행 기준 |
-| `TestRun` | 하나의 AI Application Target, 실제 Evaluator 식별자와 Snapshot 집합의 수명주기 관리 |
+| `TestRun` | 하나의 AI Application Target, classifier contract version과 Snapshot 집합의 수명주기 관리 |
 | `TargetReference` | TestRun이 실행할 AI Application을 재식별하는 local reference |
-| `EvaluationProfile` | 사용자가 요청한 평가 목적을 checks와 strictness로 표현하는 inline 입력 값 |
-| `EvaluatorReference` | Run이 실제 사용한 Evaluator 설정과 버전을 불변하게 재식별하는 local reference |
+| `ClassifierReference` | Run이 사용한 classifier contract version을 불변하게 재식별하는 local reference |
 | `ApplicationResponse` | Application Target이 반환한 자연어 응답 |
 | `EvaluationResult` | Evaluator가 ApplicationResponse를 `ALLOW | BLOCK`으로 정규화한 결과 |
 | `AssertionResult` | ExpectedResult와 EvaluationResult의 일치 여부 |
 | `QualityGateResult` | 한 TestRun의 Assertion 결과 집계 판정 |
 | `RegressionResult` | 비교 가능한 완료 TestRun 두 개의 저장 결과 비교 |
 
-`EvaluationProfile`은 MVP에서 독립 Aggregate나 CRUD 리소스가 아니다. 요청 profile과 실제 `EvaluatorReference`를 고정하는 구조와 catalog resolution은 #114에서 구현되었다. 저장된 완료 Run의 Regression 비교 모델과 API는 #119에서 구현되었다.
+classifier 설정은 사용자가 제출하는 profile이나 provider 선택이 아니라 서버 배포 configuration이다. 저장된 완료 Run의 Regression 비교 모델과 API는 #119에서 구현되었다.
 
 ## 핵심 불변식
 
@@ -33,11 +32,11 @@
 - MVP Application Target type은 `HTTP_ENDPOINT`다.
 - MVP의 `HTTP_ENDPOINT`는 OpenAI-compatible chat completions 계약만 지원한다.
 - Target의 `identifier`는 full HTTP/HTTPS endpoint URL이고 `model`은 필수 실행 정보다.
-- TestRun 요청은 inline EvaluationProfile을 포함하고 사용자는 Evaluator/provider 설정을 직접 제출하지 않는다.
-- 하나의 TestRun은 실제 사용한 Evaluator 설정과 버전을 사후에 불변하게 식별할 수 있어야 한다.
+- TestRun 요청에는 별도 평가 profile이 없으며 사용자는 classifier provider 설정을 직접 제출하지 않는다.
+- 하나의 TestRun은 classifier contract version을 사후에 불변하게 식별할 수 있어야 한다.
 - Application Target은 자연어 응답을 반환하며 `ALLOW`와 `BLOCK`을 직접 반환하는 판정 주체가 아니다.
 - ApplicationResponse는 내부 Evaluator 입력이며 public 결과 DTO에 노출하지 않는다.
-- Evaluator만 ApplicationResponse를 GuardBench 공통 EvaluationResult로 정규화한다.
+- Response Behavior Classifier만 ApplicationResponse를 GuardBench 공통 EvaluationResult로 정규화한다.
 - EvaluationResult가 있으면 ExpectedResult와 비교해 AssertionResult를 생성한다. Application 실행 또는 평가 실패로 EvaluationResult가 없으면 AssertionResult를 생성하지 않는다.
 - Quality Gate는 같은 TestRun의 Assertion 결과만 집계한다.
 - Regression은 완료된 두 TestRun의 저장 결과만 비교하고 Application Target이나 Evaluator를 다시 호출하지 않는다.
@@ -49,14 +48,14 @@
 
 ```text
 TestSuite + TestCase
-        ↓ TestRun 요청(OpenAI-compatible HTTP Target + inline EvaluationProfile)
-QUEUED: requested policy + references + TestCaseSnapshot + OutboxEvent
+        ↓ TestRun 요청(OpenAI-compatible HTTP Target)
+QUEUED: classifier contract + Target reference + TestCaseSnapshot + OutboxEvent
         ↓
 RUNNING: Snapshot당 Application 실행
         ↓
 Natural Language ApplicationResponse
         ↓
-Evaluator
+SageMaker Response Behavior Classifier
         ↓
 EvaluationResult(ALLOW | BLOCK)
         ↓
@@ -81,7 +80,7 @@ Completed TestRun A + Completed TestRun B
 
 ## 현재 구현
 
-#114를 통해 EvaluationProfile catalog resolution과 immutable EvaluatorReference 고정 구조가 구현되었다. #115와 #125를 통해 HTTP Application Target 실행과 OpenAI-compatible 응답 정규화가 구현되었고, #128에서 generic HTTP 경로를 제거해 OpenAI-compatible 전용 계약으로 단순화했다. #116을 통해 Bedrock Guardrail이 Evaluator Adapter로 전환되었다.
+#173을 통해 기존 profile/catalog 경로를 제거하고 SageMaker Response Behavior Classifier contract로 전환했다. #115와 #125를 통해 HTTP Application Target 실행과 OpenAI-compatible 응답 정규화가 구현되었고, #128에서 generic HTTP 경로를 제거해 OpenAI-compatible 전용 계약으로 단순화했다.
 
 #117을 통해 Application 실행 → Evaluator → Assertion Worker orchestration이 구현되었다. #118을 통해 Quality Gate가 현재 TestRun의 Assertion 통과율과 실행 성공률을 기준으로 판정하도록 전환되었고, #119를 통해 저장된 완료 TestRun 결과만 사용하는 Regression 비교 API가 구현되었다.
 

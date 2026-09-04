@@ -10,7 +10,7 @@
 - Decision date: 2026-08-24
 - Related Issue: #28
 - Superseded in part by: [ADR 0006](0006-independent-domain-contract-boundaries.md) — Evaluation Application의 TestRun Domain·Repository 직접 호출 구조
-- Superseded in part by: [ADR 0011](0011-ai-application-target-and-guardrail-evaluator.md) — Quality Gate 입력과 Regression 분리
+- Superseded in part by: [ADR 0013](0013-response-behavior-classifier.md) — Quality Gate 입력과 Regression 분리
 
 ## Context
 

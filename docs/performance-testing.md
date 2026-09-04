@@ -248,4 +248,4 @@ reset 없는 seed 반복 실행은 허용하지 않는다. 따라서 이전 Suit
 인프라 구조만 바꾸고 Dataset/Profile은 유지해야 CPU, memory, queue age, completion time의
 변화를 원인 후보로 비교할 수 있다. `target`, `peak`, `stress` 숫자는 Capacity Target 논의가
 끝난 뒤 추가한다. Profile의 동시 TestRun 수 × Dataset TestCase 수 × retry 가능성을 실행 전에
-확인해 Bedrock 요청량과 AWS 비용을 검토한다.
+확인해 SageMaker Runtime 요청량과 AWS 비용을 검토한다.

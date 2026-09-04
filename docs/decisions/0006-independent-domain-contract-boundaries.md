@@ -10,7 +10,7 @@
 - Decision date: 2026-08-25
 - Related Issue: #54
 - Supersedes in part: ADR 0001, ADR 0002, ADR 0003, ADR 0004, ADR 0005의 경계 간 Java 타입 재사용과 직접 패키지 의존 결정
-- Superseded in part by: [ADR 0011](0011-ai-application-target-and-guardrail-evaluator.md) — Guardrail Target Adapter를 Evaluator Adapter 역할로 전환. 소비자 소유 Port와 타입 격리는 유지
+- Superseded in part by: [ADR 0013](0013-response-behavior-classifier.md) — Target Adapter를 classifier Adapter 역할로 전환. 소비자 소유 Port와 타입 격리는 유지
 
 ## Context
 
@@ -22,7 +22,7 @@ ADR 0001은 순환 의존을 막기 위해 단방향 의존을 선택했지만 �
 testrun    -> testdefinition   (ID, ExpectedResult, Action, Severity)
 evaluation -> testdefinition   (ExpectedResult, Action)
 evaluation -> testrun          (Snapshot, TestExecution, ActualResult, ID)
-guardrail  -> testdefinition/testrun
+classifier -> testdefinition/testrun
 ```
 
 이 구조는 의존 방향이 단방향이어도 공급 도메인의 소스가 없으면 소비 도메인을 컴파일할 수 없게 한다. 실제로 Issue #9의 TestRun Core를 구현하려면 Issue #7이 소유한 기반 Java 타입이 먼저 필요하다는 작업 순서 결합이 생겼다. 또한 같은 값이라도 현재 편집 모델, 실행 시점 Snapshot, 평가 입력은 수명주기와 변경 이유가 다른데 하나의 Java 타입을 공유하면 한 모델의 변경이 다른 모델로 전파된다.
@@ -35,7 +35,7 @@ Aggregate 사이에서 객체 참조 대신 ID를 사용한다는 규칙과 Boun
 
 - `testdefinition`, `testrun`, `evaluation`을 독립적인 Domain 모델과 변경 이유를 갖는 Bounded Context로 취급한다.
 - 세 Context는 같은 프로세스와 데이터베이스에 배포할 수 있지만 서로의 Domain Java 타입 없이 Core를 구현하고 단위 테스트할 수 있어야 한다.
-- `guardrail`은 별도 Core Domain이나 Bounded Context가 아니라 `testrun`이 소유한 외부 실행 Port를 구현하는 Infrastructure Adapter다.
+- `classifier`는 별도 Core Domain이나 Bounded Context가 아니라 `testrun`이 소유한 외부 실행 Port를 구현하는 Infrastructure Adapter다.
 - 독립 개발의 기준은 다른 Context 구현의 선행 완료가 아니라 승인된 경계 명세의 존재다. 실제 연결은 별도 Integration Adapter 작업에서 수행한다.
 
 ### Java 의존 규칙
@@ -118,14 +118,14 @@ TestRun 최종화도 Evaluation이 소유한 outbound Port를 통해 요청하�
 
 공개 TestRun 조회에서 평가 값을 조합할 때도 조회 소비자가 필요한 Projection Port를 소유하고 Integration Adapter가 scalar projection으로 변환한다. 어느 쪽도 상대 Context의 Domain 객체를 반환하지 않는다.
 
-### Guardrail Adapter 경계
+### Classifier Adapter 경계
 
-외부 Guardrail 호출 계약은 소비자인 `testrun/application`이 소유한다. `guardrail/infrastructure` Adapter는 해당 Port를 구현하고 AWS SDK 요청·응답을 Port의 값 계약으로 변환한다.
+외부 classifier 호출 계약은 소비자인 `testrun/application`이 소유한다. `classifier/infrastructure` Adapter는 해당 Port를 구현하고 AWS SDK 요청·응답을 Port의 값 계약으로 변환한다.
 
-- TestRun Core는 Guardrail Adapter나 AWS SDK를 알지 못한다.
-- Guardrail Adapter는 TestDefinition Domain 타입을 사용하지 않는다.
+- TestRun Core는 classifier Adapter나 AWS SDK를 알지 못한다.
+- Classifier Adapter는 TestDefinition Domain 타입을 사용하지 않는다.
 - Adapter가 반환한 action code와 실행 값은 TestRun Application 경계에서 검증한 뒤 TestRun 소유 `ActualResult`로 변환한다.
-- Guardrail 패키지는 Core Domain 타입, Repository 또는 범용 provider 계층을 새로 소유하지 않는다.
+- Classifier 패키지는 Core Domain 타입, Repository 또는 범용 provider 계층을 새로 소유하지 않는다.
 
 ### 같은 Context 안의 Aggregate 참조
 
@@ -145,7 +145,7 @@ MVP에서는 이 결정을 위해 Gradle 멀티모듈 전환을 선행하지 않
 - 한 Context의 Application Core는 다른 Context의 Domain 또는 Application 구현에 의존하지 않는다.
 - 경계 간 의존은 승인된 Integration Adapter 패키지에서만 허용한다.
 - Integration Adapter는 소비자 소유 Port를 구현하고 양쪽 Domain 객체를 노출하지 않는다.
-- `guardrail/infrastructure`는 `testrun/application`의 외부 실행 Port만 구현하며 `testdefinition.domain`을 참조하지 않는다.
+- `classifier/infrastructure`는 `testrun/application`의 외부 실행 Port만 구현하며 `testdefinition.domain`을 참조하지 않는다.
 
 실제 Gradle subproject 분리와 별도 artifact/version 관리는 독립 배포 또는 빌드 격리가 필요해질 때 후속 Decision으로 검토한다. 단일 Gradle project라는 이유로 Domain 타입 직접 공유를 허용하지 않는다.
 
@@ -215,7 +215,7 @@ Domain 객체 공유보다는 약하지만 소비자 Core가 공급자 구현과
 4. 잘못된 source ID, action code, severity code와 필수 값 누락을 경계에서 거부하는지 검증한다.
 5. TestRun 실행 결과가 Evaluation 입력으로 mapping되어도 Assertion, Change와 Quality Gate 계약이 유지되는지 검증한다.
 6. 최종화 Port를 통한 저장에서도 QualityGateResult와 TestRun `FINISHED`가 함께 commit 또는 rollback되는지 검증한다.
-7. Guardrail Adapter의 AWS 응답이 값 계약을 거쳐 TestRun의 `ActualResult`로 변환되고 AWS 타입이 Core에 노출되지 않는지 검증한다.
+7. Classifier Adapter의 AWS 응답이 값 계약을 거쳐 TestRun의 `ActualResult`로 변환되고 AWS 타입이 Core에 노출되지 않는지 검증한다.
 8. ArchUnit 또는 동등한 정적 테스트가 금지된 Context 간 Domain/Application import와 `common/domain` 우회를 차단하는지 검증한다.
 9. Integration Adapter 밖의 Core 코드가 다른 Context의 구현 패키지를 참조하지 않는지 검증한다.
 10. 공개 HTTP API, SQS v1 메시지와 PostgreSQL 물리 스키마가 이 결정으로 바뀌지 않았는지 확인한다.

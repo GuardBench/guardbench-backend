@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Last reviewed: 2026-09-01
+> Last reviewed: 2026-09-04
 > Canonical source: GitHub
 > Origin: [Notion API 명세서](https://app.notion.com/p/3c0eeed6b62d805dac0be8db487b1359)
 
@@ -10,7 +10,7 @@ API의 단일 명세는 [openapi.yaml](openapi.yaml)이다. Endpoint, 필드, En
 
 ## 계약 층위
 
-OpenAPI는 [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)을 HTTP로 구체화한 **합의된 API 계약**이다. #114의 Evaluation Profile → EvaluatorReference 고정, #115/#125/#128의 OpenAI-compatible HTTP Application Target 경계, #116의 Bedrock Guardrail Evaluator Adapter, #117의 Worker orchestration, #118의 현재 Run Quality Gate 집계와 #119의 stored-result Regression API가 구현되었다.
+OpenAPI는 [ADR 0013](../decisions/0013-response-behavior-classifier.md)을 HTTP로 구체화한 **합의된 API 계약**이다. #115/#125/#128의 OpenAI-compatible HTTP Application Target 경계, #173의 Response Behavior Classifier 전환, #117의 Worker orchestration, #118의 현재 Run Quality Gate 집계와 #119의 stored-result Regression API가 구현되었다.
 
 ```text
 TestCaseSnapshot → OpenAI-compatible AI Application Target → Natural Language Response
@@ -75,13 +75,11 @@ TestCaseSnapshot → OpenAI-compatible AI Application Target → Natural Languag
 
 - `POST /api/v1/test-runs`는 비동기 작업을 접수하고 `202 Accepted`를 반환한다.
 - `Idempotency-Key`는 선택 사항이다. 키와 정규화된 요청 fingerprint가 같으면 기존 접수 결과를, 다르면 `409 IDEMPOTENCY_KEY_CONFLICT`를 반환한다. 생략하면 요청마다 새 TestRun을 만든다.
-- 요청 핵심은 `testSuiteId`, 단일 `HTTP_ENDPOINT` Application `target`, inline `evaluationProfile`이다. OpenAPI DTO는 `TestRunCreateReq → TargetReferenceReq + EvaluationProfileReq` 구조다.
+- 요청 핵심은 `testSuiteId`와 단일 `HTTP_ENDPOINT` Application `target`이다. Classifier 설정은 서버 deployment configuration이 소유한다.
 - `target.identifier`는 OpenAI-compatible chat completions를 호출할 full HTTP/HTTPS URL이고 `target.model`은 필수다. `target.revision`만 선택 값이다.
-- `evaluationProfile.checks`는 `PII_LEAKAGE | HARMFUL_CONTENT`, `strictness`는 `RELAXED | STANDARD | STRICT`다. 이는 UI 설문·선택으로 정한 평가 목적이며 독립 저장 리소스나 `evaluationProfileId`가 아니다.
-- 사용자는 `evaluator.type`, provider, `AWS_BEDROCK`, Guardrail identifier/version을 요청에 제출하지 않는다. GuardBench가 profile을 실제 Evaluator 설정으로 해석하고 실행에 사용한 설정을 내부적으로 고정한다.
-- 운영 catalog에 canonical profile이 없으면 `409 EVALUATION_PROFILE_NOT_SUPPORTED`를 반환한다. PII-only profile은 strictness를 collapse해 하나의 canonical entry를 사용한다.
+- 사용자는 classifier provider, endpoint name, model 또는 prompt를 요청에 제출하지 않는다.
 - 접수 시 TestSuite의 현재 TestCase를 불변 Snapshot으로 복사한다. 빈 Suite는 `409 TEST_SUITE_EMPTY`다.
-- 접수 트랜잭션은 `QUEUED` TestRun, 요청한 Evaluation Profile, HTTP Target의 identifier/model/revision, immutable EvaluatorReference, Snapshot, 선택적인 idempotency 정보와 `TestRunRequested` OutboxEvent를 원자적으로 고정한다. 외부 호출은 commit 뒤 Worker가 수행하며 이후 오류는 접수 HTTP 응답을 바꾸지 않는다.
+- 접수 트랜잭션은 `QUEUED` TestRun, HTTP Target의 identifier/model/revision, classifier contract version, Snapshot, 선택적인 idempotency 정보와 `TestRunRequested` OutboxEvent를 원자적으로 고정한다. 외부 호출은 commit 뒤 Worker가 수행하며 이후 오류는 접수 HTTP 응답을 바꾸지 않는다.
 
 ### HTTP Application Target MVP 실행 계약 — #115, #125, #128
 
@@ -108,16 +106,16 @@ Target 실행 Adapter는 호출 내부 retry를 수행하지 않는다. 기존 W
 
 Target URL은 HTTP/HTTPS absolute URL, host 필수, userinfo·fragment 금지다. Worker 기본 egress 정책은 loopback/private/link-local/multicast 주소를 차단하며, 내부 SUT가 필요한 배포는 `guardbench.http-endpoint.allowed-private-hostnames`에 승인된 hostname을 정확히 지정한다. allowlist를 사용해도 loopback/link-local/multicast/AWS metadata endpoint와 private IP literal은 차단한다. 운영 성능 환경에서 `guardbench.http-endpoint.allow-private-addresses=true`를 전역 설정하지 않는다. 응답 본문은 1 MiB를 넘을 수 없다.
 
-HTTP Application Target 실행, OpenAI-compatible response 정규화, inline Evaluation Profile 접수와 EvaluatorReference 고정, Bedrock Guardrail Evaluator와 Application response → Evaluator verdict → Assertion Worker orchestration, 현재 Run Quality Gate 및 stored-result Regression 결과 API는 구현되었다.
+HTTP Application Target 실행, OpenAI-compatible response 정규화, SageMaker Response Behavior Classifier와 Application response → classifier verdict → Assertion Worker orchestration, 현재 Run Quality Gate 및 stored-result Regression 결과 API는 구현되었다.
 
 ### TestRun 조회와 평가 결과 — agreed contract
 
 - 목록과 상세는 실행 중에도 조회할 수 있다. 아직 평가되지 않은 값은 `null`이고 이를 `NOT_EVALUATED`로 바꾸지 않는다.
-- 상세는 요청한 Application `target`과 `evaluationProfile`을 다시 확인할 수 있어야 한다. HTTP Target의 `model`은 항상 존재하며 `revision`은 요청에서 생략했으면 null이다. Evaluator/provider 내부 식별자는 사용자 입력 필드가 아니다.
+- 상세는 요청한 Application `target`과 classifier contract version을 다시 확인할 수 있어야 한다. HTTP Target의 `model`은 항상 존재하며 `revision`은 요청에서 생략했으면 null이다. Classifier provider 내부 식별자는 사용자 입력 필드가 아니다.
 - 상세의 `qualityGate`는 실행 중 `null`이다. 종료 후 Quality Gate는 같은 TestRun의 Assertion 결과만 집계한다.
 - 개별 결과 목록은 `FINISHED`에서만 조회한다. 그 전에는 `409 TEST_RUN_NOT_FINISHED`다.
 - 개별 결과의 `TestRunResultItemRes`는 Snapshot input, `executionStatus`, `evaluatorVerdict`, `expectedAction`, `assertionStatus`와 안전한 `error`를 제공한다. 값은 실행 당시 저장 결과이며 현재 TestCase 수정과 무관하다.
-- Application의 자연어 응답은 내부 Evaluator 입력이지만 public DTO에는 `applicationResponse`, `targetResponse`, `naturalLanguageResponse` 어떤 이름으로도 노출하지 않는다.
+- Application의 자연어 응답은 내부 classifier 입력이지만 public DTO에는 `applicationResponse`, `targetResponse`, `naturalLanguageResponse` 어떤 이름으로도 노출하지 않는다.
 - `error.stage`는 `APPLICATION_TARGET | EVALUATOR`로 실패 단계를 구분한다. code의 구체 taxonomy는 #117이 소유하며 provider 원문, stack trace, credential과 ARN은 노출하지 않는다.
 - `evaluationOutcome` 필터는 `TRUE_POSITIVE | TRUE_NEGATIVE | FALSE_POSITIVE | FALSE_NEGATIVE` 상세 조회에 사용한다.
 - Evaluator metrics의 분류는 다음과 같다.
@@ -155,9 +153,9 @@ Regression API는 #119에서 구현되었다. 비교 가능성은 TestCaseSnapsh
 
 | Frontend Issue | 참조할 backend 공개 계약 | 구현 시 전제 |
 | --- | --- | --- |
-| #27 TestRun 생성 | `POST /api/v1/test-runs`, `TestRunCreateReq`, `TargetReferenceReq`, `EvaluationProfileReq`, `EvaluationCheck`, `EvaluationStrictness` | OpenAI-compatible HTTP Application endpoint와 필수 model, inline profile만 제출하며 provider/Guardrail 입력은 없다. |
-| #28 실행 상세·결과 | `GET /api/v1/test-runs/{testRunId}`, `TestRunDetailRes`, `GET .../results`, `TestRunResultItemRes`, `QualityGateRes` | 요청 profile, Evaluator verdict, ExpectedResult, Assertion, 실행 상태와 안전한 오류를 표시한다. ApplicationResponse는 표시하지 않는다. |
-| #29 FN/FP 분석 | 결과의 `evaluationOutcome`과 `GET .../evaluator-metrics`의 `EvaluatorMetricsRes` | backend 분류를 source of truth로 사용하고 TestRun 상세의 Evaluation Profile을 분석 맥락으로 표시한다. |
+| #27 TestRun 생성 | `POST /api/v1/test-runs`, `TestRunCreateReq`, `TargetReferenceReq` | OpenAI-compatible HTTP Application endpoint와 필수 model만 제출하며 classifier 설정 입력은 없다. |
+| #28 실행 상세·결과 | `GET /api/v1/test-runs/{testRunId}`, `TestRunDetailRes`, `GET .../results`, `TestRunResultItemRes`, `QualityGateRes` | classifier verdict, ExpectedResult, Assertion, 실행 상태와 안전한 오류를 표시한다. ApplicationResponse는 표시하지 않는다. |
+| #29 FN/FP 분석 | 결과의 `evaluationOutcome`과 `GET .../evaluator-metrics`의 `EvaluatorMetricsRes` | backend 분류를 source of truth로 사용한다. |
 | #30 Regression | `GET .../comparable-runs`, `GET .../comparisons/{comparisonRunId}` | backend가 반환한 comparable Run만 사용한다. provider 선택 UI나 재실행 흐름을 만들지 않고 저장된 비교 결과 DTO를 사용한다. |
 
 ## 구현 경계

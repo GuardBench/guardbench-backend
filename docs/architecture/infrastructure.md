@@ -2,10 +2,11 @@
 
 > Status: APPROVED
 > Owner: Infra
-> Last reviewed: 2026-08-27
+> Last reviewed: 2026-09-04
 > Canonical source: GitHub
 > Origin: [Notion 인프라 구성 설계](https://app.notion.com/p/3c0eeed6b62d81269f60e1c69fbf9fcc)
 > Approved by: Issue #87 요청자의 2026-08-27 배포 결정
+> Updated by: [Issue #182](https://github.com/GuardBench/guardbench-backend/issues/182), [guardbench-iac PR #39](https://github.com/GuardBench/guardbench-iac/pull/39)
 
 이 문서는 GuardBench MVP를 **현재 구현 그대로 최초 배포**하기 위한 AWS 물리 인프라 계약이다. 실제 Terraform 변경과 AWS 적용은 `GuardBench/guardbench-iac`에서 수행하며, 공개 API·Domain·DB schema와 [ADR 0005](../decisions/0005-async-test-run-execution-contract.md)·[ADR 0008](../decisions/0008-async-testrun-persistence-contract.md)의 메시지·claim·Outbox 의미는 변경하지 않는다.
 
@@ -17,7 +18,7 @@
 | --- | --- | --- |
 | `GuardBench/guardbench-backend` | `73022a6` (`dev`) | 하나의 Spring Boot 프로세스가 HTTP API, Outbox Publisher와 세 Queue consumer를 모두 실행할 수 있다. Worker 역할 선택기는 없다. |
 | `GuardBench/guardbench-frontend` | `adc1ee6` (`main`) | React/Vite 정적 SPA이며 현재 화면 데이터는 mock이다. `main` push 시 `guardbench-dev-frontend` S3와 CloudFront `E1PVL0Z78B1HMR`에 배포하도록 선언돼 있다. |
-| `GuardBench/guardbench-iac` | `5b7f421` (`dev`) | Terraform source에 S3·CloudFront·ALB·ECR·ECS·VPC Endpoint가 정의돼 있다. RDS와 SQS 정의는 없고 ECS 정의는 구현되지 않은 역할 분리를 가정한다. |
+| `GuardBench/guardbench-iac` | PR #39 | SageMaker classifier Real-Time endpoint를 toggle로 생성·삭제하고 ECS task role에 InvokeEndpoint를 연결한다. |
 
 프론트엔드의 최근 GitHub Actions 실패는 3시간 유효한 임시 AWS credential이 만료된 결과이며 인프라 구성 결함이 아니다. 기존 S3·CloudFront 배포는 정상 운영 대상으로 간주하고 그대로 보존한다. Terraform 적용 전에는 기존 resource와 state를 대조하고 unmanaged resource만 import한다.
 
@@ -28,13 +29,14 @@
 | 구분 | 실제 상태 | 최초 배포 처리 |
 | --- | --- | --- |
 | `guardbench-dev-vpc` | `10.1.0.0/16`, public/private subnet 각 2개가 배포됨 | 그대로 재사용, 재생성 금지 |
-| VPC Endpoint | S3, ECR API/DKR, Logs, SSM, Monitoring, SQS, Bedrock/Runtime 배포됨 | 그대로 재사용하고 Secrets Manager Endpoint만 추가 |
+| VPC Endpoint | S3, ECR API/DKR, Logs, SSM, Monitoring, SQS, SageMaker Runtime 배포됨 | 그대로 재사용하고 Secrets Manager Endpoint만 추가 |
 | Security Group | ALB, API, Worker, RDS, VPC Endpoint용 SG가 배포됨 | API SG를 단일 App Service에 재사용, Worker SG는 미사용 보존 |
 | `guardbench-dev-alb` | internet-facing, active, HTTP 80 listener가 배포됨 | 그대로 재사용하고 ingress만 축소 |
 | `guardbench-dev-api-tg` | HTTP 8080, target type `ip`, health path `/health` | 그대로 재사용하고 health path 수정 |
 | 기존 CloudFront | S3 origin과 `/api/*` ALB origin이 배포됨 | 그대로 재사용하고 API origin protocol/policy 수정 |
 | ECS·ECR·SQS | 배포된 resource 없음 | 이번 최초 배포에서 신규 생성 |
 | GuardBench RDS | 배포된 resource 없음 | 이번 최초 배포에서 신규 생성 |
+| SageMaker classifier | model·endpoint configuration·execution role 유지, Real-Time endpoint는 비용 절감을 위해 삭제됨 | `sagemaker_classifier_endpoint_enabled=true`일 때만 endpoint 생성 |
 
 별도 VPC에 있는 `kclee-app` RDS는 PostgreSQL 18.3이며 GuardBench 전용 resource가 아니다. VPC Peering으로 연결하거나 GuardBench DB로 재사용하지 않는다.
 
@@ -50,7 +52,7 @@
 | Database | GuardBench VPC에 RDS PostgreSQL 16.14 신규 생성, Single-AZ `db.t4g.micro`, gp3 20 GiB |
 | Messaging | SQS Standard source Queue 3개와 전용 DLQ 3개 |
 | Secret | RDS managed master secret를 Secrets Manager에서 ECS 환경변수로 주입 |
-| Outbound | NAT Gateway 없이 SQS·Bedrock·ECR·Logs·Secrets Manager VPC Endpoint 사용 |
+| Outbound | NAT Gateway 없이 SQS·SageMaker Runtime·ECR·Logs·Secrets Manager VPC Endpoint 사용 |
 | 관측성 | CloudWatch native metric, application text log metric filter와 SNS alarm |
 
 `prod`는 최초 배포 범위가 아니다. 만들 때는 별도 Terraform state key, 별도 VPC, RDS, Queue, Secret, ECS Cluster와 Log Group을 사용하며 dev resource를 공유하지 않는다. 현재 하나뿐인 `infra/terraform.tfstate`를 prod와 함께 사용하지 않는다.
@@ -74,12 +76,12 @@ Browser
              ├─ gb-run-resolve consumer
              ├─ gb-workitems consumer
              ├─ gb-run-finalize consumer
-             └─ Bedrock control/runtime adapter
+             └─ SageMaker Runtime `InvokeEndpoint` → Response Behavior Classifier
                   │
                   ├─ PostgreSQL :5432 → private RDS
                   └─ HTTPS :443 → VPC Endpoints
                        ├─ SQS
-                       ├─ Bedrock / Bedrock Runtime
+                       ├─ SageMaker Runtime
                        ├─ ECR API / ECR DKR / S3 Gateway
                        ├─ CloudWatch Logs
                        └─ Secrets Manager
@@ -98,7 +100,7 @@ Browser
 - private subnet은 Internet/NAT default route를 갖지 않는다. AWS API 접근은 VPC Endpoint로만 한다.
 - RDS는 `PubliclyAccessible=false`이고 ECS Task에도 public IP를 할당하지 않는다.
 
-기존 IaC의 SQS, Bedrock, Bedrock Runtime, ECR API, ECR DKR, CloudWatch Logs Interface Endpoint와 S3 Gateway Endpoint를 유지한다. RDS managed secret 주입을 위해 Secrets Manager Interface Endpoint를 추가한다. SSM Parameter Store를 사용하지 않으면 기존 SSM·CloudWatch Monitoring Endpoint는 최초 배포 필수 항목이 아니므로 비용을 확인한 뒤 제거할 수 있다.
+기존 IaC의 SQS, SageMaker Runtime, ECR API, ECR DKR, CloudWatch Logs Interface Endpoint와 S3 Gateway Endpoint를 유지한다. SageMaker Runtime Interface Endpoint는 private ECS task가 standard SageMaker Runtime hostname으로 호출할 수 있도록 Private DNS를 활성화한다. RDS managed secret 주입을 위해 Secrets Manager Interface Endpoint를 추가한다. SSM Parameter Store를 사용하지 않으면 기존 SSM·CloudWatch Monitoring Endpoint는 최초 배포 필수 항목이 아니므로 비용을 확인한 뒤 제거할 수 있다.
 
 ### CloudFront와 ALB 연결
 
@@ -168,9 +170,12 @@ docker push {account}.dkr.ecr.ap-northeast-2.amazonaws.com/guardbench-dev:{git-s
 | `SPRING_DATASOURCE_URL` | RDS JDBC URL | PostgreSQL 연결 |
 | `SPRING_DATASOURCE_USERNAME` | RDS managed secret의 `username` | ECS secret JSON key 주입 |
 | `SPRING_DATASOURCE_PASSWORD` | RDS managed secret의 `password` | ECS secret JSON key 주입 |
-| `AWS_REGION` | `ap-northeast-2` | SQS·Bedrock client Region |
+| `AWS_REGION` | `ap-northeast-2` | SQS·SageMaker Runtime client Region |
 | `SQS_ENABLED` | `true` | SQS client와 Outbox Publisher 활성화 |
-| `WORKER_ENABLED` | `true` | 세 Queue consumer와 Bedrock adapter 활성화 |
+| `WORKER_ENABLED` | `true` | 세 Queue consumer와 Response Behavior Classifier 활성화 |
+| `SAGEMAKER_CLASSIFIER_ENDPOINT_NAME` | `guardbench-qwen3-4b-endpoint` | Terraform이 주입하는 Real-Time endpoint 이름 |
+| `SAGEMAKER_CLASSIFIER_SYSTEM_PROMPT` | 승인된 classifier system prompt v1 | 비어 있으면 평가 시 configuration error로 실패. 배포 전에 반드시 주입 |
+| `SAGEMAKER_CLASSIFIER_USER_PROMPT_TEMPLATE` | 선택값 | 비어 있으면 `USER REQUEST / ASSISTANT RESPONSE` 기본 형식 사용 |
 | `SPRING_TASK_SCHEDULING_POOL_SIZE` | `4` | 세 long-poll scheduler와 Outbox Publisher를 서로 막지 않게 실행 |
 | `GUARDBENCH_SQS_QUEUE_URLS_RESOLVE` | resolve Queue URL | startup의 `GetQueueUrl` 호출 제거 |
 | `GUARDBENCH_SQS_QUEUE_URLS_WORK_ITEMS` | work-items Queue URL | startup의 `GetQueueUrl` 호출 제거 |
@@ -202,10 +207,15 @@ Outbox Publisher는 같은 Task 안에서 1초 fixed delay, batch 10으로 `Send
 
 ### Application task role
 
-단일 Task가 현재 모든 역할을 수행하므로 다음 권한을 하나의 role에 부여한다.
+단일 Task가 현재 모든 역할을 수행하므로 다음 권한을 하나의 role에 부여한다. Application 호출 주체는 API key가 아니라 ECS task role의 IAM credentials다.
 
 - 세 Source Queue ARN: `sqs:SendMessage`, `sqs:ReceiveMessage`, `sqs:DeleteMessage`
-- 실제 Guardrail resource: `bedrock:CreateGuardrailVersion`, `bedrock:ApplyGuardrail`
+- SageMaker classifier endpoint 하나: `sagemaker:InvokeEndpoint`
+
+  - Role name: `guardbench-dev-app-task-role`
+  - Resource: `arn:aws:sagemaker:ap-northeast-2:<account-id>:endpoint/guardbench-qwen3-4b-endpoint`
+  - `Resource="*"`와 AdministratorAccess principal을 application 호출 경로에 사용하지 않는다.
+
 
 Queue URL을 직접 주입하므로 `sqs:GetQueueUrl`과 `Resource="*"`는 사용하지 않는다. DLQ에 애플리케이션이 직접 쓰거나 읽는 권한도 주지 않는다. AWS access key는 image, Task 환경변수와 GitHub 저장소에 두지 않는다.
 
@@ -235,7 +245,24 @@ from outbox_event
 where status = 'PENDING';
 ```
 
-이 query는 V2 migration의 `outbox_event(status, created_at)` 계약과 일치한다. 입력, Application response, EvaluationResult, Guardrail 설정 전문, secret과 SDK 예외의 credential 값은 로그에 남기지 않는다.
+이 query는 V2 migration의 `outbox_event(status, created_at)` 계약과 일치한다. 입력, Application response, EvaluationResult, classifier prompt 전문, classifier provider 응답, secret과 SDK 예외의 credential 값은 로그에 남기지 않는다.
+
+## SageMaker Response Behavior Classifier 운영
+
+classifier는 `(TestCase prompt, ApplicationResponse)`를 SageMaker Real-Time endpoint에 전달하고 `COMPLY` 또는 `REFUSE`만 받는다. 정상 응답의 `choices[0].message.content`가 정확히 `COMPLY`이면 `ALLOW`, 정확히 `REFUSE`이면 `BLOCK`으로 정규화한다. 빈 `choices`·`message`·`content`, 그 외 문자열, SageMaker provider failure는 임의의 action으로 대체하지 않고 configuration/provider error로 처리한다.
+
+DJL LMI/vLLM endpoint 요청에는 `messages`, `temperature: 0`, `max_tokens: 8`, `chat_template_kwargs.enable_thinking: false`를 반드시 포함한다. Qwen3 thinking mode를 끄지 않으면 응답에 think block이 섞여 parser가 오작동할 수 있다.
+
+현재 endpoint는 `InService`여도 instance-hour 과금이 발생하는 Real-Time Inference다. 비용 절감을 위해 기본 toggle은 `false`이며 endpoint만 삭제한 상태다. model, endpoint configuration, execution role, InvokeEndpoint policy와 PrivateLink는 유지한다.
+
+backend 배포·검증 순서는 다음과 같다.
+
+1. 승인된 `SAGEMAKER_CLASSIFIER_SYSTEM_PROMPT`를 deployment configuration에 설정한다.
+2. `sagemaker_classifier_endpoint_enabled=true`로 Terraform을 적용한다.
+3. endpoint가 `InService`가 될 때까지 기다린다. 생성에는 약 10분이 걸릴 수 있다.
+4. task role과 SageMaker 환경변수를 보존한 최신 ECS task definition으로 backend를 배포한다.
+5. 실제 TestRun 한 건으로 `InvokeEndpoint`, `COMPLY/REFUSE` parsing, `ALLOW/BLOCK` normalization을 검증한다.
+6. 개발·검증이 끝나면 `sagemaker_classifier_endpoint_enabled=false`로 다시 적용해 endpoint를 삭제한다.
 
 ## 기존 IaC에서 반드시 고칠 항목
 
@@ -246,9 +273,10 @@ where status = 'PENDING';
 3. ALB health path `/health`를 `/api/v1/test-suites`로 바꾸고 port 80 ingress를 CloudFront origin-facing prefix list로 제한한다.
 4. RDS PostgreSQL, Secrets Manager Endpoint, SQS Source/DLQ 6개와 redrive policy를 추가한다.
 5. 기존 source의 API/Orchestrator/Executor 세 Task Definition과 Service를 단일 `app` 정의로 바꾸고, 실제로 존재하지 않는 ECS resource를 신규 생성한다.
-6. Task Definition에 RDS secret, Queue URL과 위 환경변수를 넣고 execution/application role을 실제 ARN으로 제한한다.
-7. `latest` image와 mutable ECR tag를 제거하고 배포할 image SHA로 새 Task Definition revision을 만든다.
-8. CloudWatch alarm, log metric filter와 SNS Topic을 추가한다.
+6. Task Definition에 RDS secret, Queue URL, SageMaker classifier 환경변수와 endpoint name을 넣고 execution/application role을 실제 ARN으로 제한한다.
+7. SageMaker model·endpoint configuration·execution role을 유지하고 `sagemaker_classifier_endpoint_enabled`로 billable Real-Time endpoint만 제어한다.
+8. `latest` image와 mutable ECR tag를 제거하고 배포할 image SHA로 새 Task Definition revision을 만든다.
+9. CloudWatch alarm, log metric filter와 SNS Topic을 추가한다.
 
 기존 Terraform에는 RDS·SQS가 없고 private subnet에 default route도 없으므로, 이 변경 없이 ECS Service부터 만들면 application startup 또는 메시지 처리가 실패한다.
 
@@ -260,7 +288,7 @@ where status = 'PENDING';
 4. backend `dev`의 `clean check bootBuildImage`가 성공한 commit SHA image를 ECR에 push한다.
 5. 해당 image를 가리키는 단일 Task Definition과 ECS Service를 배포한다. Flyway V1·V2 성공과 ALB healthy target 1개를 확인한다.
 6. CloudFront URL에서 `GET /api/v1/test-suites`가 200이고, create/update API의 JSON body와 `Idempotency-Key`가 전달되는지 확인한다.
-7. TestRun 한 건을 접수해 `resolve → workitems → finalize`, terminal DB 결과, Source Queue 감소와 DLQ 0을 확인한다.
+7. TestRun 한 건을 접수해 `resolve → workitems → finalize`, SageMaker classifier 호출, terminal DB 결과, Source Queue 감소와 DLQ 0을 확인한다.
 8. Publisher/Worker log metric filter와 SNS test alarm이 실제 수신되는지 확인한다.
 
 프론트 정적 asset을 다시 배포할 때는 3시간 유효한 임시 AWS credential을 갱신한 뒤 기존 workflow를 실행한다. GitHub OIDC role 전환은 자격 증명 갱신을 자동화하는 후속 개선이며 backend 최초 배포의 차단 조건이 아니다.
