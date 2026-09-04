@@ -53,9 +53,8 @@ public final class TestRunPersistenceFixture {
         jdbcTemplate.update(
                 """
                 INSERT INTO test_run(id, test_suite_id, status, test_case_count, processed_test_case_count,
-                    target_reference_id, evaluation_checks, evaluation_strictness, evaluator_reference_id,
-                    created_at, updated_at)
-                VALUES (?, ?, 'QUEUED', ?, 0, ?, 'PII_LEAKAGE', 'STANDARD', ?, ?, ?)
+                    target_reference_id, evaluator_reference_id, created_at, updated_at)
+                VALUES (?, ?, 'QUEUED', ?, 0, ?, ?, ?, ?)
                 """,
                 testRunId,
                 testSuiteId,
@@ -82,13 +81,7 @@ public final class TestRunPersistenceFixture {
 
     public void insertEvaluatorReference(String referenceId) {
         jdbcTemplate.update(
-                "INSERT INTO evaluator_reference(reference_id, evaluator_type) VALUES (?, 'BEDROCK_GUARDRAIL')",
-                referenceId);
-        jdbcTemplate.update(
-                """
-                INSERT INTO bedrock_guardrail_evaluator(reference_id, guardrail_identifier, guardrail_revision)
-                VALUES (?, 'guardrail', '1')
-                """,
+                "INSERT INTO evaluator_reference(reference_id, provider_code, model_id) VALUES (?, 'BEDROCK', 'test-classifier-model')",
                 referenceId);
     }
 

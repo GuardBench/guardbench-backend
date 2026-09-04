@@ -27,7 +27,7 @@ class GetTestRunDetailServiceTest {
     void returnsDetailWhenTestRunExists() {
         TestRunDetail expected = new TestRunDetail(
                 901L, 1L, TestRunStatus.RUNNING, 253,
-                new TestRunProgress(120, 47.43), TARGET, null, null, null,
+                new TestRunProgress(120, 47.43), TARGET, null, null,
                 Instant.parse("2026-08-24T14:30:00Z"), Instant.parse("2026-08-24T14:30:03Z"),
                 null, Instant.parse("2026-08-24T14:31:20Z"));
         LoadTestRunDetailPort port = testRunId -> Optional.of(expected);

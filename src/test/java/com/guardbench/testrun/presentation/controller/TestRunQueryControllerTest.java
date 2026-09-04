@@ -150,7 +150,7 @@ class TestRunQueryControllerTest {
         void returnsOkWithTestRunDetail() throws Exception {
             TestRunDetail detail = new TestRunDetail(
                     901L, 1L, TestRunStatus.RUNNING, 253,
-                    new TestRunProgress(120, 47.43), TARGET, null, null, null,
+                    new TestRunProgress(120, 47.43), TARGET, null, null,
                     Instant.parse("2026-08-24T14:30:00Z"), Instant.parse("2026-08-24T14:30:03Z"),
                     null, Instant.parse("2026-08-24T14:31:20Z"));
             when(getTestRunDetailService.getTestRun(901L)).thenReturn(detail);
@@ -334,7 +334,7 @@ class TestRunQueryControllerTest {
         @DisplayName("비교 가능한 과거 Run 목록을 반환한다")
         void returnsComparableRuns() throws Exception {
             TestRunRegressionView item = new TestRunRegressionView(
-                    800L, 1L, TestRunStatus.FINISHED, TARGET, null, "evaluator|guardrail|7",
+                    800L, 1L, TestRunStatus.FINISHED, TARGET, "evaluator|guardrail|7",
                     Instant.parse("2026-08-25T10:00:00Z"));
             when(getComparableTestRunsService.getComparableRuns(eq(901L), any()))
                     .thenReturn(PageResult.of(List.of(item), new PageCriteria(1, 20), 1L));

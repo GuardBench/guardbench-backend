@@ -1,4 +1,4 @@
-package com.guardbench.evaluator.infrastructure.bedrock;
+package com.guardbench.evaluator.infrastructure.sagemaker;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -16,16 +16,16 @@ import org.springframework.core.env.MapPropertySource;
 
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.retries.api.RetryStrategy;
-import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
+import software.amazon.awssdk.services.sagemakerruntime.SageMakerRuntimeClient;
 
-/** Worker 비활성화 시 Bedrock Evaluator SDK와 Port가 로딩되지 않는지 검증한다. */
-class BedrockEvaluatorConfigurationTest {
+/** Worker 비활성화 시 SageMaker Evaluator SDK와 Port가 로딩되지 않는지 검증한다. */
+class SageMakerEvaluatorConfigurationTest {
 
     @Test
-    @DisplayName("worker가 비활성화되면 BedrockRuntimeClient가 없다")
+    @DisplayName("worker가 비활성화되면 SageMakerRuntimeClient가 없다")
     void runtimeClientNotRegisteredWhenDisabled() {
         try (var context = createContext(Map.of("guardbench.worker.enabled", "false"))) {
-            assertThat(context.getBeanNamesForType(BedrockRuntimeClient.class)).isEmpty();
+            assertThat(context.getBeanNamesForType(SageMakerRuntimeClient.class)).isEmpty();
         }
     }
 
@@ -42,12 +42,12 @@ class BedrockEvaluatorConfigurationTest {
     class CallLimitTest {
 
         @Test
-        @DisplayName("기본 설정은 전체 15초, 개별 시도 5초, 최대 3회를 적용한다")
+        @DisplayName("기본 설정은 전체 15초, 개별 시도 5초, 최대 4회를 적용한다")
         void appliesApprovedCallLimits() {
-            BedrockProperties properties = new BedrockProperties(null, null, 0L, 0L, 0);
+            SageMakerProperties properties = new SageMakerProperties(null, null, 0L, 0L, 0);
 
             ClientOverrideConfiguration configuration =
-                    BedrockEvaluatorConfiguration.overrideConfiguration(properties);
+                    SageMakerEvaluatorConfiguration.overrideConfiguration(properties);
 
             assertThat(configuration.apiCallTimeout()).contains(Duration.ofSeconds(15));
             assertThat(configuration.apiCallAttemptTimeout()).contains(Duration.ofSeconds(5));
@@ -55,13 +55,13 @@ class BedrockEvaluatorConfigurationTest {
                     .isPresent()
                     .get()
                     .extracting(RetryStrategy::maxAttempts)
-                    .isEqualTo(3);
+                    .isEqualTo(4);
         }
 
         @Test
         @DisplayName("전체 호출 한도가 claim lease를 넘으면 기동을 거부한다")
         void rejectsTimeoutBeyondClaimLease() {
-            assertThatThrownBy(() -> new BedrockProperties(null, null, 45_000L, 5_000L, 3))
+            assertThatThrownBy(() -> new SageMakerProperties(null, null, 45_000L, 5_000L, 3))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("45s execution claim lease");
         }
@@ -69,7 +69,7 @@ class BedrockEvaluatorConfigurationTest {
         @Test
         @DisplayName("개별 시도 한도가 전체 한도보다 크면 기동을 거부한다")
         void rejectsAttemptTimeoutGreaterThanTotal() {
-            assertThatThrownBy(() -> new BedrockProperties(null, null, 5_000L, 9_000L, 3))
+            assertThatThrownBy(() -> new SageMakerProperties(null, null, 5_000L, 9_000L, 3))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("api-call-timeout-ms");
         }
@@ -80,7 +80,7 @@ class BedrockEvaluatorConfigurationTest {
         context.getEnvironment().getPropertySources().addFirst(
                 new MapPropertySource("test", Map.copyOf(properties))
         );
-        context.register(BedrockEvaluatorConfiguration.class);
+        context.register(SageMakerEvaluatorConfiguration.class);
         context.refresh();
         return context;
     }
