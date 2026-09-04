@@ -177,6 +177,12 @@ public class TestRunQueryController {
             @RequestParam(required = false, defaultValue = "") List<TestRunResultAttentionType> attentionType,
             @RequestParam(required = false)
                     @Pattern(regexp = "attention", message = "허용되지 않은 값입니다.") String includeFacets) {
+        for (int i = 0; i < attentionType.size(); i++) {
+            if (attentionType.get(i) == null) {
+                throw new QueryParamValidationException(List.of(
+                        new FieldErrorDetail("attentionType[" + i + "]", "허용되지 않은 값입니다.")));
+            }
+        }
         List<SortOrder<TestRunResultSortField>> sortOrders =
                 SortParamParser.parse(sort, TestRunResultSortField.class);
         TestRunResultListCriteria criteria = new TestRunResultListCriteria(

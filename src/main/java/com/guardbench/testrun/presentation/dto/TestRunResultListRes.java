@@ -2,6 +2,7 @@ package com.guardbench.testrun.presentation.dto;
 
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.guardbench.common.presentation.dto.PageMetaRes;
 
 /**
@@ -13,5 +14,5 @@ import com.guardbench.common.presentation.dto.PageMetaRes;
 public record TestRunResultListRes(
         List<TestRunResultListItemRes> items,
         PageMetaRes page,
-        TestRunResultFacetsRes facets) {
+        @JsonInclude(JsonInclude.Include.NON_NULL) TestRunResultFacetsRes facets) {
 }
