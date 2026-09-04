@@ -2,7 +2,6 @@ package com.guardbench.testrun.infrastructure.persistence;
 
 import com.guardbench.testrun.domain.Action;
 import com.guardbench.testrun.domain.ApplicationResponse;
-import com.guardbench.testrun.domain.EvaluationProfile;
 import com.guardbench.testrun.domain.EvaluationResult;
 import com.guardbench.testrun.domain.EvaluatorReference;
 import com.guardbench.testrun.domain.ExpectedResult;
@@ -36,8 +35,6 @@ final class TestRunPersistenceMapper {
                 source.testCaseCount(),
                 source.processedTestCaseCount(),
                 source.targetReference().value(),
-                String.join(",", source.evaluationProfile().checks()),
-                source.evaluationProfile().strictness(),
                 source.evaluatorReference().value(),
                 source.executionOutcome() == null ? null : source.executionOutcome().name(),
                 source.timeline().createdAt(),
@@ -52,7 +49,6 @@ final class TestRunPersistenceMapper {
                 new TestRunId(source.id),
                 new SourceTestSuiteId(source.testSuiteId),
                 new TargetReference(source.targetReferenceId),
-                profileOf(source),
                 evaluatorReferenceOf(source),
                 source.testCaseCount,
                 source.processedTestCaseCount,
@@ -60,14 +56,6 @@ final class TestRunPersistenceMapper {
                 source.executionOutcome == null ? null : TestRunExecutionOutcome.valueOf(source.executionOutcome),
                 new TestRunTimeline(source.createdAt, source.startedAt, source.completedAt, source.updatedAt)
         );
-    }
-
-    private static EvaluationProfile profileOf(TestRunEntity source) {
-        if (source.evaluationChecks == null || source.evaluationStrictness == null
-                || source.evaluatorReferenceId == null) {
-            throw new IllegalStateException("incomplete TestRun evaluation snapshot");
-        }
-        return new EvaluationProfile(java.util.List.of(source.evaluationChecks.split(",")), source.evaluationStrictness);
     }
 
     private static EvaluatorReference evaluatorReferenceOf(TestRunEntity source) {
