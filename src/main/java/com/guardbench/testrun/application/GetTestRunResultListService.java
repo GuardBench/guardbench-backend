@@ -4,10 +4,9 @@ import com.guardbench.common.error.ApplicationErrorCode;
 import com.guardbench.common.error.ApplicationException;
 import com.guardbench.testrun.application.port.out.LoadTestRunDetailPort;
 import com.guardbench.testrun.application.port.out.LoadTestRunResultListPort;
-import com.guardbench.testrun.application.port.out.PageResult;
 import com.guardbench.testrun.application.port.out.TestRunDetail;
-import com.guardbench.testrun.application.port.out.TestRunResultItem;
 import com.guardbench.testrun.application.port.out.TestRunResultListCriteria;
+import com.guardbench.testrun.application.port.out.TestRunResultListView;
 import com.guardbench.testrun.domain.TestRunStatus;
 
 import org.springframework.stereotype.Service;
@@ -35,7 +34,7 @@ public class GetTestRunResultListService {
         this.loadTestRunResultListPort = loadTestRunResultListPort;
     }
 
-    public PageResult<TestRunResultItem> getResults(long testRunId, TestRunResultListCriteria criteria) {
+    public TestRunResultListView getResults(long testRunId, TestRunResultListCriteria criteria) {
         TestRunDetail testRun = loadTestRunDetailPort.load(testRunId)
                 .orElseThrow(() -> new ApplicationException(ApplicationErrorCode.TEST_RUN_NOT_FOUND));
         if (testRun.status() != TestRunStatus.FINISHED) {

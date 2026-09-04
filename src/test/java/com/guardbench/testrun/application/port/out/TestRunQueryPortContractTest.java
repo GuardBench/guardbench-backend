@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.DisplayName;
 
 class TestRunQueryPortContractTest {
 
@@ -69,13 +70,46 @@ class TestRunQueryPortContractTest {
                 "category",
                 new TestExecutionView(com.guardbench.testrun.domain.TestExecutionStatus.FAILED,
                         null, "APPLICATION_TARGET", "PROVIDER_ERROR", "safe message"),
-                null, null);
+                null, null, TestRunResultAttentionType.EXECUTION_FAILED);
 
         assertEquals(List.of(SortOrder.asc(TestRunResultSortField.SNAPSHOT_ID)), criteria.sort());
         assertFalse(item.assertionStatusCode() != null);
         assertThrows(IllegalArgumentException.class, () -> new TestRunResultItem(
                 10L, 20L, "case", "input", com.guardbench.testrun.domain.Action.BLOCK,
-                com.guardbench.testrun.domain.Severity.HIGH, "category", item.execution(), "UNKNOWN", null));
+                com.guardbench.testrun.domain.Severity.HIGH, "category", item.execution(), "UNKNOWN", null,
+                TestRunResultAttentionType.EXECUTION_FAILED));
+    }
+
+    @Test
+    @DisplayName("Attention Filter에 명시 정렬이 없으면 전용 기본 정렬을 위해 정렬 목록을 비워 둔다")
+    void resultCriteriaKeepsSortEmptyForAttentionDefaultOrder() {
+        TestRunResultListCriteria criteria = new TestRunResultListCriteria(
+                null, null, null, null, null, null, null, null,
+                Set.of(TestRunResultAttentionType.FALSE_NEGATIVE), false, List.of(),
+                PageCriteria.firstPage());
+
+        assertEquals(List.of(), criteria.sort());
+        assertEquals(true, criteria.usesDefaultAttentionSort());
+    }
+
+    @Test
+    @DisplayName("처리 실패 분류는 평가 분류보다 우선하고 성공 결과만 FN 또는 FP가 된다")
+    void attentionTypePrioritizesProcessingStateOverEvaluation() {
+        assertEquals(TestRunResultAttentionType.EXECUTION_FAILED,
+                TestRunResultAttentionType.classify(
+                        com.guardbench.testrun.domain.TestExecutionStatus.FAILED,
+                        com.guardbench.testrun.domain.Action.BLOCK,
+                        com.guardbench.testrun.domain.Action.ALLOW));
+        assertEquals(TestRunResultAttentionType.FALSE_NEGATIVE,
+                TestRunResultAttentionType.classify(
+                        com.guardbench.testrun.domain.TestExecutionStatus.SUCCEEDED,
+                        com.guardbench.testrun.domain.Action.BLOCK,
+                        com.guardbench.testrun.domain.Action.ALLOW));
+        assertEquals(null,
+                TestRunResultAttentionType.classify(
+                        com.guardbench.testrun.domain.TestExecutionStatus.SUCCEEDED,
+                        com.guardbench.testrun.domain.Action.BLOCK,
+                        com.guardbench.testrun.domain.Action.BLOCK));
     }
 
     @Test

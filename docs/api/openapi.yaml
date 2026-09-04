@@ -467,6 +467,10 @@ paths:
         종료 전 상태에서는 409 TEST_RUN_NOT_FINISHED로 응답한다.
         FINISHED이면 executionOutcome이 INCOMPLETE 또는 ERROR여도 조회 자체는 200이다.
         실패 결과를 별도 배열로 중복 제공하지 않고 필터를 통해 조회한다.
+        attentionType을 반복하면 유형들을 OR로 결합하고 다른 Filter와는 AND로 결합한다.
+        Attention Filter가 있고 sort를 생략하면 Severity DESC, Attention 우선순위,
+        snapshotId ASC 순으로 정렬한다. 우선순위는 FALSE_NEGATIVE,
+        EXECUTION_FAILED, TIMED_OUT, FALSE_POSITIVE, NOT_STARTED 순이다.
       parameters:
         - $ref: '#/components/parameters/PageNumber'
         - $ref: '#/components/parameters/PageSize'
@@ -479,6 +483,8 @@ paths:
         - $ref: '#/components/parameters/ExecutionStatusFilter'
         - $ref: '#/components/parameters/AssertionStatusFilter'
         - $ref: '#/components/parameters/EvaluationOutcomeFilter'
+        - $ref: '#/components/parameters/AttentionTypeFilter'
+        - $ref: '#/components/parameters/IncludeResultFacets'
       responses:
         '200':
           description: 조회 성공
@@ -500,6 +506,7 @@ paths:
                       evaluatorVerdict: ALLOW
                       assertionStatus: FAIL
                       evaluationOutcome: FALSE_NEGATIVE
+                      attentionType: FALSE_NEGATIVE
                       error: null
                   page:
                     number: 1
@@ -508,6 +515,15 @@ paths:
                     totalPages: 13
                     hasPrevious: false
                     hasNext: true
+                  facets:
+                    allResults: 78
+                    attentionTotal: 7
+                    attentionTypes:
+                      FALSE_NEGATIVE: 3
+                      FALSE_POSITIVE: 2
+                      EXECUTION_FAILED: 1
+                      TIMED_OUT: 1
+                      NOT_STARTED: 0
         '400': { $ref: '#/components/responses/ValidationError' }
         '404': { $ref: '#/components/responses/TestRunNotFound' }
         '409': { $ref: '#/components/responses/TestRunNotFinished' }
@@ -860,8 +876,10 @@ components:
       name: sort
       in: query
       description: |
-        개별 결과 다중 정렬 조건. 허용 필드는 name, category, severity, expectedAction, testCaseSnapshotId다.
-        생략하면 testCaseSnapshotId,asc를 적용하고 요청에 testCaseSnapshotId가 없으면 마지막에 testCaseSnapshotId,asc를 추가한다.
+        개별 결과 다중 정렬 조건. 허용 필드는 name, category, severity, expectedAction, snapshotId다.
+        Attention Filter가 없고 생략하면 snapshotId,asc를 적용한다.
+        명시적 요청에 snapshotId가 없으면 마지막에 snapshotId,asc를 추가한다.
+        Attention Filter가 있고 생략하면 Severity DESC, Attention 우선순위, snapshotId ASC를 적용한다.
         Severity ASC는 LOW, MEDIUM, HIGH, CRITICAL 순서이며 DESC는 그 반대다.
       style: form
       explode: true
@@ -869,8 +887,8 @@ components:
         type: array
         items:
           type: string
-          pattern: '^(name|category|severity|expectedAction|testCaseSnapshotId),(asc|desc)$'
-      example: ['severity,desc', 'testCaseSnapshotId,asc']
+          pattern: '^(name|category|severity|expectedAction|snapshotId),(asc|desc)$'
+      example: ['severity,desc', 'snapshotId,asc']
     TestRunResultName:
       name: name
       in: query
@@ -911,6 +929,25 @@ components:
       in: query
       description: ExpectedResult와 Evaluator verdict의 분류 결과 정확히 일치 Filter. 판정할 수 없는 결과는 일치하지 않는다.
       schema: { $ref: '#/components/schemas/EvaluationOutcome' }
+    AttentionTypeFilter:
+      name: attentionType
+      in: query
+      description: |
+        확인이 필요한 대표 분류 Filter다. 같은 Parameter를 반복하면 값들을 OR로 결합하며,
+        다른 Filter와는 AND로 결합한다. 처리 미완료 유형이 평가 분류보다 우선하며,
+        FALSE_NEGATIVE와 FALSE_POSITIVE는 SUCCEEDED 결과에만 적용한다.
+      style: form
+      explode: true
+      schema:
+        type: array
+        items: { $ref: '#/components/schemas/TestRunResultAttentionType' }
+    IncludeResultFacets:
+      name: includeFacets
+      in: query
+      description: attention이면 현재 일반 Filter 기준의 Attention chip 집계를 응답에 포함한다.
+      schema:
+        type: string
+        enum: [attention]
   responses:
     ValidationError:
       description: 요청값 검증 실패
@@ -1390,6 +1427,16 @@ components:
         Expected BLOCK + Evaluator BLOCK은 TP, BLOCK + ALLOW는 FN,
         ALLOW + BLOCK은 FP, ALLOW + ALLOW는 TN이다.
       enum: [TRUE_POSITIVE, TRUE_NEGATIVE, FALSE_POSITIVE, FALSE_NEGATIVE]
+    TestRunResultAttentionType:
+      type: string
+      description: |
+        결과당 최대 하나인 확인 필요 대표 분류다. FINISHED TestRun의 NOT_STARTED만 포함되며,
+        결과 목록 API 자체가 FINISHED TestRun에만 제공된다.
+      enum: [FALSE_NEGATIVE, FALSE_POSITIVE, EXECUTION_FAILED, TIMED_OUT, NOT_STARTED]
+    NullableTestRunResultAttentionType:
+      type: string
+      nullable: true
+      enum: [FALSE_NEGATIVE, FALSE_POSITIVE, EXECUTION_FAILED, TIMED_OUT, NOT_STARTED, null]
     NullableEvaluationOutcome:
       type: string
       nullable: true
@@ -1427,6 +1474,7 @@ components:
         - evaluatorVerdict
         - assertionStatus
         - evaluationOutcome
+        - attentionType
         - error
       additionalProperties: false
       properties:
@@ -1440,7 +1488,34 @@ components:
         evaluatorVerdict: { $ref: '#/components/schemas/NullableAction' }
         assertionStatus: { $ref: '#/components/schemas/NullableAssertionStatus' }
         evaluationOutcome: { $ref: '#/components/schemas/NullableEvaluationOutcome' }
+        attentionType: { $ref: '#/components/schemas/NullableTestRunResultAttentionType' }
         error: { $ref: '#/components/schemas/ExecutionErrorDetailRes' }
+    TestRunResultAttentionTypeCountsRes:
+      type: object
+      required: [FALSE_NEGATIVE, FALSE_POSITIVE, EXECUTION_FAILED, TIMED_OUT, NOT_STARTED]
+      additionalProperties: false
+      properties:
+        FALSE_NEGATIVE: { type: integer, format: int64, minimum: 0 }
+        FALSE_POSITIVE: { type: integer, format: int64, minimum: 0 }
+        EXECUTION_FAILED: { type: integer, format: int64, minimum: 0 }
+        TIMED_OUT: { type: integer, format: int64, minimum: 0 }
+        NOT_STARTED: { type: integer, format: int64, minimum: 0 }
+    TestRunResultFacetsRes:
+      type: object
+      required: [allResults, attentionTotal, attentionTypes]
+      additionalProperties: false
+      properties:
+        allResults:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Attention 선택을 제외한 현재 일반 Filter에 일치하는 전체 결과 수
+        attentionTotal:
+          type: integer
+          format: int64
+          minimum: 0
+          description: attentionTypes 다섯 집계의 합
+        attentionTypes: { $ref: '#/components/schemas/TestRunResultAttentionTypeCountsRes' }
     TestRunResultListRes:
       type: object
       description: |
@@ -1453,6 +1528,12 @@ components:
           type: array
           items: { $ref: '#/components/schemas/TestRunResultItemRes' }
         page: { $ref: '#/components/schemas/PageMetaRes' }
+        facets:
+          type: object
+          allOf:
+            - $ref: '#/components/schemas/TestRunResultFacetsRes'
+          nullable: true
+          description: includeFacets=attention일 때만 포함한다.
     EvaluatorMetricsRes:
       type: object
       description: 한 TestRun의 저장된 ExpectedResult와 Evaluator verdict 분류 집계

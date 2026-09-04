@@ -15,7 +15,8 @@ public record TestRunResultItem(
         String category,
         TestExecutionView execution,
         String assertionStatusCode,
-        String evaluationOutcomeCode) {
+        String evaluationOutcomeCode,
+        TestRunResultAttentionType attentionType) {
     public TestRunResultItem {
         if (snapshotId <= 0 || testCaseId <= 0) {
             throw new IllegalArgumentException("snapshotId and testCaseId must be positive");

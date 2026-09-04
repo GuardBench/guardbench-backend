@@ -18,5 +18,6 @@ public record TestRunResultListItemRes(
         String evaluatorVerdict,
         String assertionStatus,
         String evaluationOutcome,
+        String attentionType,
         ExecutionErrorDetailRes error) {
 }

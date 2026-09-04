@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,7 +21,9 @@ import com.guardbench.testrun.application.port.out.LoadTestRunEvaluatorMetricsPo
 import com.guardbench.testrun.application.port.out.LoadTestRunResultListPort;
 import com.guardbench.testrun.application.port.out.PageResult;
 import com.guardbench.testrun.application.port.out.SortOrder;
+import com.guardbench.testrun.application.port.out.TestRunResultAttentionType;
 import com.guardbench.testrun.application.port.out.TestRunResultItem;
+import com.guardbench.testrun.application.port.out.TestRunResultListView;
 import com.guardbench.testrun.application.port.out.TestRunResultListCriteria;
 import com.guardbench.testrun.application.port.out.TestRunResultSortField;
 import com.guardbench.testsupport.PostgresTestConfiguration;
@@ -55,7 +58,7 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
         insertExecution(90_001L, "FAILED", null, "PROVIDER_ERROR", "안전한 오류");
 
         PageResult<TestRunResultItem> result = port.load(
-                80_001L, TestRunResultListCriteria.firstPage());
+                80_001L, TestRunResultListCriteria.firstPage()).page();
 
         TestRunResultItem item = result.items().getFirst();
         assertNull(item.assertionStatusCode());
@@ -76,7 +79,8 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
 
         PageResult<TestRunResultItem> result = port.load(80_011L, new TestRunResultListCriteria(
                 null, null, null, null, null, null, "FAIL", null,
-                List.of(), com.guardbench.testrun.application.port.out.PageCriteria.firstPage()));
+                Set.of(), false, List.of(),
+                com.guardbench.testrun.application.port.out.PageCriteria.firstPage())).page();
 
         assertEquals(List.of(90_011L), result.items().stream().map(TestRunResultItem::snapshotId).toList());
     }
@@ -93,8 +97,9 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
 
         PageResult<TestRunResultItem> result = port.load(80_021L, new TestRunResultListCriteria(
                 null, null, null, null, null, null, null, null,
+                Set.of(), false,
                 List.of(SortOrder.asc(TestRunResultSortField.SEVERITY)),
-                com.guardbench.testrun.application.port.out.PageCriteria.firstPage()));
+                com.guardbench.testrun.application.port.out.PageCriteria.firstPage())).page();
 
         assertEquals(List.of(90_022L, 90_021L), result.items().stream().map(TestRunResultItem::snapshotId).toList());
     }
@@ -111,12 +116,95 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
 
         PageResult<TestRunResultItem> result = port.load(80_031L, new TestRunResultListCriteria(
                 null, null, null, null, null, null, null, "TRUE_POSITIVE",
-                List.of(), com.guardbench.testrun.application.port.out.PageCriteria.firstPage()));
+                Set.of(), false, List.of(),
+                com.guardbench.testrun.application.port.out.PageCriteria.firstPage())).page();
 
         assertEquals(List.of(90_031L), result.items().stream().map(TestRunResultItem::snapshotId).toList());
         TestRunResultItem item = result.items().getFirst();
         assertEquals("BLOCK", item.execution().evaluatorVerdict().name());
         assertEquals("TRUE_POSITIVE", item.evaluationOutcomeCode());
+    }
+
+    @Test
+    @DisplayName("attentionType은 같은 필드끼리 OR, 일반 필터와 AND로 결합하고 facets는 선택한 유형을 무시한다")
+    void filtersAttentionTypesAndReturnsUnselectedFacetCounts() {
+        insertAttentionFixtures(70_061L, 80_061L);
+
+        TestRunResultListView result = port.load(80_061L, new TestRunResultListCriteria(
+                null, null, "PII", null, null, null, null, null,
+                Set.of(TestRunResultAttentionType.FALSE_NEGATIVE, TestRunResultAttentionType.TIMED_OUT),
+                true, List.of(),
+                com.guardbench.testrun.application.port.out.PageCriteria.firstPage()));
+
+        assertEquals(List.of(90_061L, 90_063L),
+                result.page().items().stream().map(TestRunResultItem::snapshotId).toList());
+        assertEquals(List.of(
+                        TestRunResultAttentionType.FALSE_NEGATIVE,
+                        TestRunResultAttentionType.TIMED_OUT),
+                result.page().items().stream().map(TestRunResultItem::attentionType).toList());
+        assertEquals(2L, result.page().totalElements());
+        assertEquals(6L, result.facets().allResults());
+        assertEquals(5L, result.facets().attentionTotal());
+        assertEquals(1L, result.facets().falseNegative());
+        assertEquals(1L, result.facets().falsePositive());
+        assertEquals(1L, result.facets().executionFailed());
+        assertEquals(1L, result.facets().timedOut());
+        assertEquals(1L, result.facets().notStarted());
+    }
+
+    @Test
+    @DisplayName("Attention 기본 정렬은 위험도, 유형 우선순위, Snapshot ID 순으로 적용한 뒤 페이지를 자른다")
+    void sortsAttentionBeforePagination() {
+        insertAttentionFixtures(70_071L, 80_071L);
+
+        TestRunResultListView result = port.load(80_071L, new TestRunResultListCriteria(
+                null, null, "PII", null, null, null, null, null,
+                Set.of(TestRunResultAttentionType.values()), false, List.of(),
+                new com.guardbench.testrun.application.port.out.PageCriteria(2, 2)));
+
+        assertEquals(List.of(90_064L, 90_063L),
+                result.page().items().stream().map(TestRunResultItem::snapshotId).toList());
+        assertEquals(5L, result.page().totalElements());
+    }
+
+    @Test
+    @DisplayName("동일 위험도에서는 Attention 우선순위와 snapshot ID로 안정적으로 정렬한다")
+    void sortsEqualSeverityByAttentionPriorityAndSnapshotId() {
+        insertAttentionFixtures(70_081L, 80_081L);
+        jdbcTemplate.update("UPDATE test_case_snapshot SET severity = 'HIGH' WHERE test_run_id = ?", 80_081L);
+        insertSnapshot(90_068L, 80_081L, 68L, "another fn", "input", "BLOCK", "HIGH", "PII");
+        insertModernExecution(90_068L, "ALLOW", "response");
+
+        TestRunResultListView result = port.load(80_081L, new TestRunResultListCriteria(
+                null, null, "PII", null, null, null, null, null,
+                Set.of(TestRunResultAttentionType.values()), false, List.of(),
+                com.guardbench.testrun.application.port.out.PageCriteria.firstPage()));
+
+        assertEquals(List.of(90_061L, 90_068L, 90_062L, 90_063L, 90_064L, 90_065L),
+                result.page().items().stream().map(TestRunResultItem::snapshotId).toList());
+        assertEquals(List.of(
+                        TestRunResultAttentionType.FALSE_NEGATIVE, TestRunResultAttentionType.FALSE_NEGATIVE,
+                        TestRunResultAttentionType.EXECUTION_FAILED, TestRunResultAttentionType.TIMED_OUT,
+                        TestRunResultAttentionType.FALSE_POSITIVE, TestRunResultAttentionType.NOT_STARTED),
+                result.page().items().stream().map(TestRunResultItem::attentionType).toList());
+    }
+
+    @Test
+    @DisplayName("선택한 Attention 결과가 없어도 일반 필터에 맞는 미선택 facet 개수를 반환한다")
+    void keepsFacetsWhenSelectedAttentionHasNoMatches() {
+        insertAttentionFixtures(70_091L, 80_091L);
+
+        TestRunResultListView result = port.load(80_091L, new TestRunResultListCriteria(
+                null, null, "PII", null, com.guardbench.testrun.domain.Severity.HIGH,
+                null, null, null, Set.of(TestRunResultAttentionType.FALSE_NEGATIVE), true,
+                List.of(SortOrder.desc(TestRunResultSortField.SNAPSHOT_ID)),
+                com.guardbench.testrun.application.port.out.PageCriteria.firstPage()));
+
+        assertEquals(List.of(), result.page().items());
+        assertEquals(0L, result.page().totalElements());
+        assertEquals(0, result.page().totalPages());
+        assertEquals(new com.guardbench.testrun.application.port.out.TestRunResultAttentionFacets(
+                2L, 0L, 1L, 1L, 0L, 0L), result.facets());
     }
 
     @Test
@@ -242,6 +330,32 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
                 INSERT INTO assertion_result (snapshot_id, assertion_status, created_at)
                 VALUES (?, ?, ?)
                 """, snapshotId, status, Timestamp.from(T0));
+    }
+
+    private void insertAttentionFixtures(long suiteId, long testRunId) {
+        insertSuite(suiteId);
+        insertTestRun(testRunId, suiteId);
+        insertSnapshot(90_061L, testRunId, 61L, "fn", "input", "BLOCK", "CRITICAL", "PII");
+        insertModernExecution(90_061L, "ALLOW", "response");
+        insertSnapshot(90_062L, testRunId, 62L, "failed", "input", "BLOCK", "HIGH", "PII");
+        insertExecution(90_062L, "FAILED", null, "PROVIDER_ERROR", "오류");
+        insertSnapshot(90_063L, testRunId, 63L, "timeout", "input", "BLOCK", "MEDIUM", "PII");
+        insertExecution(90_063L, "TIMED_OUT", null, "PROVIDER_TIMEOUT", "시간 초과");
+        insertSnapshot(90_064L, testRunId, 64L, "fp", "input", "ALLOW", "HIGH", "PII");
+        insertModernExecution(90_064L, "BLOCK", "response");
+        insertSnapshot(90_065L, testRunId, 65L, "not started", "input", "ALLOW", "LOW", "PII");
+        insertNotStartedExecution(90_065L);
+        insertSnapshot(90_066L, testRunId, 66L, "tp", "input", "BLOCK", "CRITICAL", "PII");
+        insertModernExecution(90_066L, "BLOCK", "response");
+        insertSnapshot(90_067L, testRunId, 67L, "other timeout", "input", "BLOCK", "CRITICAL", "OTHER");
+        insertExecution(90_067L, "TIMED_OUT", null, "PROVIDER_TIMEOUT", "시간 초과");
+    }
+
+    private void insertNotStartedExecution(long snapshotId) {
+        jdbcTemplate.update("""
+                INSERT INTO test_execution (snapshot_id, result_status)
+                VALUES (?, 'NOT_STARTED')
+                """, snapshotId);
     }
 
 }
