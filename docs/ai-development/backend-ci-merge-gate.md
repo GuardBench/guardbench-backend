@@ -12,10 +12,12 @@
 
 | Event | 대상 | 실행 명령 |
 | --- | --- | --- |
-| `pull_request` | base branch가 `dev`인 모든 PR | `./gradlew clean check bootJar --no-daemon` |
-| `push` | `dev` | `./gradlew clean check bootJar --no-daemon` |
+| `pull_request` | base branch가 `dev`인 PR | Java source/build 입력 변경 시 `./gradlew clean check bootJar --no-daemon`; 그 외에는 `verify` skip |
+| `push` | `dev` | Java source/build 입력 변경 시 `./gradlew clean check bootJar --no-daemon`; 그 외에는 `verify` skip |
+| `workflow_dispatch` | `source` | `./gradlew clean check bootJar --no-daemon` |
+| `workflow_dispatch` | `infrastructure` | source 검증 없이 infrastructure deploy만 수행 |
 
-workflow는 `ubuntu-latest`, Temurin JDK 21, Gradle dependency cache를 사용한다. `check`는 테스트를 포함하며, `bootJar`는 실행 가능한 Spring Boot JAR 패키징을 검증한다. Testcontainers 테스트는 GitHub-hosted Ubuntu runner의 Docker 환경을 사용한다.
+workflow는 `ubuntu-latest`, Temurin JDK 21, Gradle dependency cache를 사용한다. 변경 범위 감지 대상은 `src/`와 Gradle build/configuration 입력이다. `check`는 테스트를 포함하며, `bootJar`는 실행 가능한 Spring Boot JAR 패키징을 검증한다. Testcontainers 테스트는 GitHub-hosted Ubuntu runner의 Docker 환경을 사용한다. Java source/build 입력이 없는 변경에서는 Gradle `verify` job을 실행하지 않는다.
 
 이 workflow가 PR에 표시하는 required check 후보는 다음이다.
 
