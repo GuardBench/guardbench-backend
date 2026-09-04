@@ -92,7 +92,6 @@ class TestRunTest {
                 new TestRunId(1),
                 new SourceTestSuiteId(10),
                 new TargetReference("target-reference"),
-                new EvaluationProfile(List.of("PII_LEAKAGE"), "STANDARD"),
                 new EvaluatorReference("evaluator-reference"),
                 testCaseCount,
                 CREATED_AT

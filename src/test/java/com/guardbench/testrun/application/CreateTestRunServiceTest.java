@@ -10,6 +10,7 @@ import java.util.List;
 import com.guardbench.common.error.ApplicationErrorCode;
 import com.guardbench.common.error.ApplicationException;
 import com.guardbench.common.support.fixture.LogCapture;
+import com.guardbench.testrun.application.port.out.EvaluatorRegistration;
 import com.guardbench.testrun.application.port.out.OutboxEventRecord;
 import com.guardbench.testrun.application.port.out.TestCaseSnapshotSource;
 
@@ -21,6 +22,8 @@ class CreateTestRunServiceTest {
     private static final String MODEL = "test-model";
     private static final TestCaseSnapshotSource SOURCE = new TestCaseSnapshotSource(
             1L, 501L, "case", "input", "ALLOW", "HIGH", "category");
+    private static final EvaluatorRegistration EVALUATOR_REGISTRATION =
+            new EvaluatorRegistration("SAGEMAKER", "test-classifier-endpoint");
 
     @Test
     @DisplayName("활성 TestCase가 있는 TestSuite로 접수하면 QUEUED TestRun과 Snapshot, Outbox 이벤트를 함께 저장한다")
@@ -29,7 +32,7 @@ class CreateTestRunServiceTest {
         adapters.givenTestSuite(1L, List.of(SOURCE, SOURCE));
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand command = new TestRunCreateCommand(
-                1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, profile(), null);
+                1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, null);
 
         TestRunCreateResult result = service.create(command);
 
@@ -47,7 +50,7 @@ class CreateTestRunServiceTest {
     }
 
     @Test
-    @DisplayName("TestRun 접수 시 target/evaluator reference와 evaluation profile이 구조화 로그에 남고 "
+    @DisplayName("TestRun 접수 시 target/evaluator reference가 구조화 로그에 남고 "
             + "prompt/response/credential은 남지 않는다")
     void logsTestRunAcceptanceWithTargetAndEvaluatorDetailsWithoutSensitiveData() {
         LogCapture logCapture = LogCapture.attach(CreateTestRunService.class);
@@ -56,7 +59,7 @@ class CreateTestRunServiceTest {
             adapters.givenTestSuite(1L, List.of(SOURCE, SOURCE));
             CreateTestRunService service = newService(adapters);
             TestRunCreateCommand command = new TestRunCreateCommand(
-                    1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, profile(), null);
+                    1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, null);
 
             TestRunCreateResult result = service.create(command);
 
@@ -67,11 +70,8 @@ class CreateTestRunServiceTest {
             assertTrue(acceptedLog.contains("targetIdentifier=https://example.com/v1/chat/completions"));
             assertTrue(acceptedLog.contains("targetRevision=v1"));
             assertTrue(acceptedLog.contains("targetModel=" + MODEL));
-            assertTrue(acceptedLog.contains("evaluatorTypeCode=BEDROCK_GUARDRAIL"));
-            assertTrue(acceptedLog.contains("evaluatorIdentifier=guardrail-123"));
-            assertTrue(acceptedLog.contains("evaluatorRevision=1"));
-            assertTrue(acceptedLog.contains("evaluationChecks=[PII_LEAKAGE]"));
-            assertTrue(acceptedLog.contains("evaluationStrictness=STANDARD"));
+            assertTrue(acceptedLog.contains("evaluatorProviderCode=" + EVALUATOR_REGISTRATION.providerCode()));
+            assertTrue(acceptedLog.contains("evaluatorModelId=" + EVALUATOR_REGISTRATION.modelId()));
             assertFalse(acceptedLog.toLowerCase(java.util.Locale.ROOT).contains("authorization"));
             assertFalse(acceptedLog.toLowerCase(java.util.Locale.ROOT).contains("bearer"));
         } finally {
@@ -85,7 +85,7 @@ class CreateTestRunServiceTest {
         CreateTestRunFakeAdapters adapters = new CreateTestRunFakeAdapters();
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand command = new TestRunCreateCommand(
-                404L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, profile(), null);
+                404L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, null);
 
         ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(command));
 
@@ -99,7 +99,7 @@ class CreateTestRunServiceTest {
         adapters.givenTestSuite(2L, List.of());
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand command = new TestRunCreateCommand(
-                2L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, profile(), null);
+                2L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, null);
 
         ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(command));
 
@@ -113,7 +113,7 @@ class CreateTestRunServiceTest {
         adapters.givenTestSuite(1L, List.of(SOURCE));
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand command = new TestRunCreateCommand(
-                1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, profile(), "idem-key-1");
+                1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, "idem-key-1");
 
         TestRunCreateResult first = service.create(command);
         TestRunCreateResult second = service.create(command);
@@ -130,9 +130,9 @@ class CreateTestRunServiceTest {
         adapters.givenTestSuite(2L, List.of(SOURCE));
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand first = new TestRunCreateCommand(
-                1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, profile(), "idem-key-2");
+                1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, "idem-key-2");
         TestRunCreateCommand different = new TestRunCreateCommand(
-                2L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, profile(), "idem-key-2");
+                2L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, "idem-key-2");
 
         service.create(first);
         ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(different));
@@ -147,9 +147,9 @@ class CreateTestRunServiceTest {
         adapters.givenTestSuite(1L, List.of(SOURCE));
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand firstModel = new TestRunCreateCommand(
-                1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", "model-a", profile(), "idem-model-key");
+                1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", "model-a", "idem-model-key");
         TestRunCreateCommand secondModel = new TestRunCreateCommand(
-                1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", "model-b", profile(), "idem-model-key");
+                1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", "model-b", "idem-model-key");
 
         service.create(firstModel);
         ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(secondModel));
@@ -164,29 +164,13 @@ class CreateTestRunServiceTest {
         adapters.givenTestSuite(1L, List.of(SOURCE));
         CreateTestRunService service = newService(adapters);
         TestRunCreateCommand command = new TestRunCreateCommand(
-                1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, profile(), null);
+                1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL, null);
 
         TestRunCreateResult first = service.create(command);
         TestRunCreateResult second = service.create(command);
 
         assertTrue(first.id() != second.id());
         assertEquals(2, adapters.savedOutboxEvents().size());
-    }
-
-    @Test
-    @DisplayName("지원하지 않는 EvaluationProfile이면 EvaluatorReference와 TestRun을 저장하지 않고 거부한다")
-    void rejectsUnsupportedEvaluationProfile() {
-        CreateTestRunFakeAdapters adapters = new CreateTestRunFakeAdapters();
-        adapters.givenTestSuite(1L, List.of(SOURCE));
-        adapters.evaluatorCatalogDoesNotSupportProfile();
-
-        ApplicationException exception = assertThrows(ApplicationException.class, () -> newService(adapters).create(
-                new TestRunCreateCommand(1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", null,
-                        MODEL, profile(), null)));
-
-        assertEquals(ApplicationErrorCode.EVALUATION_PROFILE_NOT_SUPPORTED, exception.errorCode());
-        assertEquals(0, adapters.savedEvaluatorReferenceCount());
-        assertEquals(0, adapters.savedOutboxEvents().size());
     }
 
     private static CreateTestRunService newService(CreateTestRunFakeAdapters adapters) {
@@ -201,12 +185,8 @@ class CreateTestRunServiceTest {
                 adapters,
                 adapters,
                 adapters,
-                adapters,
+                EVALUATOR_REGISTRATION,
                 adapters.clock
         );
-    }
-
-    private static com.guardbench.testrun.domain.EvaluationProfile profile() {
-        return new com.guardbench.testrun.domain.EvaluationProfile(List.of("PII_LEAKAGE"), "STANDARD");
     }
 }

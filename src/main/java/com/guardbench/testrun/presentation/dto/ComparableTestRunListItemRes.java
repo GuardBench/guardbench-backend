@@ -4,6 +4,5 @@ public record ComparableTestRunListItemRes(
         long id,
         long testSuiteId,
         TargetReferenceRes target,
-        EvaluationProfileRes evaluationProfile,
         String completedAt) {
 }

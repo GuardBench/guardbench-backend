@@ -8,13 +8,13 @@ import com.guardbench.testrun.application.TestRunCreateCommand;
 
 /**
  * TestSuite의 현재 TestCase 전체를 실행 대상으로 사용하는 TestRun 접수 요청이다. TestCase ID 목록은
- * 받지 않는다.
+ * 받지 않는다. 사용자는 evaluator/classifier 설정을 제출하지 않으며 서비스가 고정한 Response
+ * Behavior Classifier가 실제 응답 행동을 정규화한다.
  */
 public record TestRunCreateReq(
         @NotNull(message = "testSuiteId는 필수입니다.")
         @Min(value = 1, message = "testSuiteId는 1 이상이어야 합니다.") Long testSuiteId,
-        @NotNull(message = "target은 필수입니다.") @Valid TargetReferenceReq target,
-        @NotNull(message = "evaluationProfile은 필수입니다.") @Valid EvaluationProfileReq evaluationProfile
+        @NotNull(message = "target은 필수입니다.") @Valid TargetReferenceReq target
 ) {
 
     public TestRunCreateCommand toCommand(String idempotencyKey) {
@@ -24,7 +24,6 @@ public record TestRunCreateReq(
                 target.identifier(),
                 target.revision(),
                 target.model(),
-                evaluationProfile.toDomain(),
                 idempotencyKey
         );
     }

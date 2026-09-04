@@ -2,7 +2,6 @@ package com.guardbench.testrun.application.port.out;
 
 import java.time.Instant;
 
-import com.guardbench.testrun.domain.EvaluationProfile;
 import com.guardbench.testrun.domain.TestRunStatus;
 
 /** Regression 후보 조회에 필요한 TestRun의 consumer-owned projection이다. */
@@ -11,7 +10,6 @@ public record TestRunRegressionView(
         long testSuiteId,
         TestRunStatus status,
         TargetReferenceView target,
-        EvaluationProfile evaluationProfile,
         String evaluatorConfigKey,
         Instant completedAt) {
 

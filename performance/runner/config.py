@@ -86,14 +86,6 @@ def validate_profile(profile: dict[str, Any]) -> None:
     if parsed_target.scheme not in {"http", "https"} or not parsed_target.netloc \
             or parsed_target.username or parsed_target.password or parsed_target.fragment:
         raise ConfigurationError("target.identifier는 userinfo와 fragment가 없는 HTTP/HTTPS URL이어야 합니다.")
-    evaluation_profile = target.get("evaluation_profile")
-    if not isinstance(evaluation_profile, dict) or not isinstance(evaluation_profile.get("checks"), list) \
-            or not evaluation_profile.get("checks") \
-            or evaluation_profile.get("strictness") not in {"RELAXED", "STANDARD", "STRICT"}:
-        raise ConfigurationError("target.evaluation_profile의 checks와 strictness가 올바르지 않습니다.")
-    if any(check not in {"PII_LEAKAGE", "HARMFUL_CONTENT"}
-           for check in evaluation_profile["checks"]):
-        raise ConfigurationError("지원하지 않는 evaluation_profile.checks가 있습니다.")
 
     if not isinstance(acceptance, dict):
         raise ConfigurationError("acceptance는 필수 object입니다.")
