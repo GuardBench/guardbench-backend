@@ -1,5 +1,6 @@
 package com.guardbench.evaluator.infrastructure.sagemaker;
 
+import java.util.IllegalFormatException;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -73,7 +74,7 @@ public final class SageMakerClassifierEvaluatorAdapter implements EvaluatorExecu
         final String requestBody;
         try {
             requestBody = toRequestBody(request);
-        } catch (JacksonException exception) {
+        } catch (JacksonException | IllegalFormatException exception) {
             return EvaluatorExecutionResult.failed(EvaluatorFailureCode.EVALUATOR_CONFIGURATION_INVALID);
         }
 

@@ -55,12 +55,16 @@ guardbench:
     allowed-private-hostnames: []
   # SageMaker Runtime Provider 호출 한도 (ADR 0005: 재시도 포함 전체 15초, claim lease 45초 미만)
   # 실측 latency(P95 200ms 이하)는 15초 한도보다 훨씬 낮아 충분한 마진을 갖는다.
+  # max-attempts는 1(재시도 없음)로 고정한다. Provider business retry(PROVIDER_UNAVAILABLE/
+  # PROVIDER_TIMEOUT)는 Worker claim retry(ExecuteTestRunService.MAX_EXECUTION_ATTEMPTS, 최대
+  # 3회) 한 계층에만 위임하며, SDK 자체 재시도까지 함께 켜면 실제 호출 횟수가 두 값의 곱으로
+  # 증폭된다.
   sagemaker:
     region: ${AWS_REGION:ap-northeast-2}
     endpoint-override: ${SAGEMAKER_ENDPOINT_OVERRIDE:}
     api-call-timeout-ms: 15000
     api-call-attempt-timeout-ms: 5000
-    max-attempts: 4
+    max-attempts: 1
     # Response Behavior Classifier (#173): 최종 endpoint name/system prompt는 별도 실험으로 확정
     # 전이며 이 값은 배포 시 주입하는 placeholder다. endpoint-name을 비워두면 애플리케이션은 정상
     # 기동하지만 classifier를 실제로 사용하는 시점(TestRun 접수, Worker evaluate 호출)에 실패한다.

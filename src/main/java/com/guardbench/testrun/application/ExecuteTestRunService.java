@@ -42,6 +42,11 @@ import com.guardbench.testrun.domain.repository.TestExecutionRepository;
  * 완료 Outbox만 persistence phase에서 원자적으로 저장한다. Target이 실패하면 Evaluator를
  * 호출하지 않으며, Evaluator 실패 시 Target의 Application response는 보존하지만 verdict와
  * Assertion은 생성하지 않는다.
+ *
+ * <p>Provider business retry(PROVIDER_UNAVAILABLE/PROVIDER_TIMEOUT)의 소유권은
+ * {@link #MAX_EXECUTION_ATTEMPTS}(claim retry) 한 계층에만 둔다. Target/Evaluator SDK
+ * client는 자체 retry를 비활성화({@code max-attempts=1})하도록 설정해야 하며, 두 계층이
+ * 동시에 재시도하면 실제 Provider 호출 횟수가 두 값의 곱으로 증폭된다.
  */
 public class ExecuteTestRunService {
 
