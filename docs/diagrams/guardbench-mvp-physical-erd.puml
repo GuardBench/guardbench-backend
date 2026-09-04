@@ -42,8 +42,6 @@ entity "test_run" as test_run {
   * test_case_count : INTEGER
   * processed_test_case_count : INTEGER
   * target_reference_id : TEXT <<UK, FK>>
-    evaluation_checks : TEXT <<nullable legacy>>
-    evaluation_strictness : VARCHAR(16) <<nullable legacy>>
     evaluator_reference_id : TEXT <<FK, nullable legacy>>
     execution_outcome : VARCHAR(16)
   * created_at : TIMESTAMPTZ(6)
@@ -77,14 +75,8 @@ entity "http_endpoint_target" as http_endpoint_target {
 entity "evaluator_reference" as evaluator_reference {
   * reference_id : TEXT <<PK>>
   --
-  * evaluator_type : VARCHAR(32)
-}
-
-entity "bedrock_guardrail_evaluator" as bedrock_evaluator {
-  * reference_id : TEXT <<PK, FK>>
-  --
-  * guardrail_identifier : TEXT
-  * guardrail_revision : VARCHAR(8)
+  * provider_code : VARCHAR(32)
+  * model_id : TEXT
 }
 
 entity "test_case_snapshot" as snapshot {
@@ -185,7 +177,6 @@ test_suite ||..o{ test_run : historical identity
 target_reference ||--o| test_run : referenced by
 target_reference ||--o| bedrock_target : provider detail
 target_reference ||--o| http_endpoint_target : provider detail
-evaluator_reference ||--o| bedrock_evaluator : provider detail
 evaluator_reference ||--o{ test_run : immutable evaluator snapshot
 test_run ||--|{ snapshot : fixes
 test_case ||..o{ snapshot : historical identity
@@ -208,11 +199,11 @@ note right of target_reference
 end note
 
 note right of evaluator_reference
-  evaluator_type: BEDROCK_GUARDRAIL only (V6).
-  test_run.evaluator_reference_id is nullable and has no
-  UNIQUE constraint, so the schema permits reuse across Runs.
-  New TestRuns always fix checks + strictness + evaluator
-  reference together (ck_test_run_evaluation_profile_pair).
+  provider_code/model_id (V13): catalog나 checks/strictness 없이 서비스
+  전역 고정 Response Behavior Classifier의 provider와 model 식별자만
+  저장한다. SageMaker에서는 model_id가 endpoint name 값을 담는다.
+  test_run.evaluator_reference_id는 nullable이고 UNIQUE 제약이 없어
+  여러 Run이 같은 evaluator_reference를 재사용할 수 있다.
 end note
 
 note right of http_endpoint_target
@@ -249,7 +240,7 @@ legend left
   carries the immutable event identifiers.
   Claim relations are technical leases, not Domain IDs
   or Aggregate Repositories.
-  Diagram reflects Flyway V1 through V12.
+  Diagram reflects Flyway V1 through V13.
 endlegend
 
 @enduml

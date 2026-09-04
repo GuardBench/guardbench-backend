@@ -29,13 +29,14 @@ Provider는 최초 AWS Bedrock `Converse` API로 검토했으나, Bedrock API �
 4. 구현은 Amazon SageMaker endpoint에 직접 서빙한 텍스트 모델을 SageMaker Runtime `InvokeEndpoint` API로 호출해 `COMPLY`/`REFUSE` 이진 레이블을 반환받는다. endpoint는 DJL LMI(vLLM) 컨테이너의 OpenAI-compatible chat completions 스키마(`messages` + `chat_template_kwargs.enable_thinking: false`)를 사용하며, 응답은 `choices[0].message.content`의 raw text다. 최종 endpoint name과 classifier system prompt는 이 ADR 확정 시점에도 미결정이며 `guardbench.sagemaker.classifier.endpoint-name`과 `guardbench.sagemaker.classifier.system-prompt` 설정으로 배포 시점에 주입한다.
 5. classifier system prompt는 서비스 전역 고정 정책이다. TestSuite/TestCase에 evaluation system prompt 필드를 추가하지 않으며 모델별 도메인 prompt를 만들지 않는다.
 6. SageMaker 호출 실패, timeout, throttling과 classifier 출력 파싱 실패는 `ALLOW`/`BLOCK`으로 임의 fallback하지 않는다. 기존 `TestExecutionError`/`EvaluatorFailureCode` 계약을 그대로 사용해 실패로 처리한다.
+7. Provider business retry(`PROVIDER_UNAVAILABLE`/`PROVIDER_TIMEOUT`)의 소유권은 Worker claim retry(`ExecuteTestRunService.MAX_EXECUTION_ATTEMPTS`, 최대 3회) 한 계층에만 둔다. SageMaker Runtime SDK 자체 retry(`guardbench.sagemaker.max-attempts`)는 1(재시도 없음)로 고정한다. 두 계층이 동시에 재시도하면 실제 Provider 호출 횟수가 두 값의 곱으로 증폭된다(예: SDK 4회 x claim 3회 = 12회).
 
 ### EvaluationProfile과 catalog 제거
 
-7. TestRun 생성 요청의 inline `evaluationProfile(checks + strictness)`을 완전히 제거한다. 사용자는 evaluator/classifier 설정을 제출하지 않는다.
-8. profile canonicalization, profile catalog resolution(`ResolveEvaluatorCatalogPort`, `EvaluatorCatalogPersistenceAdapter`, `EvaluatorCatalogProperties`)과 `EVALUATION_PROFILE_NOT_SUPPORTED` 오류를 제거한다. 여러 canonical Guardrail(G1/G2/G3)을 구분해 등록하던 `bedrock_guardrail_evaluator` catalog 테이블도 제거한다.
-9. `EvaluatorReference`는 재현성 메타데이터로 유지한다. 다만 catalog entry나 checks/strictness가 아닌 실제 실행에 사용한 classifier의 `providerCode`와 `modelId`만 저장한다. `EvaluatorRegistration(typeCode, identifier, revision)`은 `EvaluatorRegistration(providerCode, modelId)`로 단순화한다. SageMaker 맥락에서 `modelId` 값은 endpoint name을 담는다.
-10. classifier 설정은 catalog가 아니라 서비스 전역 고정 설정(`EvaluatorRegistration` bean)이다. `CreateTestRunService`는 TestRun 접수마다 이 고정 registration으로 `EvaluatorReference`를 등록하며, catalog lookup 실패에 의한 409 응답 경로가 없다.
+8. TestRun 생성 요청의 inline `evaluationProfile(checks + strictness)`을 완전히 제거한다. 사용자는 evaluator/classifier 설정을 제출하지 않는다.
+9. profile canonicalization, profile catalog resolution(`ResolveEvaluatorCatalogPort`, `EvaluatorCatalogPersistenceAdapter`, `EvaluatorCatalogProperties`)과 `EVALUATION_PROFILE_NOT_SUPPORTED` 오류를 제거한다. 여러 canonical Guardrail(G1/G2/G3)을 구분해 등록하던 `bedrock_guardrail_evaluator` catalog 테이블도 제거한다.
+10. `EvaluatorReference`는 재현성 메타데이터로 유지한다. 다만 catalog entry나 checks/strictness가 아닌 실제 실행에 사용한 classifier의 `providerCode`와 `modelId`만 저장한다. `EvaluatorRegistration(typeCode, identifier, revision)`은 `EvaluatorRegistration(providerCode, modelId)`로 단순화한다. SageMaker 맥락에서 `modelId` 값은 endpoint name을 담는다.
+11. classifier 설정은 catalog가 아니라 서비스 전역 고정 설정(`EvaluatorRegistration` bean)이다. `CreateTestRunService`는 TestRun 접수마다 이 고정 registration으로 `EvaluatorReference`를 등록하며, catalog lookup 실패에 의한 409 응답 경로가 없다.
 
 ### 실패 시 안전한 기동
 

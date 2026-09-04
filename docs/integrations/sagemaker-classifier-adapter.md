@@ -145,10 +145,15 @@ VPC 설정도 검증되지 않았다. 실험은 VPC 설정이 없는 기본(퍼�
 `guardbench.sagemaker.*` 15초 한도는 충분한 마진을 갖는다. execution claim lease(45초)보다 짧게
 유지한다.
 
-재시도 대상은 `ThrottlingException`, `ModelError`, `InternalFailure`, `ServiceUnavailable`이며 지수
-백오프(최대 4회, base 1초)로 재시도한다. 오류는 `EVALUATOR_NOT_FOUND`, `EVALUATOR_ACCESS_DENIED`,
-`EVALUATOR_CONFIGURATION_INVALID`, `PROVIDER_UNAVAILABLE`, `PROVIDER_RESPONSE_INVALID`,
-`PROVIDER_TIMEOUT`으로 안전하게 수렴한다.
+실험(별도 검증 도구)에서는 `ThrottlingException`, `ModelError`, `InternalFailure`,
+`ServiceUnavailable`을 지수 백오프(최대 4회, base 1초)로 재시도했다. 그러나 GuardBench Worker는
+이미 Provider business retry를 claim 계층(`ExecuteTestRunService.MAX_EXECUTION_ATTEMPTS`, 최대
+3회)에서 수행하므로, SDK `max-attempts`를 그대로 4로 설정하면 실제 호출 횟수가 최대 12회(SDK 4회 x
+claim 3회)로 증폭된다. 이를 방지하기 위해 `guardbench.sagemaker.max-attempts`는 1(SDK 자체 재시도
+없음)로 고정하고, transient 실패(`ThrottlingException`, `ModelError`, `InternalFailure`,
+`ServiceUnavailable` 등)에 대한 재시도는 claim retry 한 계층에만 위임한다. 오류는
+`EVALUATOR_NOT_FOUND`, `EVALUATOR_ACCESS_DENIED`, `EVALUATOR_CONFIGURATION_INVALID`,
+`PROVIDER_UNAVAILABLE`, `PROVIDER_RESPONSE_INVALID`, `PROVIDER_TIMEOUT`으로 안전하게 수렴한다.
 
 현재 `dev`에서 이 Adapter는 `EvaluatorExecutionPort` 구현으로 존재하며 Worker가 prompt와 Application
 response를 함께 전달한다. Worker는 Evaluator의 `EvaluationResult`를 실행 결과로 저장하고, ExpectedResult와
