@@ -41,16 +41,22 @@ fields @timestamp, @message
 
 `Target 준비에 실패했습니다` 로그가 반복되면 `failureCode`로 원인을 구분하고, 최종적으로 `Target 준비 영구 실패로 TestRun을 종료했습니다` 로그가 있으면 해당 TestRun은 Snapshot 실행 단계로 진입하지 못한 것이다.
 
-## 3. Snapshot 실행 — 재시도와 최종 결과 추적
+## 3. Snapshot 실행 — 응답·classifier·재시도와 최종 결과 추적
 
 ```
 fields @timestamp, @message
-| filter @message like /testRunId=<TEST_RUN_ID>\b/ and (@message like /실패로 재시도합니다/ or @message like /terminal 결과를 저장했습니다/)
+| filter @message like /testRunId=<TEST_RUN_ID>\b/ and (@message like /Application response 진단 정보를 기록합니다/ or @message like /Classifier 호출을 시작합니다/ or @message like /Classifier 판정을 완료했습니다/ or @message like /Classifier 판정에 실패했습니다/ or @message like /실패로 재시도합니다/ or @message like /terminal 결과를 저장했습니다/)
 | sort @timestamp asc
 ```
 
 - `실패로 재시도합니다` (WARN): `snapshotId`, `attemptCount`, `errorStage`, `errorCode`, `retryable=true`, `reason`(sanitized)
+- `Application response 진단 정보를 기록합니다` (INFO): `testRunId`, `snapshotId`, `responseLength`, `responseTruncated`, `applicationResponsePreview`
+- `Classifier 판정을 완료했습니다` (INFO): `classifierOutput`, `evaluatorVerdict`, 응답 길이·truncation 정보
+- `Classifier 판정에 실패했습니다` (WARN): `errorStage`, `errorCode`, `retryable`, 응답 길이·truncation 정보
 - `terminal 결과를 저장했습니다` (INFO): 성공 시 `evaluatorVerdict`, 실패 시 `errorStage`/`errorCode`/`retryable`
+
+`applicationResponsePreview`는 서비스 정책에 따라 마스킹하지 않지만 최대 512자(Unicode code point)까지만 기록하며,
+초과 시 `…[truncated]`를 붙인다. 줄바꿈·탭 등 제어 문자는 로그 한 줄 유지를 위해 escape한다.
 
 특정 Snapshot만 보고 싶으면 `snapshotId=<SNAPSHOT_ID>`를 filter에 추가한다.
 
@@ -60,12 +66,26 @@ fields @timestamp, @message
 | sort @timestamp asc
 ```
 
-## 4. Quality Gate 최종화 — PASS/FAIL 판정 근거 확인
+Run 201처럼 `PROVIDER_UNAVAILABLE`이 재시도된 뒤 소진되는 경우, 같은 `snapshotId`에 대해 `실패로 재시도합니다`가 여러 번 나오고 마지막 `terminal 결과를 저장했습니다`의 `retryable=true`로 "재시도했지만 소진되었다"는 것을 확인한다.
+
+## 4. Assertion·Quality Gate 최종화 — PASS/FAIL 판정 근거 확인
 
 ```
 fields @timestamp, @message
 | filter @message like /finalization을 완료했습니다/ and @message like /testRunId=<TEST_RUN_ID>\b/
 ```
+
+Assertion까지 함께 조회하려면 다음 filter를 사용한다.
+
+```
+fields @timestamp, @message
+| filter @message like /testRunId=<TEST_RUN_ID>\b/ and (@message like /Classifier 판정을/ or @message like /Snapshot assertion을/ or @message like /terminal 결과를 저장했습니다/)
+| sort @timestamp asc
+```
+
+`Snapshot assertion을 판정했습니다` 로그에서 `testRunId`, `snapshotId`, `expectedAction`, `evaluatorVerdict`,
+`assertionStatus`, `evaluated`, `evaluationReused`를 확인할 수 있다. 이를 통해 Application response 진단 로그와
+classifier verdict가 Assertion으로 변환된 결과를 Snapshot 단위로 연결한다.
 
 한 줄에서 확인 가능한 필드:
 
