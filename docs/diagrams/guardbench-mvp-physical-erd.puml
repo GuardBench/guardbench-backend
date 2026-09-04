@@ -34,34 +34,10 @@ entity "test_case" as test_case {
   * updated_at : TIMESTAMPTZ(6)
 }
 
-entity "test_run" as test_run {
-  * id : BIGINT <<PK, sequence>>
-  --
-  * test_suite_id : BIGINT <<historical identity>>
-  * status : VARCHAR(16)
-  * test_case_count : INTEGER
-  * processed_test_case_count : INTEGER
-  * target_reference_id : TEXT <<UK, FK>>
-    evaluator_reference_id : TEXT <<FK, nullable legacy>>
-    execution_outcome : VARCHAR(16)
-  * created_at : TIMESTAMPTZ(6)
-    started_at : TIMESTAMPTZ(6)
-    completed_at : TIMESTAMPTZ(6)
-  * updated_at : TIMESTAMPTZ(6)
-}
-
 entity "target_reference" as target_reference {
   * reference_id : TEXT <<PK>>
   --
-  * target_type : VARCHAR(32)
-}
-
-entity "bedrock_guardrail_target" as bedrock_target {
-  * reference_id : TEXT <<PK, FK>>
-  --
-  * guardrail_identifier : TEXT
-  * requested_revision : TEXT
-    resolved_revision : TEXT
+  * target_type : VARCHAR(32) = HTTP_ENDPOINT
 }
 
 entity "http_endpoint_target" as http_endpoint_target {
@@ -77,6 +53,22 @@ entity "evaluator_reference" as evaluator_reference {
   --
   * provider_code : VARCHAR(32)
   * model_id : TEXT
+}
+
+entity "test_run" as test_run {
+  * id : BIGINT <<PK, sequence>>
+  --
+  * test_suite_id : BIGINT <<historical identity>>
+  * status : VARCHAR(16)
+  * test_case_count : INTEGER
+  * processed_test_case_count : INTEGER
+  * target_reference_id : TEXT <<UK, FK>>
+  * evaluator_reference_id : TEXT <<FK>>
+    execution_outcome : VARCHAR(16)
+  * created_at : TIMESTAMPTZ(6)
+    started_at : TIMESTAMPTZ(6)
+    completed_at : TIMESTAMPTZ(6)
+  * updated_at : TIMESTAMPTZ(6)
 }
 
 entity "test_case_snapshot" as snapshot {
@@ -175,57 +167,38 @@ entity "outbox_event" as outbox {
 test_suite ||--o{ test_case : contains
 test_suite ||..o{ test_run : historical identity
 target_reference ||--o| test_run : referenced by
-target_reference ||--o| bedrock_target : provider detail
-target_reference ||--o| http_endpoint_target : provider detail
-evaluator_reference ||--o{ test_run : immutable evaluator snapshot
+target_reference ||--|| http_endpoint_target : HTTP target detail
+evaluator_reference ||--o{ test_run : classifier reference
 test_run ||--|{ snapshot : fixes
 test_case ||..o{ snapshot : historical identity
 snapshot ||--o| execution : single target
 snapshot ||--o| execution_claim : technical lease
 test_run ||--o| idempotency : request replay
 test_run ||--o| resolution_claim : technical lease
-snapshot ||--o| assertion : expected vs actual
-snapshot ||--o| change_result : legacy, no new writes
+snapshot ||--o| assertion : expected vs evaluated behavior
+snapshot ||--o| change_result : persisted evaluation shape
 test_run ||--o| quality_gate : final evaluation
 outbox ..> test_run : payload reference only
 
 note right of target_reference
-  target_type: BEDROCK_GUARDRAIL | HTTP_ENDPOINT
-  Provider detail is stored in the matching table.
-  test_run.target_reference_id is NOT NULL with a UNIQUE
-  constraint, so at most one TestRun per target_reference.
-  New TestRuns register HTTP_ENDPOINT only;
-  bedrock_guardrail_target is retained V3 legacy data.
+  Current target contract is HTTP_ENDPOINT only.
+  test_run.target_reference_id is NOT NULL and UNIQUE.
 end note
 
 note right of evaluator_reference
-  provider_code/model_id (V13): catalog나 checks/strictness 없이 서비스
-  전역 고정 Response Behavior Classifier의 provider와 model 식별자만
-  저장한다. SageMaker에서는 model_id가 endpoint name 값을 담는다.
-  test_run.evaluator_reference_id는 nullable이고 UNIQUE 제약이 없어
-  여러 Run이 같은 evaluator_reference를 재사용할 수 있다.
+  Stores the provider/model identity of the global
+  Response Behavior Classifier used by a TestRun.
+  test_run.evaluator_reference_id is required.
 end note
 
 note right of http_endpoint_target
-  V4 adds HTTP_ENDPOINT persistence; V6 adds requested revision.
-  V5 requires an http/https URL with host-like text.
-  V7 adds the OpenAI-compatible model; V8 makes it NOT NULL.
-  Public API accepts HTTP_ENDPOINT only.
-end note
-
-note right of test_case
-  Public DELETE is physical.
-  Historical Snapshot values remain independent.
+  endpoint_url and OpenAI-compatible model are required.
+  requested_revision is optional metadata.
 end note
 
 note bottom of execution
-  PK limits each Snapshot to one row.
-  Only terminal result states are stored.
-end note
-
-note bottom of change_result
-  V3 removes existing rows.
-  Single-target TestRun creates no new rows.
+  A successful execution stores both the AI Application response
+  and the normalized classifier verdict ALLOW/BLOCK.
 end note
 
 note bottom of quality_gate
@@ -234,14 +207,10 @@ note bottom of quality_gate
 end note
 
 legend left
-  Current TestCase → TestSuite uses ON DELETE RESTRICT.
+  This diagram is the current physical schema created by Flyway V1.
+  TestCase → TestSuite uses ON DELETE RESTRICT.
   Snapshot source and TestRun suite IDs are historical scalars without FKs.
-  Outbox has no test_run_id column; its payload
-  carries the immutable event identifiers.
-  Claim relations are technical leases, not Domain IDs
-  or Aggregate Repositories.
-  Diagram reflects Flyway V1 through V13, including legacy physical tables.
-  See guardbench-current-model-erd.puml for the active model without legacy artifacts.
+  Claim relations are technical leases, not Domain IDs or Aggregate Repositories.
 endlegend
 
 @enduml
