@@ -266,15 +266,24 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
 
     private void insertTestRun(long id, long suiteId) {
         String targetReference = "target-ref-" + id;
-        jdbcTemplate.update("INSERT INTO target_reference(reference_id, target_type) VALUES (?, 'BEDROCK_GUARDRAIL')",
+        String evaluatorReference = "evaluator-ref-" + id;
+        jdbcTemplate.update("INSERT INTO target_reference(reference_id, target_type) VALUES (?, 'HTTP_ENDPOINT')",
                 targetReference);
+        jdbcTemplate.update("""
+                INSERT INTO http_endpoint_target(reference_id, endpoint_url, model)
+                VALUES (?, 'https://example.com/v1/chat/completions', 'test-model')
+                """, targetReference);
+        jdbcTemplate.update("""
+                INSERT INTO evaluator_reference(reference_id, provider_code, model_id)
+                VALUES (?, 'SAGEMAKER', 'classifier-endpoint')
+                """, evaluatorReference);
         jdbcTemplate.update("""
                 INSERT INTO test_run (
                     id, test_suite_id, status, test_case_count, processed_test_case_count,
-                    target_reference_id, execution_outcome,
+                    target_reference_id, evaluator_reference_id, execution_outcome,
                     created_at, started_at, completed_at, updated_at)
-                VALUES (?, ?, 'FINISHED', 1, 1, ?, 'COMPLETED', ?, ?, ?, ?)
-                """, id, suiteId, targetReference,
+                VALUES (?, ?, 'FINISHED', 1, 1, ?, ?, 'COMPLETED', ?, ?, ?, ?)
+                """, id, suiteId, targetReference, evaluatorReference,
                 Timestamp.from(T0), Timestamp.from(T0), Timestamp.from(T0), Timestamp.from(T0));
     }
 
@@ -357,5 +366,4 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
                 VALUES (?, 'NOT_STARTED')
                 """, snapshotId);
     }
-
 }
