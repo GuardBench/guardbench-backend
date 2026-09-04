@@ -1582,6 +1582,7 @@ components:
           items: { $ref: '#/components/schemas/TestRunResultItemRes' }
         page: { $ref: '#/components/schemas/PageMetaRes' }
         facets:
+          type: object
           allOf:
             - $ref: '#/components/schemas/TestRunResultFacetsRes'
           nullable: true

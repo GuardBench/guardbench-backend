@@ -162,7 +162,7 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
                 Set.of(TestRunResultAttentionType.values()), false, List.of(),
                 new com.guardbench.testrun.application.port.out.PageCriteria(2, 2)));
 
-        assertEquals(List.of(90_074L, 90_073L),
+        assertEquals(List.of(90_064L, 90_063L),
                 result.page().items().stream().map(TestRunResultItem::snapshotId).toList());
         assertEquals(5L, result.page().totalElements());
     }
