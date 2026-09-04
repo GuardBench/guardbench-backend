@@ -121,13 +121,13 @@ class PerformanceRunnerTest(unittest.TestCase):
                     ecs_client=FailingEcs(), rds_client=object(), sagemaker_client=object()
                 ).collect()
 
-    def test_small_profile_is_valid_and_does_not_embed_dataset(self):
+    def test_smoke_profile_is_valid_and_does_not_embed_dataset(self):
         with patch.dict(os.environ, {
             "PERF_TARGET_URL": "https://target.example.test/v1/chat/completions",
             "PERF_TARGET_MODEL": "test-model",
             "PERF_TARGET_REVISION": "test-revision",
         }, clear=True):
-            profile = load_profile(ROOT / "profiles/small.yaml")
+            profile = load_profile(ROOT / "profiles/smoke.yaml")
 
         self.assertEqual("SMOKE", profile["test"]["type"])
         self.assertNotIn("dataset", profile)
@@ -163,7 +163,7 @@ class PerformanceRunnerTest(unittest.TestCase):
     def test_missing_profile_target_is_rejected(self):
         with patch.dict(os.environ, {}, clear=True):
             with self.assertRaises(ConfigurationError):
-                load_profile(ROOT / "profiles/small.yaml")
+                load_profile(ROOT / "profiles/smoke.yaml")
 
     def test_reset_requires_all_safety_guards(self):
         with self.assertRaises(ConfigurationError):
@@ -310,18 +310,18 @@ class PerformanceRunnerTest(unittest.TestCase):
                 (result_dir / filename).write_text("{}", encoding="utf-8")
             client = FakeS3()
 
-            upload_result_directory(result_dir, "performance-results", "small-123", s3_client=client)
+            upload_result_directory(result_dir, "performance-results", "smoke-123", s3_client=client)
 
         self.assertEqual(len(RESULT_FILENAMES), len(client.calls))
         self.assertEqual(
-            ("result.json", "performance-results", "performance/results/small-123/result.json"),
+            ("result.json", "performance-results", "performance/results/smoke-123/result.json"),
             client.calls[-2],
         )
 
     def test_result_upload_rejects_incomplete_runs(self):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaises(ResultUploadError):
-                upload_result_directory(Path(directory), "performance-results", "small-123", s3_client=object())
+                upload_result_directory(Path(directory), "performance-results", "smoke-123", s3_client=object())
 
     def test_verify_runtime_checks_container_contract_inputs(self):
         verify_runtime = (ROOT.parent / "bin" / "verify-runtime").read_text(encoding="utf-8")
@@ -333,7 +333,7 @@ class PerformanceRunnerTest(unittest.TestCase):
         self.assertIn("javac -version", verify_runtime)
         self.assertIn("bin/run-performance", verify_runtime)
         self.assertIn("src/main/resources/db/migration", verify_runtime)
-        self.assertIn("performance/profiles/small.yaml", verify_runtime)
+        self.assertIn("performance/profiles/smoke.yaml", verify_runtime)
         self.assertIn("performance/datasets/baseline-v1.yaml", verify_runtime)
 
     def test_container_launcher_uses_image_runtime(self):

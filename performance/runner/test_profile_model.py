@@ -28,11 +28,9 @@ class PerformanceProfileModelTest(unittest.TestCase):
         self.assertEqual(300, profile["workload"]["completion_timeout_seconds"])
         self.assertEqual(2, profile["workload"]["polling_interval_seconds"])
 
-    def test_small_alias_does_not_create_a_dataset_size_axis_in_profile(self):
+    def test_smoke_profile_does_not_create_dataset_size_or_capacity_axis(self):
         smoke = self._load("smoke.yaml")
-        small = self._load("small.yaml")
 
-        self.assertEqual(smoke, small)
         self.assertNotIn("dataset_size", smoke)
         self.assertNotIn("infrastructure_capacity", smoke)
 
