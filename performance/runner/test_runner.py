@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from performance.runner.acceptance import evaluate
-from performance.runner.config import ConfigurationError, load_profile
+from performance.runner.config import ConfigurationError, load_profile, load_yaml
 from performance.runner.dataset import load_seed_payload
 from performance.runner.cli import K6_THRESHOLD_FAILURE_EXIT_CODE, RunnerError, reset_database, run_k6
 from performance.runner.safety import migration_jdbc_url, validate_reset_safety
@@ -55,6 +55,28 @@ class PerformanceRunnerTest(unittest.TestCase):
 
         self.assertEqual("SMOKE", profile["test"]["type"])
         self.assertNotIn("dataset", profile)
+        self.assertNotIn("evaluation_profile", profile["target"])
+
+    def test_classifier_metrics_are_declared_with_endpoint_dimensions(self):
+        with patch.dict(os.environ, {
+            "PERF_SAGEMAKER_ENDPOINT_NAME": "classifier-endpoint",
+            "PERF_SAGEMAKER_VARIANT_NAME": "AllTraffic",
+        }, clear=False):
+            metrics = load_yaml(ROOT / "metrics/aws.yaml")["metrics"]
+
+        by_id = {metric["id"]: metric for metric in metrics}
+        expected = {
+            "sagemaker_invocations",
+            "sagemaker_model_latency",
+            "sagemaker_overhead_latency",
+            "sagemaker_invocation_4xx_errors",
+            "sagemaker_invocation_5xx_errors",
+        }
+        self.assertTrue(expected.issubset(by_id))
+        for metric_id in expected:
+            self.assertEqual("AWS/SageMaker", by_id[metric_id]["namespace"])
+            self.assertEqual("classifier-endpoint", by_id[metric_id]["dimensions"]["EndpointName"])
+            self.assertEqual("AllTraffic", by_id[metric_id]["dimensions"]["VariantName"])
 
     def test_baseline_dataset_has_78_cases(self):
         payload, count = load_seed_payload(ROOT / "datasets/baseline-v1.yaml")
@@ -115,11 +137,36 @@ class PerformanceRunnerTest(unittest.TestCase):
             {"id": "ecs_cpu_utilization", "values": []},
             {"id": "sqs_resolve_visible", "values": []},
             {"id": "rds_cpu_utilization", "values": []},
+            {"id": "sagemaker_invocations", "values": []},
         ]}
 
         result = evaluate(acceptance_profile(), passing_summary(), {"passed": True, "duration_seconds": 1}, [], aws_metrics)
 
         self.assertEqual("FAIL", result["status"])
+
+    def test_acceptance_requires_classifier_metrics(self):
+        aws_metrics = {"status": "COLLECTED", "metrics": [
+            {"id": "ecs_cpu_utilization", "values": [1]},
+            {"id": "sqs_resolve_visible", "values": [1]},
+            {"id": "rds_cpu_utilization", "values": [1]},
+        ]}
+
+        result = evaluate(acceptance_profile(), passing_summary(), {"passed": True, "duration_seconds": 1}, [], aws_metrics)
+
+        self.assertEqual("FAIL", result["status"])
+        self.assertIn("SageMaker", next(check for check in result["checks"] if check["name"] == "aws.metrics_collected")["expected"])
+
+    def test_acceptance_passes_with_classifier_metrics(self):
+        aws_metrics = {"status": "COLLECTED", "metrics": [
+            {"id": "ecs_cpu_utilization", "values": [1]},
+            {"id": "sqs_resolve_visible", "values": [1]},
+            {"id": "rds_cpu_utilization", "values": [1]},
+            {"id": "sagemaker_invocations", "values": [78]},
+        ]}
+
+        result = evaluate(acceptance_profile(), passing_summary(), {"passed": True, "duration_seconds": 1}, [], aws_metrics)
+
+        self.assertEqual("PASS", result["status"])
 
     def test_migration_jdbc_url_is_derived_from_reset_target(self):
         jdbc_url = migration_jdbc_url({
@@ -142,6 +189,7 @@ class PerformanceRunnerTest(unittest.TestCase):
             {"id": "ecs_cpu_utilization", "values": [1]},
             {"id": "sqs_resolve_visible", "values": [1]},
             {"id": "rds_cpu_utilization", "values": [1]},
+            {"id": "sagemaker_invocations", "values": [1]},
         ]}
 
         result = evaluate(acceptance_profile(), passing_summary(), {"passed": True, "duration_seconds": 1}, [],

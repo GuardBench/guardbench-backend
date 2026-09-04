@@ -55,9 +55,10 @@ def evaluate(profile: dict[str, Any], summary: dict[str, Any],
         for metric in collected_metrics
     )
     checks.append({"name": "aws.metrics_collected", "actual": aws_metrics.get("status"),
-                   "expected": "COLLECTED with ECS/SQS/RDS datapoints",
+                   "expected": "COLLECTED with ECS/SQS/RDS/SageMaker datapoints",
                    "passed": aws_metrics.get("status") == "COLLECTED"
-                   and has_datapoint("ecs_") and has_datapoint("sqs_") and has_datapoint("rds_")})
+                   and has_datapoint("ecs_") and has_datapoint("sqs_") and has_datapoint("rds_")
+                   and has_datapoint("sagemaker_")})
     checks.append({"name": "k6.thresholds", "actual": "FAIL" if k6_threshold_failed else "PASS",
                    "expected": "PASS", "passed": not k6_threshold_failed})
     return {"status": "PASS" if all(check["passed"] for check in checks) else "FAIL", "checks": checks}

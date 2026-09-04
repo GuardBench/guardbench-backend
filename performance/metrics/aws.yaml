@@ -102,3 +102,43 @@ metrics:
     period_seconds: 60
     dimensions:
       DBInstanceIdentifier: "${PERF_RDS_INSTANCE_ID}"
+  - id: sagemaker_invocations
+    namespace: AWS/SageMaker
+    metric_name: Invocations
+    statistic: Sum
+    period_seconds: 60
+    dimensions:
+      EndpointName: "${PERF_SAGEMAKER_ENDPOINT_NAME}"
+      VariantName: "${PERF_SAGEMAKER_VARIANT_NAME}"
+  - id: sagemaker_model_latency
+    namespace: AWS/SageMaker
+    metric_name: ModelLatency
+    statistic: Average
+    period_seconds: 60
+    dimensions:
+      EndpointName: "${PERF_SAGEMAKER_ENDPOINT_NAME}"
+      VariantName: "${PERF_SAGEMAKER_VARIANT_NAME}"
+  - id: sagemaker_overhead_latency
+    namespace: AWS/SageMaker
+    metric_name: OverheadLatency
+    statistic: Average
+    period_seconds: 60
+    dimensions:
+      EndpointName: "${PERF_SAGEMAKER_ENDPOINT_NAME}"
+      VariantName: "${PERF_SAGEMAKER_VARIANT_NAME}"
+  - id: sagemaker_invocation_4xx_errors
+    namespace: AWS/SageMaker
+    metric_name: Invocation4XXErrors
+    statistic: Sum
+    period_seconds: 60
+    dimensions:
+      EndpointName: "${PERF_SAGEMAKER_ENDPOINT_NAME}"
+      VariantName: "${PERF_SAGEMAKER_VARIANT_NAME}"
+  - id: sagemaker_invocation_5xx_errors
+    namespace: AWS/SageMaker
+    metric_name: Invocation5XXErrors
+    statistic: Sum
+    period_seconds: 60
+    dimensions:
+      EndpointName: "${PERF_SAGEMAKER_ENDPOINT_NAME}"
+      VariantName: "${PERF_SAGEMAKER_VARIANT_NAME}"
