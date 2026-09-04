@@ -25,3 +25,12 @@
 `small.yaml`은 기존 Runner/문서 참조와의 호환을 위해 같은 설정을 유지하는 alias다. 새 실행과 새 문서는 `smoke.yaml`을 사용한다. 여기서 `small`은 Dataset Size를 뜻하지 않는다.
 
 LOAD/PEAK/STRESS/SOAK의 구체적인 workload 값과 Dataset Size의 `SMALL/MEDIUM/LARGE` 경계는 사전에 고정하지 않는다. Smoke 결과와 이후 단계적 실험 결과를 보고 정한다. 새 Profile은 Runner 핵심 로직에 타입별 분기문을 추가하지 않고 동일 schema로 추가한다.
+
+## 실험 진행 규칙
+
+1. Dataset과 Infrastructure Capacity를 고정한 상태에서 Smoke로 실행 경계를 검증한다.
+2. 다음 Workload 값은 직전 실행의 completion time, SQS backlog/drain, ECS/RDS/SageMaker 지표를 근거로 정한다.
+3. Workload 증가에 따른 포화 구간을 찾은 뒤, 동일 Dataset/Workload를 유지하고 Infrastructure Capacity만 변경해 효과를 비교한다.
+4. Dataset Size 자체의 영향을 보고 싶을 때만 Dataset을 별도 축으로 변경한다.
+
+즉 `Workload 증가`와 `Infrastructure Capacity 증가`를 같은 실험에서 동시에 바꾸지 않는다. 그래야 병목 원인을 구분할 수 있다.
