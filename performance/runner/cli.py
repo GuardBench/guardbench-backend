@@ -137,7 +137,6 @@ def _wait_for_drain(api: ApiClient, inspector: QueueInspector, source_urls: list
 def _k6_environment(profile: dict[str, Any], run_id: str, suite_id: int, base_url: str) -> dict[str, str]:
     workload = profile["workload"]
     target = profile["target"]
-    evaluation = target["evaluation_profile"]
     api = profile["acceptance"]["api"]
     completion = profile["acceptance"]["completion"]
     return {
@@ -146,8 +145,6 @@ def _k6_environment(profile: dict[str, Any], run_id: str, suite_id: int, base_ur
         "PERF_TARGET_URL": target["identifier"],
         "PERF_TARGET_MODEL": target["model"],
         "PERF_TARGET_REVISION": target.get("revision", ""),
-        "PERF_EVALUATION_CHECKS": ",".join(evaluation["checks"]),
-        "PERF_EVALUATION_STRICTNESS": evaluation["strictness"],
         "PERF_RUN_ID": run_id,
         "PERF_CONCURRENT_TEST_RUNS": str(workload["concurrent_test_runs"]),
         "PERF_RAMP_UP_SECONDS": str(workload["ramp_up_seconds"]),
