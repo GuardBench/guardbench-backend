@@ -5,7 +5,6 @@ import java.util.Objects;
 
 import com.guardbench.testrun.domain.TestRunExecutionOutcome;
 import com.guardbench.testrun.domain.TestRunStatus;
-import com.guardbench.testrun.domain.EvaluationProfile;
 
 public record TestRunDetail(
         long id,
@@ -14,7 +13,6 @@ public record TestRunDetail(
         int testCaseCount,
         TestRunProgress progress,
         TargetReferenceView target,
-        EvaluationProfile evaluationProfile,
         TestRunExecutionOutcome executionOutcome,
         QualityGateView qualityGate,
         Instant createdAt,

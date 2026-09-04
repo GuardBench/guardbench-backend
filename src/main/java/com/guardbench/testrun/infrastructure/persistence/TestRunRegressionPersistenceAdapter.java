@@ -13,7 +13,6 @@ import com.guardbench.testrun.application.port.out.TargetReferenceView;
 import com.guardbench.testrun.application.port.out.TestRunRegressionSnapshot;
 import com.guardbench.testrun.application.port.out.TestRunRegressionView;
 import com.guardbench.testrun.domain.Action;
-import com.guardbench.testrun.domain.EvaluationProfile;
 import com.guardbench.testrun.domain.Severity;
 import com.guardbench.testrun.domain.TestRunStatus;
 
@@ -30,17 +29,16 @@ class TestRunRegressionPersistenceAdapter implements LoadTestRunRegressionPort {
             SELECT r.id, r.test_suite_id, r.status, r.target_reference_id, tr.target_type,
                    COALESCE(bg.guardrail_identifier, he.endpoint_url) AS target_identifier,
                    COALESCE(bg.requested_revision, he.requested_revision) AS target_revision,
-                   he.model AS target_model, r.evaluation_checks, r.evaluation_strictness,
+                   he.model AS target_model,
                    r.completed_at,
-                   CASE WHEN er.reference_id IS NULL OR be.reference_id IS NULL THEN NULL
-                        ELSE er.evaluator_type || '|' || be.guardrail_identifier || '|' || be.guardrail_revision
+                   CASE WHEN er.reference_id IS NULL THEN NULL
+                        ELSE er.provider_code || '|' || er.model_id
                    END AS evaluator_config_key
             FROM test_run r
             JOIN target_reference tr ON tr.reference_id = r.target_reference_id
             LEFT JOIN bedrock_guardrail_target bg ON bg.reference_id = tr.reference_id
             LEFT JOIN http_endpoint_target he ON he.reference_id = tr.reference_id
             LEFT JOIN evaluator_reference er ON er.reference_id = r.evaluator_reference_id
-            LEFT JOIN bedrock_guardrail_evaluator be ON be.reference_id = er.reference_id
             WHERE r.id = ?
             """;
 
@@ -48,35 +46,27 @@ class TestRunRegressionPersistenceAdapter implements LoadTestRunRegressionPort {
             SELECT r.id, r.test_suite_id, r.status, r.target_reference_id, tr.target_type,
                    COALESCE(bg.guardrail_identifier, he.endpoint_url) AS target_identifier,
                    COALESCE(bg.requested_revision, he.requested_revision) AS target_revision,
-                   he.model AS target_model, r.evaluation_checks, r.evaluation_strictness,
+                   he.model AS target_model,
                    r.completed_at,
-                   er.evaluator_type || '|' || be.guardrail_identifier || '|' || be.guardrail_revision
-                       AS evaluator_config_key
+                   er.provider_code || '|' || er.model_id AS evaluator_config_key
             FROM test_run r
             JOIN target_reference tr ON tr.reference_id = r.target_reference_id
             LEFT JOIN bedrock_guardrail_target bg ON bg.reference_id = tr.reference_id
             LEFT JOIN http_endpoint_target he ON he.reference_id = tr.reference_id
             JOIN evaluator_reference er ON er.reference_id = r.evaluator_reference_id
-            JOIN bedrock_guardrail_evaluator be ON be.reference_id = er.reference_id
             WHERE r.id <> ?
               AND r.status = 'FINISHED'
               AND r.test_case_count = (SELECT test_case_count FROM test_run WHERE id = ?)
-              AND er.evaluator_type = (
-                  SELECT er0.evaluator_type
+              AND er.provider_code = (
+                  SELECT er0.provider_code
                   FROM test_run r0
                   JOIN evaluator_reference er0 ON er0.reference_id = r0.evaluator_reference_id
                   WHERE r0.id = ?
               )
-              AND be.guardrail_identifier = (
-                  SELECT be0.guardrail_identifier
+              AND er.model_id = (
+                  SELECT er0.model_id
                   FROM test_run r0
-                  JOIN bedrock_guardrail_evaluator be0 ON be0.reference_id = r0.evaluator_reference_id
-                  WHERE r0.id = ?
-              )
-              AND be.guardrail_revision = (
-                  SELECT be0.guardrail_revision
-                  FROM test_run r0
-                  JOIN bedrock_guardrail_evaluator be0 ON be0.reference_id = r0.evaluator_reference_id
+                  JOIN evaluator_reference er0 ON er0.reference_id = r0.evaluator_reference_id
                   WHERE r0.id = ?
               )
               AND (r.completed_at, r.id) < (
@@ -151,23 +141,18 @@ class TestRunRegressionPersistenceAdapter implements LoadTestRunRegressionPort {
                 COMPARABLE_SELECT,
                 this::mapRun,
                 testRunId, testRunId, testRunId, testRunId, testRunId,
-                testRunId, testRunId, testRunId, page.size(), page.offset());
+                testRunId, testRunId, page.size(), page.offset());
         String countSql = "SELECT COUNT(*) FROM (" + COMPARABLE_SELECT
                 .replace("LIMIT ? OFFSET ?", "") + ") candidates";
         long totalElements = jdbcTemplate.queryForObject(
                 countSql,
                 Long.class,
                 testRunId, testRunId, testRunId, testRunId, testRunId,
-                testRunId, testRunId, testRunId);
+                testRunId, testRunId);
         return PageResult.of(items, page, totalElements);
     }
 
     private TestRunRegressionView mapRun(ResultSet resultSet, int rowNumber) throws SQLException {
-        String checks = resultSet.getString("evaluation_checks");
-        String strictness = resultSet.getString("evaluation_strictness");
-        EvaluationProfile profile = checks == null
-                ? null
-                : new EvaluationProfile(List.of(checks.split(",")), strictness);
         return new TestRunRegressionView(
                 resultSet.getLong("id"),
                 resultSet.getLong("test_suite_id"),
@@ -178,7 +163,6 @@ class TestRunRegressionPersistenceAdapter implements LoadTestRunRegressionPort {
                         resultSet.getString("target_identifier"),
                         resultSet.getString("target_revision"),
                         resultSet.getString("target_model")),
-                profile,
                 resultSet.getString("evaluator_config_key"),
                 toInstant(resultSet, "completed_at"));
     }

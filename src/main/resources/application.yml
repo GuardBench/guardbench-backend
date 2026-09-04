@@ -27,17 +27,6 @@ spring:
 # SQS 런타임 설정 (DefaultCredentialsProvider 체인 사용, Spring Cloud AWS 없음)
 # SQS 빈 활성화: guardbench.sqs.enabled=true일 때만 SqsClient를 생성한다.
 guardbench:
-  # MVP operator catalog: 7 canonical entries (PII-only collapses strictness).
-  # Identifiers and revisions are environment-overridable for pre-provisioned immutable Guardrails.
-  evaluator-catalog:
-    entries:
-      - { checks: [PII_LEAKAGE], strictness: STANDARD, guardrail-identifier: "${EVALUATOR_CATALOG_G1_ID:ddsaa7puiszg}", guardrail-revision: "${EVALUATOR_CATALOG_G1_REVISION:1}" }
-      - { checks: [HARMFUL_CONTENT], strictness: RELAXED, guardrail-identifier: "${EVALUATOR_CATALOG_G2_ID:0vkh7a4wkphg}", guardrail-revision: "${EVALUATOR_CATALOG_G2_RELAXED_REVISION:1}" }
-      - { checks: [HARMFUL_CONTENT], strictness: STANDARD, guardrail-identifier: "${EVALUATOR_CATALOG_G2_ID:0vkh7a4wkphg}", guardrail-revision: "${EVALUATOR_CATALOG_G2_STANDARD_REVISION:2}" }
-      - { checks: [HARMFUL_CONTENT], strictness: STRICT, guardrail-identifier: "${EVALUATOR_CATALOG_G2_ID:0vkh7a4wkphg}", guardrail-revision: "${EVALUATOR_CATALOG_G2_STRICT_REVISION:3}" }
-      - { checks: [PII_LEAKAGE, HARMFUL_CONTENT], strictness: RELAXED, guardrail-identifier: "${EVALUATOR_CATALOG_G3_ID:571rwjlw2ozk}", guardrail-revision: "${EVALUATOR_CATALOG_G3_RELAXED_REVISION:1}" }
-      - { checks: [PII_LEAKAGE, HARMFUL_CONTENT], strictness: STANDARD, guardrail-identifier: "${EVALUATOR_CATALOG_G3_ID:571rwjlw2ozk}", guardrail-revision: "${EVALUATOR_CATALOG_G3_STANDARD_REVISION:2}" }
-      - { checks: [PII_LEAKAGE, HARMFUL_CONTENT], strictness: STRICT, guardrail-identifier: "${EVALUATOR_CATALOG_G3_ID:571rwjlw2ozk}", guardrail-revision: "${EVALUATOR_CATALOG_G3_STRICT_REVISION:3}" }
   sqs:
     enabled: ${SQS_ENABLED:false}
     region: ${AWS_REGION:ap-northeast-2}
@@ -64,10 +53,25 @@ guardbench:
     # 성능 환경의 승인된 internal ALB hostname만 정확히 일치시켜 private 주소를 허용한다.
     # 와일드카드와 private IP literal은 허용하지 않는다.
     allowed-private-hostnames: []
-  # Bedrock Provider 호출 한도 (ADR 0005: 재시도 포함 전체 15초, claim lease 45초 미만)
-  bedrock:
+  # SageMaker Runtime Provider 호출 한도 (ADR 0005: 재시도 포함 전체 15초, claim lease 45초 미만)
+  # 실측 latency(P95 200ms 이하)는 15초 한도보다 훨씬 낮아 충분한 마진을 갖는다.
+  # max-attempts는 1(재시도 없음)로 고정한다. Provider business retry(PROVIDER_UNAVAILABLE/
+  # PROVIDER_TIMEOUT)는 Worker claim retry(ExecuteTestRunService.MAX_EXECUTION_ATTEMPTS, 최대
+  # 3회) 한 계층에만 위임하며, SDK 자체 재시도까지 함께 켜면 실제 호출 횟수가 두 값의 곱으로
+  # 증폭된다.
+  sagemaker:
     region: ${AWS_REGION:ap-northeast-2}
-    endpoint-override: ${BEDROCK_ENDPOINT_OVERRIDE:}
+    endpoint-override: ${SAGEMAKER_ENDPOINT_OVERRIDE:}
     api-call-timeout-ms: 15000
     api-call-attempt-timeout-ms: 5000
-    max-attempts: 3
+    max-attempts: 1
+    # Response Behavior Classifier (#173): 최종 endpoint name/system prompt는 별도 실험으로 확정
+    # 전이며 이 값은 배포 시 주입하는 placeholder다. endpoint-name을 비워두면 애플리케이션은 정상
+    # 기동하지만 classifier를 실제로 사용하는 시점(TestRun 접수, Worker evaluate 호출)에 실패한다.
+    classifier:
+      # 실험에서 사용한 이름 예시: guardbench-qwen3-4b-endpoint (검증 후 삭제됨, 고정값 아님)
+      endpoint-name: ${SAGEMAKER_CLASSIFIER_ENDPOINT_NAME:}
+      # classifier system prompt(v1)는 별도 실험 결과 값이며 이 리포지토리에는 원문을 포함하지 않는다.
+      system-prompt: ${SAGEMAKER_CLASSIFIER_SYSTEM_PROMPT:}
+      # user-prompt-template을 비워두면 이슈 #173이 명시한 기본 형식(USER REQUEST / ASSISTANT RESPONSE)을 사용한다.
+      user-prompt-template: ${SAGEMAKER_CLASSIFIER_USER_PROMPT_TEMPLATE:}

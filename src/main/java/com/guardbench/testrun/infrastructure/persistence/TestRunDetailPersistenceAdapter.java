@@ -41,7 +41,7 @@ class TestRunDetailPersistenceAdapter implements LoadTestRunDetailPort {
                    COALESCE(bg.guardrail_identifier, he.endpoint_url) AS target_identifier,
                    COALESCE(bg.requested_revision, he.requested_revision) AS target_revision,
                    he.model AS target_model,
-                   r.evaluation_checks, r.evaluation_strictness, r.execution_outcome,
+                   r.execution_outcome,
                    r.created_at, r.started_at, r.completed_at, r.updated_at,
                    qgr.gate_status, qgr.assertion_pass_rate, qgr.execution_success_rate
             FROM test_run r
@@ -80,19 +80,12 @@ class TestRunDetailPersistenceAdapter implements LoadTestRunDetailPort {
                         resultSet.getString("target_identifier"),
                         resultSet.getString("target_revision"),
                         resultSet.getString("target_model")),
-                profileOf(resultSet),
                 executionOutcome == null ? null : TestRunExecutionOutcome.valueOf(executionOutcome),
                 mapQualityGate(resultSet),
                 toInstant(resultSet, "created_at"),
                 toInstant(resultSet, "started_at"),
                 toInstant(resultSet, "completed_at"),
                 toInstant(resultSet, "updated_at"));
-    }
-
-    private static com.guardbench.testrun.domain.EvaluationProfile profileOf(ResultSet resultSet) throws SQLException {
-        String checks = resultSet.getString("evaluation_checks");
-        String strictness = resultSet.getString("evaluation_strictness");
-        return checks == null ? null : new com.guardbench.testrun.domain.EvaluationProfile(List.of(checks.split(",")), strictness);
     }
 
     private QualityGateView mapQualityGate(ResultSet resultSet) throws SQLException {

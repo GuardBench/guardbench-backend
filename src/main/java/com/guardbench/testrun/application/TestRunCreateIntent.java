@@ -11,7 +11,6 @@ public record TestRunCreateIntent(
         String targetType,
         String targetIdentifier,
         String targetRevision,
-        String targetModel,
-        com.guardbench.testrun.domain.EvaluationProfile evaluationProfile
+        String targetModel
 ) {
 }

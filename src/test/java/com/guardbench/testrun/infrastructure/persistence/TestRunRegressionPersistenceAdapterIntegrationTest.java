@@ -80,23 +80,19 @@ class TestRunRegressionPersistenceAdapterIntegrationTest {
                 """, id, Timestamp.from(T0), Timestamp.from(T0));
     }
 
-    private void insertRun(long id, long suiteId, String evaluatorId, String evaluatorIdentifier, String completedAt) {
+    private void insertRun(long id, long suiteId, String evaluatorId, String modelId, String completedAt) {
         String targetId = "target-" + id;
         jdbcTemplate.update("INSERT INTO target_reference(reference_id, target_type) VALUES (?, 'HTTP_ENDPOINT')", targetId);
         jdbcTemplate.update("INSERT INTO http_endpoint_target(reference_id, endpoint_url, model) VALUES (?, ?, 'model')",
                 targetId, "https://example.com/" + id);
-        jdbcTemplate.update("INSERT INTO evaluator_reference(reference_id, evaluator_type) VALUES (?, 'BEDROCK_GUARDRAIL')",
-                evaluatorId);
-        jdbcTemplate.update("""
-                INSERT INTO bedrock_guardrail_evaluator(reference_id, guardrail_identifier, guardrail_revision)
-                VALUES (?, ?, '7')
-                """, evaluatorId, evaluatorIdentifier);
+        jdbcTemplate.update("INSERT INTO evaluator_reference(reference_id, provider_code, model_id) VALUES (?, 'BEDROCK', ?)",
+                evaluatorId, modelId);
         jdbcTemplate.update("""
                 INSERT INTO test_run (
                     id, test_suite_id, status, test_case_count, processed_test_case_count,
-                    target_reference_id, evaluation_checks, evaluation_strictness, evaluator_reference_id,
+                    target_reference_id, evaluator_reference_id,
                     execution_outcome, created_at, started_at, completed_at, updated_at)
-                VALUES (?, ?, 'FINISHED', 1, 1, ?, 'PII_LEAKAGE', 'STANDARD', ?, 'COMPLETED', ?, ?, ?, ?)
+                VALUES (?, ?, 'FINISHED', 1, 1, ?, ?, 'COMPLETED', ?, ?, ?, ?)
                 """, id, suiteId, targetId, evaluatorId, Timestamp.from(T0), Timestamp.from(T0),
                 Timestamp.from(Instant.parse(completedAt)), Timestamp.from(Instant.parse(completedAt)));
     }

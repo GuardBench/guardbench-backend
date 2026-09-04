@@ -48,16 +48,12 @@ import com.guardbench.testsupport.PostgresTestConfiguration;
 
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.regions.Region;
-import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
-import software.amazon.awssdk.services.bedrockruntime.model.ApplyGuardrailRequest;
-import software.amazon.awssdk.services.bedrockruntime.model.ApplyGuardrailResponse;
-import software.amazon.awssdk.services.bedrockruntime.model.GuardrailAction;
-import software.amazon.awssdk.services.bedrockruntime.model.GuardrailAssessment;
-import software.amazon.awssdk.services.bedrockruntime.model.GuardrailContentFilter;
-import software.amazon.awssdk.services.bedrockruntime.model.GuardrailContentPolicyAction;
-import software.amazon.awssdk.services.bedrockruntime.model.GuardrailContentPolicyAssessment;
-import software.amazon.awssdk.services.bedrockruntime.model.ResourceNotFoundException;
+import software.amazon.awssdk.services.sagemakerruntime.SageMakerRuntimeClient;
+import software.amazon.awssdk.services.sagemakerruntime.model.InvokeEndpointRequest;
+import software.amazon.awssdk.services.sagemakerruntime.model.InvokeEndpointResponse;
+import software.amazon.awssdk.services.sagemakerruntime.model.ValidationErrorException;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
 import software.amazon.awssdk.services.sqs.model.DeleteMessageRequest;
@@ -70,7 +66,7 @@ import tools.jackson.databind.ObjectMapper;
  * 실제 Spring Boot HTTP API부터 PostgreSQL, Outbox, LocalStack SQS, Worker, Target, Evaluator와
  * Finalization까지 하나의 TestRun pipeline을 검증한다.
  *
- * <p>Bedrock은 LocalStack이 제공하지 않으므로 실제 Adapter의 외부 SDK client만 대체한다.
+ * <p>SageMaker Runtime은 LocalStack이 제공하지 않으므로 실제 Adapter의 외부 SDK client만 대체한다.
  */
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -82,7 +78,9 @@ import tools.jackson.databind.ObjectMapper;
                 "guardbench.sqs.polling.delay-ms=25",
                 "guardbench.sqs.outbox.delay-ms=25",
                 "guardbench.sqs.outbox.initial-delay-ms=0",
-                "guardbench.http-endpoint.allow-private-addresses=true"
+                "guardbench.http-endpoint.allow-private-addresses=true",
+                "guardbench.sagemaker.classifier.endpoint-name=local-e2e-classifier-endpoint",
+                "guardbench.sagemaker.classifier.system-prompt=local-e2e classifier system prompt"
         })
 @Import(PostgresTestConfiguration.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -129,7 +127,7 @@ class TestRunLocalE2eTest {
     private SqsClient applicationSqsClient;
 
     @MockitoBean
-    private BedrockRuntimeClient bedrockRuntimeClient;
+    private SageMakerRuntimeClient sageMakerRuntimeClient;
 
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(HTTP_TIMEOUT)
@@ -140,7 +138,7 @@ class TestRunLocalE2eTest {
     void resetFixture() {
         drainQueues();
         new TestRunPersistenceFixture(jdbcTemplate).clearPersistenceTables();
-        reset(bedrockRuntimeClient);
+        reset(sageMakerRuntimeClient);
     }
 
     @AfterEach
@@ -196,7 +194,7 @@ class TestRunLocalE2eTest {
         assertThat(item.has("naturalLanguageResponse")).isFalse();
 
         verifyApplicationRequest("safe input", 1);
-        verify(bedrockRuntimeClient).applyGuardrail(any(ApplyGuardrailRequest.class));
+        verify(sageMakerRuntimeClient).invokeEndpoint(any(InvokeEndpointRequest.class));
     }
 
     @Test
@@ -224,7 +222,7 @@ class TestRunLocalE2eTest {
         assertThat(result.path("data").path("items")).hasSize(2);
         verifyApplicationRequest("block input", 1);
         verifyApplicationRequest("allow input", 1);
-        verify(bedrockRuntimeClient, times(2)).applyGuardrail(any(ApplyGuardrailRequest.class));
+        verify(sageMakerRuntimeClient, times(2)).invokeEndpoint(any(InvokeEndpointRequest.class));
     }
 
     @Test
@@ -250,7 +248,7 @@ class TestRunLocalE2eTest {
         assertThat(item.path("error").path("code").asText()).isEqualTo("PROVIDER_RESPONSE_INVALID");
         assertThat(item.path("evaluatorVerdict").isNull()).isTrue();
         verifyApplicationRequest("malformed input", 1);
-        verifyNoInteractions(bedrockRuntimeClient);
+        verifyNoInteractions(sageMakerRuntimeClient);
     }
 
     @Test
@@ -258,8 +256,8 @@ class TestRunLocalE2eTest {
     void finishesWhenEvaluatorFails() throws Exception {
         startApplicationMockServer();
         registerApplicationExpectation("evaluator input", safeApplicationResponse());
-        when(bedrockRuntimeClient.applyGuardrail(any(ApplyGuardrailRequest.class)))
-                .thenThrow(ResourceNotFoundException.builder().message("provider detail must not leak").build());
+        when(sageMakerRuntimeClient.invokeEndpoint(any(InvokeEndpointRequest.class)))
+                .thenThrow(ValidationErrorException.builder().message("provider detail must not leak").build());
 
         long suiteId = createSuite("""
                 [{"name":"평가 실패","input":"evaluator input","expectedAction":"BLOCK","severity":"HIGH","category":"evaluator"}]
@@ -277,12 +275,12 @@ class TestRunLocalE2eTest {
         assertThat(detail.path("data").path("status").asText()).isEqualTo("FINISHED");
         assertThat(item.path("executionStatus").asText()).isEqualTo("FAILED");
         assertThat(item.path("error").path("stage").asText()).isEqualTo("EVALUATOR");
-        assertThat(item.path("error").path("code").asText()).isEqualTo("EVALUATOR_NOT_FOUND");
+        assertThat(item.path("error").path("code").asText()).isEqualTo("EVALUATOR_CONFIGURATION_INVALID");
         assertThat(item.path("assertionStatus").isNull()).isTrue();
         assertThat(item.path("evaluatorVerdict").isNull()).isTrue();
         assertThat(item.has("applicationResponse")).isFalse();
         assertThat(storedResponse).isEqualTo("safe response");
-        verify(bedrockRuntimeClient).applyGuardrail(any(ApplyGuardrailRequest.class));
+        verify(sageMakerRuntimeClient).invokeEndpoint(any(InvokeEndpointRequest.class));
     }
 
     private void startApplicationMockServer() {
@@ -330,29 +328,29 @@ class TestRunLocalE2eTest {
     }
 
     private void stubAllowEvaluator() {
-        when(bedrockRuntimeClient.applyGuardrail(any(ApplyGuardrailRequest.class)))
-                .thenReturn(ApplyGuardrailResponse.builder().action(GuardrailAction.NONE).build());
+        when(sageMakerRuntimeClient.invokeEndpoint(any(InvokeEndpointRequest.class)))
+                .thenReturn(classifierLabelResponse("COMPLY"));
     }
 
     private void stubEvaluatorByResponse() {
-        when(bedrockRuntimeClient.applyGuardrail(any(ApplyGuardrailRequest.class)))
+        when(sageMakerRuntimeClient.invokeEndpoint(any(InvokeEndpointRequest.class)))
                 .thenAnswer(invocation -> {
-                    ApplyGuardrailRequest request = invocation.getArgument(0);
-                    String response = request.content().getFirst().text().text();
-                    if (response.contains("blocked")) {
-                        return ApplyGuardrailResponse.builder()
-                                .action(GuardrailAction.GUARDRAIL_INTERVENED)
-                                .assessments(GuardrailAssessment.builder()
-                                        .contentPolicy(GuardrailContentPolicyAssessment.builder()
-                                                .filters(GuardrailContentFilter.builder()
-                                                        .action(GuardrailContentPolicyAction.BLOCKED)
-                                                        .build())
-                                                .build())
-                                        .build())
-                                .build();
+                    InvokeEndpointRequest request = invocation.getArgument(0);
+                    String classifierInput = request.body().asUtf8String();
+                    if (classifierInput.contains("blocked")) {
+                        return classifierLabelResponse("REFUSE");
                     }
-                    return ApplyGuardrailResponse.builder().action(GuardrailAction.NONE).build();
+                    return classifierLabelResponse("COMPLY");
                 });
+    }
+
+    private static InvokeEndpointResponse classifierLabelResponse(String label) {
+        String body = """
+                {"choices":[{"message":{"role":"assistant","content":"%s"},"finish_reason":"stop"}]}
+                """.formatted(label);
+        return InvokeEndpointResponse.builder()
+                .body(SdkBytes.fromUtf8String(body))
+                .build();
     }
 
     private long createSuite(String testCases) throws Exception {
@@ -368,8 +366,7 @@ class TestRunLocalE2eTest {
         String body = """
                 {
                   "testSuiteId":%d,
-                  "target":{"type":"HTTP_ENDPOINT","identifier":"%s/v1/chat/completions","model":"local-model","revision":"local"},
-                  "evaluationProfile":{"checks":["PII_LEAKAGE"],"strictness":"STANDARD"}
+                  "target":{"type":"HTTP_ENDPOINT","identifier":"%s/v1/chat/completions","model":"local-model","revision":"local"}
                 }
                 """.formatted(suiteId, applicationServerUrl());
         JsonNode response = send("POST", TEST_RUN_URL, body).bodyJson();

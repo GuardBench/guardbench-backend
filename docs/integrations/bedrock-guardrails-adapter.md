@@ -1,13 +1,20 @@
 # Bedrock Guardrail Evaluator Adapter 설계 근거
 
-> Status: APPROVED
+> Status: DEPRECATED
 > Owner: Backend
-> Last reviewed: 2026-09-01
+> Last reviewed: 2026-09-04
 > Canonical source: GitHub
 > Related: [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)
 > Related Issue: #116
+> Superseded by: [SageMaker Response Behavior Classifier Adapter 설계 근거](sagemaker-classifier-adapter.md), [ADR 0013](../decisions/0013-response-behavior-classifier.md)
 
-## 목표 역할
+이 문서가 정의하던 `ApplyGuardrail` 기반 Bedrock Guardrail Evaluator Adapter는 [Issue #173](https://github.com/GuardBench/guardbench-backend/issues/173)에서 Response Behavior Classifier Adapter로 대체되었다. `BedrockGuardrailEvaluatorAdapter`, `bedrock_guardrail_evaluator` 테이블과 Guardrail catalog 개념은 코드에서 제거되었다.
+
+현재 계약은 [SageMaker Response Behavior Classifier Adapter 설계 근거](sagemaker-classifier-adapter.md)를 따른다. 이 문서는 과거 결정의 history 보존을 위해서만 남긴다.
+
+---
+
+## 목표 역할 (역사적 기록)
 
 AWS Bedrock Guardrail은 AI Application Target이 아니라 첫 번째 Guardrail Evaluator 구현이다. AI Application이 반환한 자연어 ApplicationResponse를 평가하고 GuardBench 공통 `EvaluationResult(ALLOW | BLOCK)`로 정규화한다.
 

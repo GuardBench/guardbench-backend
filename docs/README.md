@@ -15,8 +15,8 @@
 | 모든 작업 | `AGENTS.md`, 현재 Issue | [작업 워크플로](ai-development/workflow.md) |
 | 코드 리뷰 | 현재 Issue, PR diff, 관련 APPROVED 계약 | [에이전트 코드 리뷰](ai-development/review.md) |
 | API 구현 | [API 안내](api/README.md), [OpenAPI](api/openapi.yaml) | 오류·응답·DTO 컨벤션 |
-| 도메인 구현 | [핵심 모델](domain/core-model.md), [평가 계약](domain/evaluation-contract.md), [ADR 0011](decisions/0011-ai-application-target-and-guardrail-evaluator.md), [ADR 0006](decisions/0006-independent-domain-contract-boundaries.md) | 경계 변경 시 [ADR 안내](decisions/README.md), 패키지 구조 |
-| 영속성·인프라 | 관련 승인 Issue와 [ADR 안내](decisions/README.md) | 시스템 개요, DRAFT 인프라는 참고만 사용, Provider Adapter는 [계약 맵](contracts/README.md)과 [Bedrock Guardrails Adapter 설계 근거](integrations/bedrock-guardrails-adapter.md) |
+| 도메인 구현 | [핵심 모델](domain/core-model.md), [평가 계약](domain/evaluation-contract.md), [ADR 0011](decisions/0011-ai-application-target-and-guardrail-evaluator.md), [ADR 0013](decisions/0013-response-behavior-classifier.md), [ADR 0006](decisions/0006-independent-domain-contract-boundaries.md) | 경계 변경 시 [ADR 안내](decisions/README.md), 패키지 구조 |
+| 영속성·인프라 | 관련 승인 Issue와 [ADR 안내](decisions/README.md) | 시스템 개요, DRAFT 인프라는 참고만 사용, Provider Adapter는 [계약 맵](contracts/README.md)과 [SageMaker Response Behavior Classifier Adapter 설계 근거](integrations/sagemaker-classifier-adapter.md) |
 | 문서·결정 | 관련 계약과 [ADR 안내](decisions/README.md) | [ADR 템플릿](decisions/template.md) |
 
 ## 상태 정의
@@ -33,7 +33,7 @@
 | 제품 | [MVP 범위](product/mvp-scope.md) | APPROVED | KOSA AWS 3팀 | 2026-09-01 | [최신 PRD](https://app.notion.com/p/3c0eeed6b62d80759d77f0ab0d5bcbd3) |
 | 도메인 | [핵심 모델](domain/core-model.md) | APPROVED | Backend | 2026-09-01 | [도메인 모델 정의](https://app.notion.com/p/3c0eeed6b62d81b48c03ed6034440936) |
 | 도메인 | [평가 계약](domain/evaluation-contract.md) | APPROVED | Backend | 2026-09-01 | [MVP 평가 계약](https://app.notion.com/p/3c3eeed6b62d8120a57eebaa13b6ed27) |
-| 도메인 | [Evaluation Profile Catalog](domain/evaluation-profile-catalog.md) | APPROVED | Backend | 2026-08-31 | 없음 |
+| 도메인 | [Evaluation Profile Catalog](domain/evaluation-profile-catalog.md) | DEPRECATED | Backend | 2026-09-04 | 없음 |
 | API | [API 안내](api/README.md) · [OpenAPI](api/openapi.yaml) | APPROVED | Backend | 2026-09-01 | [API 명세서](https://app.notion.com/p/3c0eeed6b62d805dac0be8db487b1359) |
 | 성능 테스트 | [성능 테스트 운영](performance-testing.md) | APPROVED | Backend | 2026-09-01 | 없음 |
 | 아키텍처 | [시스템 개요](architecture/system-overview.md) | APPROVED | Backend | 2026-09-01 | [도메인 모델 정의](https://app.notion.com/p/3c0eeed6b62d81b48c03ed6034440936) |
@@ -42,7 +42,8 @@
 | 아키텍처 | [비동기 신뢰성 및 테스트 원칙](architecture/async-reliability-and-testing.md) | DRAFT | Backend | 2026-09-02 | 없음 |
 | 아키텍처 | [TestRun CloudWatch Logs Insights 조회 가이드](architecture/testrun-cloudwatch-logs-guide.md) | DRAFT | Backend | 2026-09-03 | 없음 |
 | 계약 라우팅 | [비동기 TestRun 계약 맵](contracts/README.md) | APPROVED | Backend | 2026-08-31 | 없음 |
-| 통합 | [Bedrock Guardrails Adapter 설계 근거](integrations/bedrock-guardrails-adapter.md) | APPROVED | Backend | 2026-09-01 | 없음 |
+| 통합 | [SageMaker Response Behavior Classifier Adapter 설계 근거](integrations/sagemaker-classifier-adapter.md) | APPROVED | Backend | 2026-09-04 | 없음 |
+| 통합 | [Bedrock Guardrail Evaluator Adapter 설계 근거 (deprecated)](integrations/bedrock-guardrails-adapter.md) | DEPRECATED | Backend | 2026-09-04 | 없음 |
 | 통합 | [HTTP Endpoint Application Target Adapter](integrations/http-endpoint-target.md) | APPROVED | Backend | 2026-09-01 | 없음 |
 | 결정 | [ADR 안내](decisions/README.md) | APPROVED | Team | 2026-08-27 | 없음 |
 | 결정 | [ADR 0001: 도메인 타입 소유권과 Aggregate 경계](decisions/0001-domain-type-ownership-and-aggregate-boundaries.md) | APPROVED | Backend | 2026-08-24 | 없음 |
@@ -56,7 +57,8 @@
 | 결정 | [ADR 0009: TestCase 논리 삭제의 동시 요청 처리](decisions/0009-testcase-soft-delete-concurrency.md) | SUPERSEDED | Backend | 2026-08-25 | 없음 |
 | 결정 | [ADR 0012: TestSuite/TestCase 영구 삭제와 historical identity](decisions/0012-testdefinition-hard-delete-and-historical-identity.md) | APPROVED | Backend | 2026-09-03 | 없음 |
 | 결정 | [ADR 0010: TestRun 단일 Target 실행 모델](decisions/0010-single-target-test-run-model.md) | APPROVED | Backend | 2026-08-30 | 없음 |
-| 결정 | [ADR 0011: AI Application Target과 Guardrail Evaluator 역할 분리](decisions/0011-ai-application-target-and-guardrail-evaluator.md) | APPROVED | Backend | 2026-08-31 | 없음 |
+| 결정 | [ADR 0011: AI Application Target과 Guardrail Evaluator 역할 분리](decisions/0011-ai-application-target-and-guardrail-evaluator.md) | APPROVED | Backend | 2026-09-04 | 없음 |
+| 결정 | [ADR 0013: Guardrail Evaluator를 Response Behavior Classifier로 대체](decisions/0013-response-behavior-classifier.md) | APPROVED | Backend | 2026-09-04 | 없음 |
 | AI 개발 | [작업 워크플로](ai-development/workflow.md) | APPROVED | Team | 2026-09-01 | 현재 대화에서 승격 |
 | AI 개발 | [Backend CI와 dev Merge Gate](ai-development/backend-ci-merge-gate.md) | DRAFT | Backend | 2026-08-26 | 없음 |
 | AI 개발 | [코드 리뷰](ai-development/review.md) | APPROVED | Team | 2026-08-31 | PR #20·#23 사례와 Issue #33 |

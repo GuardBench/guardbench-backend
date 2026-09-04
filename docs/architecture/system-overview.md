@@ -5,7 +5,7 @@
 > Last reviewed: 2026-09-01
 > Canonical source: GitHub
 > Origin: [Notion 도메인 모델 정의](https://app.notion.com/p/3c0eeed6b62d81b48c03ed6034440936)
-> Related: [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)
+> Related: [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md), [ADR 0013](../decisions/0013-response-behavior-classifier.md)
 
 GuardBench MVP는 Java·Spring Boot 단일 백엔드다. AI Application 실행, 평가 계약과 구체 기술 Adapter를 분리한다.
 
@@ -24,13 +24,13 @@ HTTP/SQS Adapter → Application Use Case → Domain/Core
 - TestRun은 하나의 AI Application Target을 실행하고 실제 사용한 Evaluator 설정과 버전을 불변하게 식별한다.
 - MVP 공개 Application Target type은 `HTTP_ENDPOINT`다.
 - `HTTP_ENDPOINT`는 OpenAI-compatible chat completions 계약만 지원하며 `identifier`와 `model`을 필수 실행 정보로 사용한다.
-- TestRun 생성 요청은 inline Evaluation Profile을 포함한다.
-- GuardBench가 Evaluation Profile을 catalog를 통해 실제 Evaluator/provider 설정으로 해석하며 사용자는 provider나 Guardrail identifier/version을 직접 지정하지 않는다.
+- TestRun 생성 요청은 evaluator/classifier 설정을 포함하지 않는다.
+- GuardBench는 서비스 전역 고정 Response Behavior Classifier로 실제 응답 행동(`COMPLY | REFUSE`)을 관측하며, 사용자는 provider나 model 식별자를 직접 지정하지 않는다.
 - Application Target Adapter는 Snapshot input을 OpenAI-compatible request로 외부 Application에 전달하고 `choices[0].message.content`를 자연어 ApplicationResponse로 정규화한다.
-- Evaluator Adapter는 ApplicationResponse를 `EvaluationResult(ALLOW | BLOCK)`로 변환한다.
-- AWS Bedrock Guardrail은 첫 번째 Evaluator Adapter 구현이다.
+- Evaluator Adapter는 prompt와 ApplicationResponse를 `COMPLY | REFUSE`로 분류하고 `EvaluationResult(ALLOW | BLOCK)`로 정규화한다. `COMPLY -> ALLOW`, `REFUSE -> BLOCK`이다.
+- Amazon SageMaker endpoint에 직접 서빙한 텍스트 모델(`InvokeEndpoint` API)은 첫 번째 Response Behavior Classifier Adapter 구현이다.
 - TestSuite, TestCase, ExpectedResult, Assertion, Quality Gate와 Regression의 의미는 AWS SDK와 독립적이다.
-- Evaluation Profile CRUD, provider ensemble이나 provider별 범용 고급 설정 계층을 선제 도입하지 않는다.
+- Evaluator/classifier catalog, provider ensemble이나 provider별 범용 고급 설정 계층을 선제 도입하지 않는다.
 
 ```text
 TestCaseSnapshot
@@ -50,11 +50,11 @@ Regression은 위 실행 흐름에 포함되지 않는다. 완료된 두 TestRun
 
 ## 현재 구현
 
-#114를 통해 inline Evaluation Profile을 canonical catalog entry로 정규화하고 실제 immutable `EvaluatorReference`를 TestRun에 고정하는 경계가 구현되었다.
+#114를 통해 실제 immutable `EvaluatorReference`를 TestRun에 고정하는 경계가 구현되었다.
 
 #115와 #125를 통해 `HTTP_ENDPOINT` Application Target이 자연어 응답을 수집하고 OpenAI-compatible chat completions 요청·응답을 처리하는 Adapter가 구현되었다. #128은 MVP 계약을 단순화해 generic HTTP 경로를 제거하고 모든 HTTP Target에 `model`을 필수화했다.
 
-#116을 통해 AWS Bedrock Guardrail이 Evaluator Adapter로 전환되어 `EvaluatorExecutionPort` 구현으로 존재한다. #117을 통해 Worker가 Application response를 Evaluator에 전달하고 `EvaluationResult`와 Assertion을 저장한다. Application response는 내부 실행 결과로만 보존하며 public 결과에는 노출하지 않는다.
+#116을 통해 AWS Bedrock Guardrail이 Evaluator Adapter로 전환되어 `EvaluatorExecutionPort` 구현으로 존재했으나, #173을 통해 Amazon SageMaker endpoint 기반 Response Behavior Classifier Adapter로 대체되었다([ADR 0013](../decisions/0013-response-behavior-classifier.md)). #117을 통해 Worker가 prompt와 Application response를 Evaluator에 전달하고 정규화된 `EvaluationResult`와 Assertion을 저장한다. Application response는 내부 실행 결과로만 보존하며 public 결과에는 노출하지 않는다.
 
 #118을 통해 Quality Gate가 현재 TestRun의 평가 가능한 Assertion 통과율과 전체 Snapshot 실행 성공률을 집계하도록 전환되었다. 두 비율이 각각 95% 이상이면 `PASS`, 평가 가능한 Assertion이 없으면 `NOT_EVALUATED`다.
 

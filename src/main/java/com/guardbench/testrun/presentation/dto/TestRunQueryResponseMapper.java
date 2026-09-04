@@ -41,7 +41,6 @@ public final class TestRunQueryResponseMapper {
                 detail.testCaseCount(),
                 toProgressRes(detail.progress()),
                 new TargetReferenceRes(detail.target().referenceId(), detail.target().type(), detail.target().identifier(), detail.target().revision(), detail.target().model()),
-                TestRunCreateRes.toResponse(detail.evaluationProfile()),
                 detail.executionOutcome() != null ? detail.executionOutcome().name() : null,
                 detail.qualityGate() != null ? toQualityGateRes(detail.qualityGate()) : null,
                 toIso(detail.createdAt()),
@@ -91,7 +90,7 @@ public final class TestRunQueryResponseMapper {
                 item.id(), item.testSuiteId(),
                 new TargetReferenceRes(item.target().referenceId(), item.target().type(), item.target().identifier(),
                         item.target().revision(), item.target().model()),
-                TestRunCreateRes.toResponse(item.evaluationProfile()), toIso(item.completedAt()));
+                toIso(item.completedAt()));
     }
 
     private static TestRunComparisonItemRes toComparisonItemRes(

@@ -81,7 +81,7 @@ class CompareTestRunsServiceTest {
     }
 
     private static TestRunRegressionView run(long id, String evaluatorKey, String completedAt) {
-        return new TestRunRegressionView(id, 10L, TestRunStatus.FINISHED, TARGET, null, evaluatorKey,
+        return new TestRunRegressionView(id, 10L, TestRunStatus.FINISHED, TARGET, evaluatorKey,
                 Instant.parse(completedAt));
     }
 

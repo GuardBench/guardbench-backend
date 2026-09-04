@@ -64,7 +64,7 @@ class GetTestRunEvaluatorMetricsServiceTest {
     private static TestRunDetail detailWithStatus(TestRunStatus status) {
         return new TestRunDetail(
                 901L, 1L, status, 1,
-                new TestRunProgress(1, 100.0), TARGET, null, null, null,
+                new TestRunProgress(1, 100.0), TARGET, null, null,
                 Instant.parse("2026-08-24T14:30:00Z"), Instant.parse("2026-08-24T14:30:03Z"),
                 null, Instant.parse("2026-08-24T14:31:20Z"));
     }

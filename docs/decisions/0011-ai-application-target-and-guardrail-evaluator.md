@@ -2,9 +2,10 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Last reviewed: 2026-09-01
+> Last reviewed: 2026-09-04
 > Canonical source: GitHub
 > Origin: [GitHub Issue #113](https://github.com/GuardBench/guardbench-backend/issues/113)
+> Superseded in part by: [ADR 0013](0013-response-behavior-classifier.md) — Guardrail Evaluator 역할, inline Evaluation Profile과 Evaluator catalog 경계. AI Application Target, Assertion, Regression, Quality Gate 역할 분리는 이 ADR이 계속 유효하다.
 
 - ADR Status: ACCEPTED
 - Decision date: 2026-08-31
@@ -25,9 +26,9 @@ GuardBench가 검증하려는 System Under Test는 AI Application이다. Guardra
 2. TestRun 접수 시 현재 TestCase 정의를 `TestCaseSnapshot`으로 불변 복제한다. 이후 TestCase 수정·삭제는 해당 Run의 실행과 판정 의미를 바꾸지 않는다.
 3. Application Target은 Snapshot input을 받아 자연어 `ApplicationResponse`를 반환한다. `ALLOW`와 `BLOCK`은 Application 응답 값이 아니다.
 4. ApplicationResponse는 내부 Evaluator 입력이며 frontend-facing 결과 DTO에 노출하지 않는다.
-5. Evaluator는 ApplicationResponse를 평가해 GuardBench 공통 `EvaluationResult(ALLOW | BLOCK)`를 만든다. AWS Bedrock Guardrail은 첫 번째 Guardrail Evaluator 구현이다.
-6. TestRun 생성 요청은 사용자의 평가 목적을 구조화한 inline `evaluationProfile`을 받는다. MVP profile은 `checks`와 `strictness`로 구성하며 독립 CRUD 리소스나 `evaluationProfileId`가 아니다.
-7. 사용자는 Evaluator type, provider, Bedrock Guardrail identifier/version을 직접 제출하지 않는다. GuardBench가 `evaluationProfile`을 실제 Evaluator 설정으로 해석하고, TestRun은 사용한 설정과 버전을 사후에 불변하게 식별할 수 있어야 한다. `EvaluatorReference`의 물리 표현과 해석 결과 저장은 [#114](https://github.com/GuardBench/guardbench-backend/issues/114)에서 구현한다.
+5. Evaluator는 ApplicationResponse를 평가해 GuardBench 공통 `EvaluationResult(ALLOW | BLOCK)`를 만든다. AWS Bedrock Guardrail은 첫 번째 Guardrail Evaluator 구현이다. **[ADR 0013으로 대체]** Evaluator 구현은 Guardrail에서 Response Behavior Classifier로 대체되었다.
+6. TestRun 생성 요청은 사용자의 평가 목적을 구조화한 inline `evaluationProfile`을 받는다. MVP profile은 `checks`와 `strictness`로 구성하며 독립 CRUD 리소스나 `evaluationProfileId`가 아니다. **[ADR 0013으로 대체]** `evaluationProfile`은 제거되었고 사용자는 평가 목적을 제출하지 않는다.
+7. 사용자는 Evaluator type, provider, Bedrock Guardrail identifier/version을 직접 제출하지 않는다. GuardBench가 `evaluationProfile`을 실제 Evaluator 설정으로 해석하고, TestRun은 사용한 설정과 버전을 사후에 불변하게 식별할 수 있어야 한다. `EvaluatorReference`의 물리 표현과 해석 결과 저장은 [#114](https://github.com/GuardBench/guardbench-backend/issues/114)에서 구현한다. **[ADR 0013으로 부분 대체]** profile 해석 대신 서비스 전역 고정 classifier 설정을 사용하지만, `EvaluatorReference`가 실제 사용한 설정을 사후 식별하는 불변식은 유지한다.
 8. 기존 `ExpectedResult(ALLOW | BLOCK)`과 Assertion 의미를 재사용한다. Assertion은 ExpectedResult와 EvaluationResult가 같으면 `PASS`, 다르면 `FAIL`이다. Application 실행 또는 평가가 완료되지 않아 EvaluationResult가 없으면 Assertion을 만들지 않는다.
 
 ```text
@@ -68,22 +69,23 @@ Completed TestRun A + Completed TestRun B
 
 ### 현재 구현
 
-이 ADR과 [OpenAPI](../api/openapi.yaml)는 합의된 계약이며, ADR 승인 당시의 구현 차이는 #114~#119 후속 Issue에서 해소되었다.
+이 ADR과 [OpenAPI](../api/openapi.yaml)는 합의된 계약이며, ADR 승인 당시의 구현 차이는 #114~#119 후속 Issue에서 해소되었다. **[ADR 0013 이후 현재 계약]** Evaluator 구현과 inline `evaluationProfile` 계약은 [ADR 0013](0013-response-behavior-classifier.md)이 대체했다. 아래 단락은 ADR 0011 승인 당시(#113~#119) 구현을 역사적으로 기록하며 현재 코드와 다르다.
 
-현재 구현은 새 TestRun에 `HTTP_ENDPOINT` Application Target과 immutable EvaluatorReference를 고정하고 Bedrock Guardrail을 Evaluator로 호출한다. Worker는 Application response → `EvaluationResult` → Assertion 흐름으로 결과를 저장한다. `bedrock_guardrail_target`은 기존 V3 데이터 조회를 위해 남아 있지만 새 TestRun 등록에는 사용하지 않는다.
+ADR 0011 승인 당시 구현은 새 TestRun에 `HTTP_ENDPOINT` Application Target과 immutable EvaluatorReference를 고정하고 Bedrock Guardrail을 Evaluator로 호출했다. Worker는 Application response → `EvaluationResult` → Assertion 흐름으로 결과를 저장했다. `bedrock_guardrail_target`은 기존 V3 데이터 조회를 위해 남아 있지만 새 TestRun 등록에는 사용하지 않는다. 이 부분은 ADR 0013 이후에도 유지된다.
 
-Quality Gate는 현재 Run의 평가 가능한 Assertion 통과율과 전체 실행 성공률을 집계하며, 두 비율이 각각 95% 이상일 때 `PASS`, 평가 가능한 Assertion이 없으면 `NOT_EVALUATED`가 된다. Regression API는 비교 가능한 완료 Run의 저장된 Snapshot/Evaluator 설정과 EvaluationResult만 사용해 변화 결과를 계산하며 Application Target과 Evaluator를 재호출하지 않는다.
+Quality Gate는 현재 Run의 평가 가능한 Assertion 통과율과 전체 실행 성공률을 집계하며, 두 비율이 각각 95% 이상일 때 `PASS`, 평가 가능한 Assertion이 없으면 `NOT_EVALUATED`가 된다. Regression API는 비교 가능한 완료 Run의 저장된 Snapshot/Evaluator 설정과 EvaluationResult만 사용해 변화 결과를 계산하며 Application Target과 Evaluator를 재호출하지 않는다. 이 문단은 ADR 0013 이후에도 현재 계약이다.
 
 이 계약을 구현한 후속 Issue는 다음과 같다.
 
 - [#114](https://github.com/GuardBench/guardbench-backend/issues/114): TestRun의 EvaluatorReference 고정과 Guardrail Target 의존 제거 (완료)
 - [#115](https://github.com/GuardBench/guardbench-backend/issues/115): HTTP Endpoint AI Application 실행과 자연어 응답 수집 (완료)
-- [#116](https://github.com/GuardBench/guardbench-backend/issues/116): AWS Bedrock Guardrail Evaluator Adapter 전환 (완료)
+- [#116](https://github.com/GuardBench/guardbench-backend/issues/116): AWS Bedrock Guardrail Evaluator Adapter 전환 (완료, #173로 대체)
 - [#117](https://github.com/GuardBench/guardbench-backend/issues/117): Worker를 Application 실행 → Evaluator → Assertion 흐름으로 전환 (완료)
 - [#118](https://github.com/GuardBench/guardbench-backend/issues/118): 현재 TestRun Assertion 기반 Quality Gate (완료)
 - [#119](https://github.com/GuardBench/guardbench-backend/issues/119): 저장된 완료 Run 결과 기반 Regression API (완료)
+- [#173](https://github.com/GuardBench/guardbench-backend/issues/173): Guardrail Evaluator/Profile을 Response Behavior Classifier로 교체 (완료, [ADR 0013](0013-response-behavior-classifier.md))
 
-inline Evaluation Profile의 공개 입력 계약은 #113에서 확정했다. Profile을 독립 영속·재사용 리소스로 만드는 설계, provider별 고급 설정과 provider ensemble은 Research 또는 후속 구현 범위이며 이 ADR에서 확정하지 않는다.
+inline Evaluation Profile의 공개 입력 계약은 #113에서 확정했으나 #173/ADR 0013에서 제거되었다. Profile을 독립 영속·재사용 리소스로 만드는 설계, provider별 고급 설정과 provider ensemble은 Research 또는 후속 구현 범위이며 이 ADR에서 확정하지 않는다.
 
 ## Alternatives
 

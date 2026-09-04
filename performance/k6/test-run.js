@@ -21,10 +21,6 @@ const payload = JSON.stringify({
     model: __ENV.PERF_TARGET_MODEL,
     revision: __ENV.PERF_TARGET_REVISION || null,
   },
-  evaluationProfile: {
-    checks: (__ENV.PERF_EVALUATION_CHECKS || 'HARMFUL_CONTENT').split(','),
-    strictness: __ENV.PERF_EVALUATION_STRICTNESS || 'STANDARD',
-  },
 });
 
 function pollUntilFinished(testRunId, startedAt) {
