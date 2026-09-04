@@ -56,7 +56,7 @@ entity "target_reference" as target_reference {
   * target_type : VARCHAR(32)
 }
 
-entity "bedrock_guardrail_target" as bedrock_target {
+entity "bedrock_guardrail_target\n[LEGACY - no new writes]" as bedrock_target {
   * reference_id : TEXT <<PK, FK>>
   --
   * guardrail_identifier : TEXT
@@ -175,8 +175,8 @@ entity "outbox_event" as outbox {
 test_suite ||--o{ test_case : contains
 test_suite ||..o{ test_run : historical identity
 target_reference ||--o| test_run : referenced by
-target_reference ||--o| bedrock_target : provider detail
-target_reference ||--o| http_endpoint_target : provider detail
+target_reference ||--o| bedrock_target : legacy provider detail
+target_reference ||--o| http_endpoint_target : current provider detail
 evaluator_reference ||--o{ test_run : immutable evaluator snapshot
 test_run ||--|{ snapshot : fixes
 test_case ||..o{ snapshot : historical identity
@@ -184,18 +184,25 @@ snapshot ||--o| execution : single target
 snapshot ||--o| execution_claim : technical lease
 test_run ||--o| idempotency : request replay
 test_run ||--o| resolution_claim : technical lease
-snapshot ||--o| assertion : expected vs actual
+snapshot ||--o| assertion : expected vs evaluated behavior
 snapshot ||--o| change_result : legacy, no new writes
 test_run ||--o| quality_gate : final evaluation
 outbox ..> test_run : payload reference only
 
 note right of target_reference
-  target_type: BEDROCK_GUARDRAIL | HTTP_ENDPOINT
-  Provider detail is stored in the matching table.
+  Current contract: HTTP_ENDPOINT AI Application Target only.
+  New TestRuns do not register Bedrock Guardrail targets.
+  bedrock_guardrail_target remains only because this is a
+  physical ERD reflecting historical Flyway migrations.
   test_run.target_reference_id is NOT NULL with a UNIQUE
   constraint, so at most one TestRun per target_reference.
-  New TestRuns register HTTP_ENDPOINT only;
-  bedrock_guardrail_target is retained V3 legacy data.
+end note
+
+note right of bedrock_target
+  LEGACY PHYSICAL TABLE.
+  Retained for migration history / schema compatibility only.
+  It is not part of the current public TestRun target contract.
+  See ADR 0010 and ADR 0013 for the current model.
 end note
 
 note right of evaluator_reference
@@ -207,6 +214,7 @@ note right of evaluator_reference
 end note
 
 note right of http_endpoint_target
+  Current AI Application Target persistence.
   V4 adds HTTP_ENDPOINT persistence; V6 adds requested revision.
   V5 requires an http/https URL with host-like text.
   V7 adds the OpenAI-compatible model; V8 makes it NOT NULL.
@@ -220,12 +228,15 @@ end note
 
 note bottom of execution
   PK limits each Snapshot to one row.
+  Application response and evaluator verdict belong to
+  the single-target Response Behavior Classifier flow.
   Only terminal result states are stored.
 end note
 
 note bottom of change_result
-  V3 removes existing rows.
-  Single-target TestRun creates no new rows.
+  Legacy physical table retained from the old comparison model.
+  V3 removes existing rows; single-target TestRun creates no new rows.
+  Current regression comparison reuses compatible historical Run results.
 end note
 
 note bottom of quality_gate
@@ -234,13 +245,17 @@ note bottom of quality_gate
 end note
 
 legend left
+  CURRENT: HTTP_ENDPOINT target + Response Behavior Classifier.
+  LEGACY tables remain visible only because this diagram mirrors
+  the physical schema produced by Flyway V1 through V13.
+  Historical tables must not be interpreted as current API contracts.
+
   Current TestCase → TestSuite uses ON DELETE RESTRICT.
   Snapshot source and TestRun suite IDs are historical scalars without FKs.
   Outbox has no test_run_id column; its payload
   carries the immutable event identifiers.
   Claim relations are technical leases, not Domain IDs
   or Aggregate Repositories.
-  Diagram reflects Flyway V1 through V13.
 endlegend
 
 @enduml
