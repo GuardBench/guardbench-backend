@@ -123,8 +123,11 @@ guardbench:
 ```
 
 실행 결과는 `performance/results/<run-id>/`에 `profile.yaml`, `dataset.yaml`,
-`k6-summary.json`, `aws-metrics.json`, `result.json`, `report.md`로 저장한다. `report.md`의
-Application/Infrastructure revision은 `APP_REVISION`, `INFRA_REVISION` 환경변수로 주입한다.
+`k6-summary.json`, `aws-metrics.json`, `result.json`, `report.md`로 저장한다. `result.json`의
+`infrastructure_capacity`는 실행 전 AWS API에서 읽은 configured capacity snapshot이며,
+`revisions`와 capture 시각을 함께 보존한다. `aws-metrics.json`은 실행 중 관측한 utilization,
+latency, queue 등의 시계열을 별도로 보존한다. `report.md`의 Application/Infrastructure
+revision과 snapshot의 revision은 `APP_REVISION`, `INFRA_REVISION` 환경변수로 주입한다.
 
 ## Spot Runner image와 결과 보존
 
@@ -177,6 +180,18 @@ Runner는 실행 전 다음을 확인하고 하나라도 실패하면 k6를 시�
 2. 처리 중인 이전 TestRun이 없는지 확인
 3. Source Queue의 visible/in-flight/delayed 메시지가 없는지 확인
 4. DLQ에 메시지가 없는지 확인
+
+Preflight가 통과하면 Runner는 k6/reset 전에 ECS service와 task definition, RDS instance,
+SageMaker endpoint의 실제 configured capacity를 조회한다. 이 조회에 필요한 resource
+identifier가 없거나 AWS 응답이 불완전하거나 조회가 실패하면 `unknown`으로 성공 처리하지
+않고 Runner를 중단한다. 따라서 저장된 snapshot은 다음 값을 포함한다.
+
+- ECS: cluster/service identifier, desired count, running task count, task CPU/memory
+- RDS: DB instance identifier/class
+- SageMaker: endpoint/production variant, instance type, desired/current instance count
+
+`running task count`는 snapshot 시점의 ECS service 응답값이며, 실행 구간의 관측 시계열과
+혼동하지 않는다.
 
 모든 비교 가능한 실제 실행은 `--reset`을 필수로 요구한다. `--reset`은 Dataset seed 전에 DB를
 초기화하고 애플리케이션이 소유한 Flyway를 non-web Boot run으로 실행한다. 별도 performance
@@ -231,6 +246,10 @@ CloudWatch는 실행 시작~완료 구간으로 다음 시계열을 수집한다
 - RDS: `CPUUtilization`, `DatabaseConnections`
 - SageMaker classifier: `Invocations`, `ModelLatency`, `OverheadLatency`,
   `Invocation4XXErrors`, `Invocation5XXErrors`
+
+Configured capacity snapshot과 CloudWatch observed metrics는 서로 다른 artifact 영역이다.
+Capacity 변경 전후 비교에서는 `result.json.infrastructure_capacity`를 실행 조건으로 보고,
+`aws-metrics.json`을 해당 조건에서 관측된 utilization/latency/backlog 결과로 해석한다.
 
 SageMaker metric은 `EndpointName + VariantName` dimension으로 조회한다. 성능 Baseline에서는
 classifier가 실제 E2E 경로의 일부이므로 ECS·SQS·RDS와 함께 SageMaker datapoint도 있어야
