@@ -17,6 +17,57 @@
 | `workflow_dispatch` | `source` | `./gradlew clean check bootJar --no-daemon` |
 | `workflow_dispatch` | `infrastructure` | source 검증 없이 infrastructure deploy만 수행 |
 
+`workflow_dispatch`의 `deployment_target`은 `dev` 또는 `performance`다. `push`는 항상 `dev`
+환경에만 자동 배포하고, Performance Backend는 수동 실행에서 `deployment_target: performance`를
+선택한다. deploy job은 선택된 GitHub Environment의 다음 변수를 사용한다. 값은 repository/org
+공통 변수가 아니라 각 Environment에 설정한다.
+
+Performance application revision을 배포할 때는 Actions에서 `Backend CI`를 `dev` branch로
+실행하고 `deployment_target: performance`, `deployment_mode: source`를 선택한다. Terraform
+인프라 변경을 반영할 때는 같은 target에 `deployment_mode: infrastructure`를 선택한다.
+
+```text
+AWS_DEPLOY_ROLE_ARN
+AWS_REGION
+ECR_REPOSITORY
+ECS_CLUSTER
+ECS_SERVICE
+ECS_CONTAINER_NAME
+ECS_TASK_DEFINITION_FAMILY
+```
+
+GitHub Environment와 IaC가 맞춰야 하는 Performance 배포 계약은 다음과 같다.
+
+| 항목 | 값 또는 규칙 |
+| --- | --- |
+| Environment name | `performance` |
+| Allowed deployment branch | `dev` |
+| `AWS_DEPLOY_ROLE_ARN` | Performance ECS 배포 role ARN |
+| `AWS_REGION` | `ap-northeast-2` |
+| `ECR_REPOSITORY` | Performance Backend image repository name |
+| `ECS_CLUSTER` | Performance ECS cluster name |
+| `ECS_SERVICE` | Performance Backend ECS service name |
+| `ECS_CONTAINER_NAME` | Performance app container name |
+| `ECS_TASK_DEFINITION_FAMILY` | Performance app task-definition family name; ARN이나 revision을 사용하지 않음 |
+
+Performance role의 web identity trust policy는 다음 조건을 모두 허용한다.
+
+```json
+{
+  "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+  "token.actions.githubusercontent.com:sub": "repo:GuardBench/guardbench-backend:environment:performance"
+}
+```
+
+위 조건은 `sts:AssumeRoleWithWebIdentity` 허용 statement에 `StringEquals`로 설정한다. `dev`는
+별도 Environment와 별도 role을 사용하고 subject는
+`repo:GuardBench/guardbench-backend:environment:dev`다. role ARN만 추가하고 trust subject를
+갱신하지 않으면 OIDC AssumeRole 단계에서 배포가 실패한다.
+
+Performance 배포는 최신 ACTIVE infrastructure task definition을 base로 사용하며, configured
+service가 같은 task-definition family를 사용하지 않으면 등록 전에 실패한다. source 배포에서는
+ECR repository가 `IMMUTABLE`인지와 image tag가 전체 Git SHA인지 확인한다.
+
 workflow는 `ubuntu-latest`, Temurin JDK 21, Gradle dependency cache를 사용한다. 변경 범위 감지 대상은 `src/`와 Gradle build/configuration 입력이다. `check`는 테스트를 포함하며, `bootJar`는 실행 가능한 Spring Boot JAR 패키징을 검증한다. Testcontainers 테스트는 GitHub-hosted Ubuntu runner의 Docker 환경을 사용한다. Java source/build 입력이 없는 변경에서는 Gradle `verify` job을 실행하지 않는다.
 
 이 workflow가 PR에 표시하는 required check 후보는 다음이다.

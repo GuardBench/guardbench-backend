@@ -7,8 +7,16 @@ on:
     branches: [dev]
   workflow_dispatch:
     inputs:
+      deployment_target:
+        description: Select the ECS environment to deploy.
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - performance
       deployment_mode:
-        description: Select whether to deploy current dev source or only refresh infrastructure configuration.
+        description: Select whether to deploy the current source revision or only refresh infrastructure configuration.
         required: true
         default: infrastructure
         type: choice
@@ -76,7 +84,7 @@ jobs:
         run: ./gradlew clean check bootJar --no-daemon
 
   deploy:
-    name: deploy dev
+    name: deploy ${{ github.event_name == 'workflow_dispatch' && inputs.deployment_target || 'dev' }}
     needs: [verify, changes]
     if: >-
       always() &&
@@ -93,9 +101,9 @@ jobs:
       )
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: dev
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.deployment_target || 'dev' }}
     concurrency:
-      group: guardbench-dev-application-deployment
+      group: guardbench-${{ github.event_name == 'workflow_dispatch' && inputs.deployment_target || 'dev' }}-application-deployment
       cancel-in-progress: false
     permissions:
       contents: read
@@ -109,6 +117,7 @@ jobs:
       ECS_CONTAINER_NAME: ${{ vars.ECS_CONTAINER_NAME }}
       ECS_TASK_DEFINITION_FAMILY: ${{ vars.ECS_TASK_DEFINITION_FAMILY }}
       IMAGE_TAG: ${{ github.sha }}
+      DEPLOYMENT_TARGET: ${{ github.event_name == 'workflow_dispatch' && inputs.deployment_target || 'dev' }}
       DEPLOYMENT_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.deployment_mode == 'source' && 'manual-source' || github.event_name == 'workflow_dispatch' && 'manual-infrastructure' || 'automatic-source' }}
     steps:
       - uses: actions/checkout@v4
@@ -117,6 +126,21 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: gradle
+      - name: Validate deployment target configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$DEPLOYMENT_TARGET" in
+            dev|performance) ;;
+            *) echo "Unsupported deployment target: ${DEPLOYMENT_TARGET}" >&2; exit 1 ;;
+          esac
+          test -n "$AWS_DEPLOY_ROLE_ARN"
+          test -n "$AWS_REGION"
+          test -n "$ECR_REPOSITORY"
+          test -n "$ECS_CLUSTER"
+          test -n "$ECS_SERVICE"
+          test -n "$ECS_CONTAINER_NAME"
+          test -n "$ECS_TASK_DEFINITION_FAMILY"
       - name: Configure AWS credentials through OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -139,6 +163,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          [[ "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]]
+          tag_mutability="$(aws ecr describe-repositories \
+            --repository-names "$ECR_REPOSITORY" \
+            --query 'repositories[0].imageTagMutability' \
+            --output text)"
+          test "$tag_mutability" = "IMMUTABLE"
+
           if aws ecr describe-images \
             --repository-name "$ECR_REPOSITORY" \
             --image-ids "imageTag=${IMAGE_TAG}" >/dev/null 2>&1; then
@@ -191,6 +222,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          service_count="$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --query 'length(services)' \
+            --output text)"
+          test "$service_count" = "1"
+
+          service_task_definition="$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --query 'services[0].taskDefinition' \
+            --output text)"
+          test -n "$service_task_definition"
+          test "$service_task_definition" != "None"
+
           aws ecs describe-task-definition \
             --task-definition "$ECS_TASK_DEFINITION_FAMILY" \
             --query taskDefinition \
@@ -199,6 +245,12 @@ jobs:
           base_task_definition="$(jq -r '.taskDefinitionArn' base-task-definition.json)"
           test -n "$base_task_definition"
           test "$base_task_definition" != "null"
+          test "$(jq -r '.status' base-task-definition.json)" = "ACTIVE"
+          test "$(jq -r '.family' base-task-definition.json)" = "$ECS_TASK_DEFINITION_FAMILY"
+
+          service_task_definition_family="${service_task_definition##*/}"
+          service_task_definition_family="${service_task_definition_family%:*}"
+          test "$service_task_definition_family" = "$ECS_TASK_DEFINITION_FAMILY"
 
           container_count="$(jq --arg name "$ECS_CONTAINER_NAME" \
             '[.containerDefinitions[] | select(.name == $name)] | length' \
@@ -245,6 +297,7 @@ jobs:
             --output text)"
           echo "arn=${target_task_definition}" >> "$GITHUB_OUTPUT"
           {
+            echo "Deployment target: ${DEPLOYMENT_TARGET}"
             echo "Base task definition (latest ACTIVE): ${base_task_definition}"
             echo "Target task definition: ${target_task_definition}"
           } >> "$GITHUB_STEP_SUMMARY"
