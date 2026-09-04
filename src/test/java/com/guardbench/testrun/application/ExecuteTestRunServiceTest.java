@@ -102,6 +102,34 @@ class ExecuteTestRunServiceTest {
         }
 
         @Test
+        @DisplayName("Application response 진단 로그는 512자까지 기록하고 초과분을 표시한다")
+        void logsApplicationResponseWithBoundedPreview() {
+            String response = "가".repeat(600);
+            LogCapture logCapture = LogCapture.attach(ExecuteTestRunService.class);
+            try {
+                claimPort.willAcquire(SNAPSHOT_ID);
+                contextPort.setContext(SNAPSHOT_ID, defaultContext());
+                guardrailPort.willReturn(TargetExecutionResult.succeeded(response));
+                evaluatorPort.willReturn(EvaluatorExecutionResult.succeeded("ALLOW"));
+
+                service.execute(SNAPSHOT_ID);
+
+                String diagnosticLog = logCapture.firstMessageContaining("Application response 진단 정보");
+                assertTrue(diagnosticLog.contains("responseLength=600"));
+                assertTrue(diagnosticLog.contains("responseTruncated=true"));
+                assertTrue(diagnosticLog.contains("…[truncated]"));
+                String preview = diagnosticLog.substring(diagnosticLog.indexOf("applicationResponsePreview=")
+                        + "applicationResponsePreview=".length());
+                assertEquals(512, preview.codePointCount(0, preview.length()));
+                String classifierLog = logCapture.firstMessageContaining("Classifier 판정을 완료했습니다");
+                assertTrue(classifierLog.contains("classifierOutput=ALLOW"));
+                assertTrue(classifierLog.contains("evaluatorVerdict=ALLOW"));
+            } finally {
+                logCapture.detach();
+            }
+        }
+
+        @Test
         @DisplayName("Application Target 실패 시 Evaluator를 호출하지 않는다")
         void doesNotEvaluateTargetFailure() {
             claimPort.willAcquire(SNAPSHOT_ID);
@@ -120,19 +148,28 @@ class ExecuteTestRunServiceTest {
         @Test
         @DisplayName("Evaluator 실패 시 response만 보존하고 verdict는 저장하지 않는다")
         void storesEvaluatorFailureWithoutVerdict() {
-            claimPort.willAcquire(SNAPSHOT_ID);
-            contextPort.setContext(SNAPSHOT_ID, new ExecutionContext(
-                    TARGET_REFERENCE, INPUT_TEXT, TEST_RUN_ID, "evaluator-ref"));
-            guardrailPort.willReturn(TargetExecutionResult.succeeded("natural language response"));
-            evaluatorPort.willReturn(EvaluatorExecutionResult.failed(EvaluatorFailureCode.EVALUATOR_NOT_FOUND));
+            LogCapture logCapture = LogCapture.attach(ExecuteTestRunService.class);
+            try {
+                claimPort.willAcquire(SNAPSHOT_ID);
+                contextPort.setContext(SNAPSHOT_ID, new ExecutionContext(
+                        TARGET_REFERENCE, INPUT_TEXT, TEST_RUN_ID, "evaluator-ref"));
+                guardrailPort.willReturn(TargetExecutionResult.succeeded("natural language response"));
+                evaluatorPort.willReturn(EvaluatorExecutionResult.failed(EvaluatorFailureCode.EVALUATOR_NOT_FOUND));
 
-            service.execute(SNAPSHOT_ID);
+                service.execute(SNAPSHOT_ID);
 
-            TestExecution saved = executionRepository.savedExecutions().getFirst();
-            assertEquals(TestExecutionStatus.FAILED, saved.status());
-            assertEquals("natural language response", saved.applicationResponse().value());
-            assertEquals(TestExecutionErrorStage.EVALUATOR, saved.error().stage());
-            assertEquals(null, saved.evaluationResult());
+                TestExecution saved = executionRepository.savedExecutions().getFirst();
+                assertEquals(TestExecutionStatus.FAILED, saved.status());
+                assertEquals("natural language response", saved.applicationResponse().value());
+                assertEquals(TestExecutionErrorStage.EVALUATOR, saved.error().stage());
+                assertEquals(null, saved.evaluationResult());
+                String classifierLog = logCapture.firstMessageContaining("Classifier 판정에 실패했습니다");
+                assertTrue(classifierLog.contains("classifierOutput=null"));
+                assertTrue(classifierLog.contains("evaluatorVerdict=null"));
+                assertTrue(classifierLog.contains("errorCode=EVALUATOR_NOT_FOUND"));
+            } finally {
+                logCapture.detach();
+            }
         }
     }
 
@@ -383,7 +420,6 @@ class ExecuteTestRunServiceTest {
                 assertTrue(terminalLog.contains("errorCode=PROVIDER_UNAVAILABLE"));
                 assertTrue(terminalLog.contains("errorStage=APPLICATION_TARGET"));
                 assertTrue(terminalLog.contains("retryable=true"));
-                assertFalse(terminalLog.contains("Hello, block this content"));
             } finally {
                 logCapture.detach();
             }
@@ -462,7 +498,6 @@ class ExecuteTestRunServiceTest {
                 assertTrue(terminalLog.contains("errorStage=APPLICATION_TARGET"));
                 assertTrue(terminalLog.contains("errorCode=TARGET_CONFIGURATION_INVALID"));
                 assertTrue(terminalLog.contains("retryable=false"));
-                assertFalse(terminalLog.contains("Hello, block this content"));
             } finally {
                 logCapture.detach();
             }

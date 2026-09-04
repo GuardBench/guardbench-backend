@@ -270,18 +270,19 @@ public class FinalizeTestRunService {
     private List<SnapshotEvaluation> evaluateSnapshots(TestRunExecutionFacts facts, Instant now) {
         List<SnapshotEvaluation> evaluations = new ArrayList<>();
         for (SnapshotExecutionFact fact : facts.snapshotFacts()) {
-            Optional<SnapshotEvaluation> result = evaluateSnapshot(fact, now);
+            Optional<SnapshotEvaluation> result = evaluateSnapshot(facts.testRunId(), fact, now);
             result.ifPresent(evaluations::add);
         }
         return evaluations;
     }
 
-    private Optional<SnapshotEvaluation> evaluateSnapshot(SnapshotExecutionFact fact, Instant now) {
+    private Optional<SnapshotEvaluation> evaluateSnapshot(long testRunId, SnapshotExecutionFact fact, Instant now) {
         SnapshotEvaluationReference reference = new SnapshotEvaluationReference(fact.snapshotId());
 
         // 이미 평가된 Snapshot은 기존 결과 사용 (재계산하지 않음)
         Optional<SnapshotEvaluation> existing = snapshotEvaluationRepository.findById(reference);
         if (existing.isPresent()) {
+            logAssertionDiagnostic(testRunId, fact, existing.get(), true);
             return existing;
         }
 
@@ -298,7 +299,26 @@ public class FinalizeTestRunService {
 
         // 새로 생성된 평가만 저장한다
         newEvaluation.ifPresent(snapshotEvaluationRepository::save);
+        if (newEvaluation.isPresent()) {
+            logAssertionDiagnostic(testRunId, fact, newEvaluation.get(), false);
+        } else {
+            log.info("Snapshot assertion을 건너뛰었습니다. testRunId={} snapshotId={} "
+                            + "expectedAction={} evaluatorVerdict=null assertionStatus=null evaluated=false",
+                    testRunId, fact.snapshotId(), fact.expectedActionCode());
+        }
         return newEvaluation;
+    }
+
+    private void logAssertionDiagnostic(
+            long testRunId,
+            SnapshotExecutionFact fact,
+            SnapshotEvaluation evaluation,
+            boolean evaluationReused
+    ) {
+        log.info("Snapshot assertion을 판정했습니다. testRunId={} snapshotId={} expectedAction={} "
+                        + "evaluatorVerdict={} assertionStatus={} evaluated=true evaluationReused={}",
+                testRunId, fact.snapshotId(), fact.expectedActionCode(),
+                fact.execution().evaluatorVerdictCode(), evaluation.assertionResult().status(), evaluationReused);
     }
 
     private static EvaluationAction toAction(String code) {
