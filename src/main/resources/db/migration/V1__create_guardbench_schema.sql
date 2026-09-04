@@ -29,7 +29,6 @@ CREATE TABLE test_case (
     category        TEXT NOT NULL,
     created_at      TIMESTAMPTZ(6) NOT NULL,
     updated_at      TIMESTAMPTZ(6) NOT NULL,
-    deleted_at      TIMESTAMPTZ(6),
 
     CONSTRAINT fk_test_case_suite
         FOREIGN KEY (test_suite_id) REFERENCES test_suite(id) ON DELETE RESTRICT,
@@ -38,31 +37,48 @@ CREATE TABLE test_case (
     CONSTRAINT ck_test_case_category_nonblank CHECK (category ~ '[^[:space:]]'),
     CONSTRAINT ck_test_case_expected_action CHECK (expected_action IN ('ALLOW', 'BLOCK')),
     CONSTRAINT ck_test_case_severity
-        CHECK (severity IN ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')),
-    CONSTRAINT ck_test_case_time_order
-        CHECK (
-            updated_at >= created_at
-            AND (deleted_at IS NULL OR deleted_at >= created_at)
-        )
+        CHECK (severity IN ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW'))
 );
 
 ALTER SEQUENCE test_case_id_seq OWNED BY test_case.id;
 
-CREATE INDEX idx_test_case_active_suite_created
-    ON test_case(test_suite_id, created_at, id)
-    WHERE deleted_at IS NULL;
+CREATE TABLE target_reference (
+    reference_id TEXT PRIMARY KEY,
+    target_type  VARCHAR(32) NOT NULL,
 
-CREATE INDEX idx_test_case_active_suite_category
-    ON test_case(test_suite_id, category, created_at, id)
-    WHERE deleted_at IS NULL;
+    CONSTRAINT ck_target_reference_id_nonblank
+        CHECK (reference_id ~ '[^[:space:]]'),
+    CONSTRAINT ck_target_reference_type
+        CHECK (target_type = 'HTTP_ENDPOINT')
+);
 
-CREATE INDEX idx_test_case_active_suite_expected_action
-    ON test_case(test_suite_id, expected_action, created_at, id)
-    WHERE deleted_at IS NULL;
+CREATE TABLE http_endpoint_target (
+    reference_id      TEXT PRIMARY KEY,
+    endpoint_url      TEXT NOT NULL,
+    model             TEXT NOT NULL,
+    requested_revision TEXT,
 
-CREATE INDEX idx_test_case_active_suite_severity
-    ON test_case(test_suite_id, severity, created_at, id)
-    WHERE deleted_at IS NULL;
+    CONSTRAINT fk_http_endpoint_target_reference
+        FOREIGN KEY (reference_id) REFERENCES target_reference(reference_id) ON DELETE RESTRICT,
+    CONSTRAINT ck_http_endpoint_url_nonblank CHECK (endpoint_url ~ '[^[:space:]]'),
+    CONSTRAINT ck_http_endpoint_url_scheme
+        CHECK (endpoint_url ~* '^https?://[^/?#[:space:]]+'),
+    CONSTRAINT ck_http_endpoint_target_model_nonblank
+        CHECK (model ~ '[^[:space:]]'),
+    CONSTRAINT ck_http_endpoint_target_revision_nonblank
+        CHECK (requested_revision IS NULL OR requested_revision ~ '[^[:space:]]')
+);
+
+CREATE TABLE evaluator_reference (
+    reference_id  TEXT PRIMARY KEY,
+    provider_code VARCHAR(32) NOT NULL,
+    model_id      TEXT NOT NULL,
+
+    CONSTRAINT ck_evaluator_reference_provider_code_nonblank
+        CHECK (provider_code ~ '[^[:space:]]'),
+    CONSTRAINT ck_evaluator_reference_model_id_nonblank
+        CHECK (model_id ~ '[^[:space:]]')
+);
 
 CREATE TABLE test_run (
     id                        BIGINT PRIMARY KEY DEFAULT nextval('test_run_id_seq'),
@@ -70,19 +86,18 @@ CREATE TABLE test_run (
     status                    VARCHAR(16) NOT NULL,
     test_case_count           INTEGER NOT NULL,
     processed_test_case_count INTEGER NOT NULL DEFAULT 0,
-    baseline_guardrail_id     TEXT NOT NULL,
-    baseline_version          TEXT NOT NULL,
-    candidate_guardrail_id    TEXT NOT NULL,
-    candidate_requested_source VARCHAR(16) NOT NULL,
-    candidate_resolved_version TEXT,
+    target_reference_id       TEXT NOT NULL UNIQUE,
+    evaluator_reference_id    TEXT NOT NULL,
     execution_outcome         VARCHAR(16),
     created_at                TIMESTAMPTZ(6) NOT NULL,
     started_at                TIMESTAMPTZ(6),
     completed_at              TIMESTAMPTZ(6),
     updated_at                TIMESTAMPTZ(6) NOT NULL,
 
-    CONSTRAINT fk_test_run_suite
-        FOREIGN KEY (test_suite_id) REFERENCES test_suite(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_test_run_target_reference
+        FOREIGN KEY (target_reference_id) REFERENCES target_reference(reference_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_test_run_evaluator_reference
+        FOREIGN KEY (evaluator_reference_id) REFERENCES evaluator_reference(reference_id) ON DELETE RESTRICT,
     CONSTRAINT ck_test_run_status
         CHECK (status IN ('QUEUED', 'PREPARING', 'RUNNING', 'FINISHED')),
     CONSTRAINT ck_test_run_count
@@ -90,22 +105,6 @@ CREATE TABLE test_run (
             test_case_count > 0
             AND processed_test_case_count BETWEEN 0 AND test_case_count
         ),
-    CONSTRAINT ck_test_run_guardrail_ids
-        CHECK (
-            baseline_guardrail_id ~ '[^[:space:]]'
-            AND candidate_guardrail_id ~ '[^[:space:]]'
-            AND baseline_guardrail_id = candidate_guardrail_id
-        ),
-    CONSTRAINT ck_test_run_versions
-        CHECK (
-            baseline_version ~ '^[0-9]+$'
-            AND (
-                candidate_resolved_version IS NULL
-                OR candidate_resolved_version ~ '^[0-9]+$'
-            )
-        ),
-    CONSTRAINT ck_test_run_candidate_source
-        CHECK (candidate_requested_source = 'DRAFT'),
     CONSTRAINT ck_test_run_execution_outcome
         CHECK (
             execution_outcome IS NULL
@@ -123,7 +122,6 @@ CREATE TABLE test_run (
                 status = 'QUEUED'
                 AND started_at IS NULL
                 AND completed_at IS NULL
-                AND candidate_resolved_version IS NULL
                 AND execution_outcome IS NULL
                 AND processed_test_case_count = 0
             )
@@ -137,7 +135,6 @@ CREATE TABLE test_run (
                 status = 'RUNNING'
                 AND started_at IS NOT NULL
                 AND completed_at IS NULL
-                AND candidate_resolved_version IS NOT NULL
                 AND execution_outcome IS NULL
             )
             OR (
@@ -146,10 +143,6 @@ CREATE TABLE test_run (
                 AND completed_at IS NOT NULL
                 AND execution_outcome IS NOT NULL
                 AND processed_test_case_count = test_case_count
-                AND (
-                    candidate_resolved_version IS NOT NULL
-                    OR execution_outcome = 'ERROR'
-                )
             )
         )
 );
@@ -158,13 +151,10 @@ ALTER SEQUENCE test_run_id_seq OWNED BY test_run.id;
 
 CREATE INDEX idx_test_run_created
     ON test_run(created_at DESC, id DESC);
-
 CREATE INDEX idx_test_run_suite_created
     ON test_run(test_suite_id, created_at DESC, id DESC);
-
 CREATE INDEX idx_test_run_status_created
     ON test_run(status, created_at DESC, id DESC);
-
 CREATE INDEX idx_test_run_outcome_created
     ON test_run(execution_outcome, created_at DESC, id DESC)
     WHERE execution_outcome IS NOT NULL;
@@ -182,8 +172,6 @@ CREATE TABLE test_case_snapshot (
 
     CONSTRAINT fk_snapshot_test_run
         FOREIGN KEY (test_run_id) REFERENCES test_run(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_snapshot_source_test_case
-        FOREIGN KEY (source_test_case_id) REFERENCES test_case(id) ON DELETE RESTRICT,
     CONSTRAINT uk_snapshot_run_source_test_case
         UNIQUE (test_run_id, source_test_case_id),
     CONSTRAINT ck_snapshot_name_nonblank CHECK (name ~ '[^[:space:]]'),
@@ -199,38 +187,36 @@ ALTER SEQUENCE test_case_snapshot_id_seq OWNED BY test_case_snapshot.id;
 
 CREATE INDEX idx_snapshot_run_id
     ON test_case_snapshot(test_run_id, id);
-
 CREATE INDEX idx_snapshot_source_test_case_id
     ON test_case_snapshot(source_test_case_id);
-
 CREATE INDEX idx_snapshot_run_category
     ON test_case_snapshot(test_run_id, category, id);
-
 CREATE INDEX idx_snapshot_run_expected_action
     ON test_case_snapshot(test_run_id, expected_action, id);
-
 CREATE INDEX idx_snapshot_run_severity
     ON test_case_snapshot(test_run_id, severity, id);
 
 CREATE TABLE test_execution (
-    snapshot_id   BIGINT NOT NULL,
-    target_type   VARCHAR(16) NOT NULL,
-    result_status VARCHAR(16) NOT NULL,
-    actual_action VARCHAR(16),
-    error_code    TEXT,
-    error_message TEXT,
-    started_at    TIMESTAMPTZ(6),
-    completed_at  TIMESTAMPTZ(6),
+    snapshot_id          BIGINT PRIMARY KEY,
+    result_status        VARCHAR(16) NOT NULL,
+    application_response TEXT,
+    evaluator_verdict    VARCHAR(16),
+    error_stage          VARCHAR(32),
+    error_code           TEXT,
+    error_message        TEXT,
+    started_at           TIMESTAMPTZ(6),
+    completed_at         TIMESTAMPTZ(6),
 
-    CONSTRAINT pk_test_execution PRIMARY KEY (snapshot_id, target_type),
     CONSTRAINT fk_execution_snapshot
         FOREIGN KEY (snapshot_id) REFERENCES test_case_snapshot(id) ON DELETE RESTRICT,
-    CONSTRAINT ck_execution_target_type
-        CHECK (target_type IN ('BASELINE', 'CANDIDATE')),
     CONSTRAINT ck_execution_result_status
         CHECK (result_status IN ('SUCCEEDED', 'FAILED', 'TIMED_OUT', 'NOT_STARTED')),
-    CONSTRAINT ck_execution_actual_action
-        CHECK (actual_action IS NULL OR actual_action IN ('ALLOW', 'BLOCK')),
+    CONSTRAINT ck_execution_application_response
+        CHECK (application_response IS NULL OR application_response ~ '[^[:space:]]'),
+    CONSTRAINT ck_execution_evaluator_verdict
+        CHECK (evaluator_verdict IS NULL OR evaluator_verdict IN ('ALLOW', 'BLOCK')),
+    CONSTRAINT ck_execution_error_stage
+        CHECK (error_stage IS NULL OR error_stage IN ('APPLICATION_TARGET', 'EVALUATOR')),
     CONSTRAINT ck_execution_error_pair
         CHECK (
             (error_code IS NULL AND error_message IS NULL)
@@ -240,7 +226,9 @@ CREATE TABLE test_execution (
         CHECK (
             (
                 result_status = 'SUCCEEDED'
-                AND actual_action IS NOT NULL
+                AND application_response IS NOT NULL
+                AND evaluator_verdict IS NOT NULL
+                AND error_stage IS NULL
                 AND error_code IS NULL
                 AND error_message IS NULL
                 AND started_at IS NOT NULL
@@ -248,15 +236,20 @@ CREATE TABLE test_execution (
             )
             OR (
                 result_status IN ('FAILED', 'TIMED_OUT')
-                AND actual_action IS NULL
+                AND evaluator_verdict IS NULL
+                AND error_stage IS NOT NULL
+                AND error_code IS NOT NULL
+                AND error_message IS NOT NULL
                 AND started_at IS NOT NULL
                 AND completed_at IS NOT NULL
             )
             OR (
                 result_status = 'NOT_STARTED'
-                AND actual_action IS NULL
+                AND application_response IS NULL
+                AND evaluator_verdict IS NULL
                 AND error_code IS NULL
                 AND error_message IS NULL
+                AND error_stage IS NULL
                 AND started_at IS NULL
                 AND completed_at IS NULL
             )
@@ -305,14 +298,11 @@ CREATE TABLE change_result (
 );
 
 CREATE TABLE quality_gate_result (
-    test_run_id                      BIGINT PRIMARY KEY,
-    gate_status                      VARCHAR(32) NOT NULL,
-    candidate_assertion_pass_rate    DOUBLE PRECISION,
-    security_regression_count        INTEGER,
-    security_regression_rate         DOUBLE PRECISION,
-    usability_regression_rate        DOUBLE PRECISION,
-    test_execution_success_rate      DOUBLE PRECISION,
-    created_at                       TIMESTAMPTZ(6) NOT NULL,
+    test_run_id            BIGINT PRIMARY KEY,
+    gate_status            VARCHAR(32) NOT NULL,
+    assertion_pass_rate    DOUBLE PRECISION,
+    execution_success_rate DOUBLE PRECISION,
+    created_at             TIMESTAMPTZ(6) NOT NULL,
 
     CONSTRAINT fk_quality_gate_test_run
         FOREIGN KEY (test_run_id) REFERENCES test_run(id) ON DELETE RESTRICT,
@@ -320,36 +310,101 @@ CREATE TABLE quality_gate_result (
         CHECK (gate_status IN ('PASS', 'FAIL', 'NOT_EVALUATED')),
     CONSTRAINT ck_quality_gate_metric_ranges
         CHECK (
-            (candidate_assertion_pass_rate IS NULL
-                OR candidate_assertion_pass_rate BETWEEN 0.0 AND 1.0)
-            AND (security_regression_count IS NULL OR security_regression_count >= 0)
-            AND (security_regression_rate IS NULL
-                OR security_regression_rate BETWEEN 0.0 AND 1.0)
-            AND (usability_regression_rate IS NULL
-                OR usability_regression_rate BETWEEN 0.0 AND 1.0)
-            AND (test_execution_success_rate IS NULL
-                OR test_execution_success_rate BETWEEN 0.0 AND 1.0)
+            (assertion_pass_rate IS NULL OR assertion_pass_rate BETWEEN 0.0 AND 1.0)
+            AND (execution_success_rate IS NULL OR execution_success_rate BETWEEN 0.0 AND 1.0)
         ),
     CONSTRAINT ck_quality_gate_result_shape
         CHECK (
             (
                 gate_status = 'NOT_EVALUATED'
-                AND candidate_assertion_pass_rate IS NULL
-                AND security_regression_count IS NULL
-                AND security_regression_rate IS NULL
-                AND usability_regression_rate IS NULL
-                AND test_execution_success_rate IS NULL
+                AND assertion_pass_rate IS NULL
+                AND execution_success_rate IS NULL
             )
             OR (
                 gate_status IN ('PASS', 'FAIL')
-                AND candidate_assertion_pass_rate IS NOT NULL
-                AND security_regression_count IS NOT NULL
-                AND security_regression_rate IS NOT NULL
-                AND usability_regression_rate IS NOT NULL
-                AND test_execution_success_rate IS NOT NULL
+                AND assertion_pass_rate IS NOT NULL
+                AND execution_success_rate IS NOT NULL
             )
         )
 );
 
 CREATE INDEX idx_quality_gate_status_run
     ON quality_gate_result(gate_status, test_run_id);
+
+CREATE TABLE test_run_idempotency (
+    idempotency_key     VARCHAR(100) PRIMARY KEY,
+    request_fingerprint CHAR(64) NOT NULL,
+    test_run_id         BIGINT NOT NULL UNIQUE,
+    created_at          TIMESTAMPTZ(6) NOT NULL,
+    expires_at          TIMESTAMPTZ(6) NOT NULL,
+
+    CONSTRAINT fk_test_run_idempotency_test_run
+        FOREIGN KEY (test_run_id) REFERENCES test_run(id) ON DELETE RESTRICT,
+    CONSTRAINT ck_test_run_idempotency_expiry
+        CHECK (expires_at > created_at)
+);
+
+CREATE INDEX idx_test_run_idempotency_expires_at
+    ON test_run_idempotency(expires_at);
+
+CREATE TABLE test_run_resolution_claim (
+    test_run_id   BIGINT PRIMARY KEY,
+    claim_token   UUID NOT NULL,
+    lease_until   TIMESTAMPTZ(6) NOT NULL,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    claimed_at    TIMESTAMPTZ(6) NOT NULL,
+    updated_at    TIMESTAMPTZ(6) NOT NULL,
+
+    CONSTRAINT fk_test_run_resolution_claim_test_run
+        FOREIGN KEY (test_run_id) REFERENCES test_run(id) ON DELETE RESTRICT,
+    CONSTRAINT ck_test_run_resolution_claim_attempt_count
+        CHECK (attempt_count >= 0),
+    CONSTRAINT ck_test_run_resolution_claim_lease
+        CHECK (lease_until >= claimed_at)
+);
+
+CREATE TABLE test_execution_claim (
+    snapshot_id   BIGINT PRIMARY KEY,
+    claim_token   UUID NOT NULL,
+    lease_until   TIMESTAMPTZ(6) NOT NULL,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    claimed_at    TIMESTAMPTZ(6) NOT NULL,
+    updated_at    TIMESTAMPTZ(6) NOT NULL,
+
+    CONSTRAINT fk_test_execution_claim_snapshot
+        FOREIGN KEY (snapshot_id) REFERENCES test_case_snapshot(id) ON DELETE RESTRICT,
+    CONSTRAINT ck_test_execution_claim_attempt_count
+        CHECK (attempt_count >= 0),
+    CONSTRAINT ck_test_execution_claim_lease
+        CHECK (lease_until >= claimed_at)
+);
+
+CREATE TABLE outbox_event (
+    event_id          UUID PRIMARY KEY,
+    event_type        VARCHAR(32) NOT NULL,
+    schema_version    SMALLINT NOT NULL,
+    payload           JSONB NOT NULL,
+    deduplication_key TEXT NOT NULL UNIQUE,
+    status            VARCHAR(16) NOT NULL,
+    created_at        TIMESTAMPTZ(6) NOT NULL,
+    published_at      TIMESTAMPTZ(6),
+
+    CONSTRAINT ck_outbox_event_type
+        CHECK (event_type IN (
+            'TestRunRequested',
+            'TestExecutionRequested',
+            'TestExecutionCompleted'
+        )),
+    CONSTRAINT ck_outbox_event_schema_version
+        CHECK (schema_version IN (1, 2)),
+    CONSTRAINT ck_outbox_event_status
+        CHECK (status IN ('PENDING', 'PUBLISHED')),
+    CONSTRAINT ck_outbox_event_published_at
+        CHECK (
+            (status = 'PENDING' AND published_at IS NULL)
+            OR (status = 'PUBLISHED' AND published_at IS NOT NULL)
+        )
+);
+
+CREATE INDEX idx_outbox_event_status_created_at
+    ON outbox_event(status, created_at);
