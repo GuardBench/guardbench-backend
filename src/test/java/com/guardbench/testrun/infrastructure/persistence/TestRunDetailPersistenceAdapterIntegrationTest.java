@@ -21,7 +21,7 @@ import com.guardbench.testrun.application.port.out.TestRunDetail;
 import com.guardbench.testsupport.PostgresTestConfiguration;
 
 /**
- * TestRun 상세 조회의 상태·진행률·targets·Quality Gate 조합을 실제 PostgreSQL에서 검증한다.
+ * TestRun 상세 조회의 상태·진행률·target·Quality Gate 조합을 실제 PostgreSQL에서 검증한다.
  *
  * @see <a href="../../../../../../../../docs/api/openapi.yaml">GuardBench API V1</a>
  */
@@ -50,12 +50,14 @@ class TestRunDetailPersistenceAdapterIntegrationTest {
     @DisplayName("RUNNING TestRun은 Quality Gate가 null이고 target reference를 포함한다")
     void returnsNullQualityGateForRunningTestRun() {
         insertSuite(50_001L);
-        insertTestRun(60_001L, 50_001L, "RUNNING", "2", null, null, true, false);
+        insertTestRun(60_001L, 50_001L, "RUNNING", "2", null, true, false);
 
         TestRunDetail detail = port.load(60_001L).orElseThrow();
 
         assertEquals("RUNNING", detail.status().name());
         assertEquals("target-ref-60001", detail.target().referenceId());
+        assertEquals("HTTP_ENDPOINT", detail.target().type());
+        assertEquals("https://example.com/v1/chat/completions", detail.target().identifier());
         assertNull(detail.executionOutcome());
         assertNull(detail.qualityGate());
     }
@@ -64,7 +66,7 @@ class TestRunDetailPersistenceAdapterIntegrationTest {
     @DisplayName("FINISHED TestRun의 PASS Quality Gate는 전체 metrics를 포함한다")
     void returnsFullMetricsForPassedQualityGate() {
         insertSuite(50_011L);
-        insertTestRun(60_011L, 50_011L, "FINISHED", "3", "COMPLETED", null, true, true);
+        insertTestRun(60_011L, 50_011L, "FINISHED", "3", "COMPLETED", true, true);
         insertQualityGateResult(60_011L, "PASS");
 
         TestRunDetail detail = port.load(60_011L).orElseThrow();
@@ -77,7 +79,7 @@ class TestRunDetailPersistenceAdapterIntegrationTest {
     @DisplayName("NOT_EVALUATED Quality Gate는 metrics가 null이다")
     void returnsNullMetricsForNotEvaluatedQualityGate() {
         insertSuite(50_021L);
-        insertTestRun(60_021L, 50_021L, "FINISHED", "4", "ERROR", null, true, true);
+        insertTestRun(60_021L, 50_021L, "FINISHED", "4", "ERROR", true, true);
         insertQualityGateResult(60_021L, "NOT_EVALUATED");
 
         TestRunDetail detail = port.load(60_021L).orElseThrow();
@@ -94,20 +96,28 @@ class TestRunDetailPersistenceAdapterIntegrationTest {
     }
 
     private void insertTestRun(
-            long id, long suiteId, String status, String resolvedVersion, String executionOutcome,
-            String unused, boolean started, boolean finished) {
+            long id, long suiteId, String status, String requestedRevision, String executionOutcome,
+            boolean started, boolean finished) {
         String targetReference = "target-ref-" + id;
-        jdbcTemplate.update("INSERT INTO target_reference(reference_id, target_type) VALUES (?, 'BEDROCK_GUARDRAIL')",
+        String evaluatorReference = "evaluator-ref-" + id;
+        jdbcTemplate.update("INSERT INTO target_reference(reference_id, target_type) VALUES (?, 'HTTP_ENDPOINT')",
                 targetReference);
-        jdbcTemplate.update("INSERT INTO bedrock_guardrail_target(reference_id, guardrail_identifier, requested_revision, resolved_revision) VALUES (?, 'guardrail', 'DRAFT', NULL)", targetReference);
+        jdbcTemplate.update("""
+                INSERT INTO http_endpoint_target(reference_id, endpoint_url, model, requested_revision)
+                VALUES (?, 'https://example.com/v1/chat/completions', 'test-model', ?)
+                """, targetReference, requestedRevision);
+        jdbcTemplate.update("""
+                INSERT INTO evaluator_reference(reference_id, provider_code, model_id)
+                VALUES (?, 'SAGEMAKER', 'classifier-endpoint')
+                """, evaluatorReference);
         jdbcTemplate.update("""
                 INSERT INTO test_run (
                     id, test_suite_id, status, test_case_count, processed_test_case_count,
-                    target_reference_id, execution_outcome,
+                    target_reference_id, evaluator_reference_id, execution_outcome,
                     created_at, started_at, completed_at, updated_at)
-                VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                id, suiteId, status, finished ? 1 : 0, targetReference, executionOutcome,
+                id, suiteId, status, finished ? 1 : 0, targetReference, evaluatorReference, executionOutcome,
                 Timestamp.from(T0),
                 started ? Timestamp.from(T0) : null,
                 finished ? Timestamp.from(T0) : null,
