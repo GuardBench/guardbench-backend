@@ -85,7 +85,7 @@ class TestRunRegressionPersistenceAdapterIntegrationTest {
         jdbcTemplate.update("INSERT INTO target_reference(reference_id, target_type) VALUES (?, 'HTTP_ENDPOINT')", targetId);
         jdbcTemplate.update("INSERT INTO http_endpoint_target(reference_id, endpoint_url, model) VALUES (?, ?, 'model')",
                 targetId, "https://example.com/" + id);
-        jdbcTemplate.update("INSERT INTO evaluator_reference(reference_id, provider_code, model_id) VALUES (?, 'BEDROCK', ?)",
+        jdbcTemplate.update("INSERT INTO evaluator_reference(reference_id, provider_code, model_id) VALUES (?, 'SAGEMAKER', ?)",
                 evaluatorId, modelId);
         jdbcTemplate.update("""
                 INSERT INTO test_run (
