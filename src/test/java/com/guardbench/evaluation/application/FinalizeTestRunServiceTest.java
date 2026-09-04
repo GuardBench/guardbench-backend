@@ -122,6 +122,9 @@ class FinalizeTestRunServiceTest {
                 assertEquals(true, completedLog.contains("executionSucceededCount=4"));
                 assertEquals(true, completedLog.contains("executionFailedCount=0"));
                 assertEquals(true, completedLog.contains("evaluatorReference=evaluator-ref"));
+                assertEquals(true, logCapture.hasMessageContaining("Snapshot assertion을 판정했습니다"));
+                assertEquals(true, logCapture.hasMessageContaining("snapshotId=10"));
+                assertEquals(true, logCapture.hasMessageContaining("assertionStatus=FAIL"));
             } finally {
                 logCapture.detach();
             }

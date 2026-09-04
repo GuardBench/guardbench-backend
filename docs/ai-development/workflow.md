@@ -29,6 +29,14 @@ Feature, Bug 또는 Engineering Task 템플릿을 사용한다. 목적, 관련 �
 
 `DRAFT`에 따라 공개 동작이 달라지면 미결정을 Issue에 남기고 중단한다. GitHub와 Notion이 충돌하면 GitHub를 우선하고 차이를 보고한다. 현재 Issue가 기존 계약이나 API를 명시적으로 대체하면 `AGENTS.md`의 [계약 대체와 호환성](../../AGENTS.md#계약-대체와-호환성) 규칙을 따른다.
 
+### 호환성 판단 절차
+
+legacy alias, deprecated shim 또는 backward-compatible 경로를 보존·추가하기 전에는 실제 근거를 확인한다. 근거는 현재 공개 API 소비처, 실제 내부 호출부, 명시된 migration/data compatibility 요구, 사용자 또는 Issue의 명시적 backward compatibility 요구, 운영 중인 실제 배포 버전 간 호환 필요성으로 한정한다. 기존 테스트가 존재한다는 사실이나 `최소 변경`이라는 이유만으로는 충분하지 않다.
+
+구현 전에 공개 API 호출처, 내부 호출부, 설정·스크립트·문서의 reference, migration/data 요구, 운영 배포 버전을 검색하고 결과를 Issue 또는 PR에 기록한다. 근거가 없고 새 계약이 기존 경로를 대체한다면 legacy 경로를 제거하는 것이 기본값이다. 소비처 조사 없이 alias나 shim을 추가하지 않으며, 기존 경로가 명시적으로 대체되지 않았거나 판단이 불확실하면 공개 계약을 임의로 깨거나 호환 경로를 추측해 추가하지 않고 필요성과 영향 범위를 보고한다.
+
+호환성을 유지하기로 결정한 경우에는 Issue 또는 PR에 근거, 대상·영향 범위, 제거 조건 또는 유지 기간을 남기고 관련 검증을 갱신한다. 상세 상시 규칙은 [`AGENTS.md`의 계약 대체와 호환성](../../AGENTS.md#계약-대체와-호환성)을 따른다.
+
 ## 2. worktree와 branch 준비
 
 Issue 하나당 별도 worktree와 `agent/{issue-number}-{slug}` branch를 사용한다. 기준 branch는 기본적으로 `dev`다.
