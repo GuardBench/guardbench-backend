@@ -368,6 +368,13 @@ class PerformanceRunnerTest(unittest.TestCase):
         self.assertIn('docker push "$1"', publish_script)
         self.assertNotIn("guardbench", build_script)
 
+    def test_shell_script_line_endings_are_pinned_to_lf(self):
+        attributes = (ROOT.parent / ".gitattributes").read_text(encoding="utf-8")
+        build_script = (ROOT / "build-runner-image.sh").read_bytes()
+
+        self.assertIn("*.sh text eol=lf", attributes)
+        self.assertNotIn(b"\r\n", build_script)
+
     def test_image_build_passes_one_git_sha_to_tag_and_revision(self):
         with tempfile.TemporaryDirectory() as directory:
             fake_bin = Path(directory) / "bin"
