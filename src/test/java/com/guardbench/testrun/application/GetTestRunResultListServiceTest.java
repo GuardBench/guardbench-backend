@@ -18,6 +18,7 @@ import com.guardbench.testrun.application.port.out.TestRunDetail;
 import com.guardbench.testrun.application.port.out.TestRunProgress;
 import com.guardbench.testrun.application.port.out.TestRunResultItem;
 import com.guardbench.testrun.application.port.out.TestRunResultListCriteria;
+import com.guardbench.testrun.application.port.out.TestRunResultListView;
 import com.guardbench.testrun.application.port.out.TargetReferenceView;
 import com.guardbench.testrun.domain.Action;
 import com.guardbench.testrun.domain.Severity;
@@ -39,17 +40,18 @@ class GetTestRunResultListServiceTest {
         TestRunResultItem resultItem = new TestRunResultItem(
                 1001L, 10L, "case", "input", Action.BLOCK, Severity.HIGH, "category",
                 new TestExecutionView(TestExecutionStatus.SUCCEEDED, Action.ALLOW, null, null, null),
-                "FAIL", "FALSE_NEGATIVE");
+                "FAIL", "FALSE_NEGATIVE", null);
         PageResult<TestRunResultItem> expected =
                 PageResult.of(List.of(resultItem), new PageCriteria(1, 20), 1L);
         LoadTestRunDetailPort detailPort = testRunId -> Optional.of(finishedTestRun);
-        LoadTestRunResultListPort resultPort = (testRunId, criteria) -> expected;
+        TestRunResultListView expectedView = new TestRunResultListView(expected, null);
+        LoadTestRunResultListPort resultPort = (testRunId, criteria) -> expectedView;
         GetTestRunResultListService service = new GetTestRunResultListService(detailPort, resultPort);
 
-        PageResult<TestRunResultItem> actual =
+        TestRunResultListView actual =
                 service.getResults(901L, TestRunResultListCriteria.firstPage());
 
-        assertEquals(expected, actual);
+        assertEquals(expectedView, actual);
     }
 
     @Test
