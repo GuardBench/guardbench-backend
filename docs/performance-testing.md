@@ -39,7 +39,7 @@ Dataset은 무엇을 실행할지, Profile은 얼마나 실행할지를 소유�
 | 구분 | 책임 | 예시 |
 | --- | --- | --- |
 | Dataset | TestSuite/TestCase 내용과 재현 가능한 TestCase 수 | `baseline-v1`, 78 TestCases |
-| Profile | 동시 TestRun 수, ramp-up, duration, test type, acceptance criteria | `small`, `SMOKE` |
+| Profile | 동시 TestRun 수, ramp-up, duration, test type, acceptance criteria | `smoke`, `SMOKE` |
 
 `performance/datasets/baseline-v1.yaml`은 기존 데모용 78건 import fixture를 immutable
 source로 고정한다. 이 Dataset은 classifier 정확도 benchmark가 아니라 반복 가능한 performance
@@ -55,7 +55,7 @@ Profile type은 다음 의미를 갖는다.
 - `STRESS`: 용량 한계를 찾는 단계적 증가 실험
 - `SOAK`: 장시간 실행에서 backlog, memory, 오류 누적 확인
 
-`small.yaml`만 현재 실행 가능한 초기 Profile이다. `target`, `peak`, `stress`, `soak`의
+`smoke.yaml`만 현재 실행 가능한 초기 Profile이다. `target`, `peak`, `stress`, `soak`의
 최종 숫자는 Capacity Target 결정 후 같은 형식으로 추가한다.
 
 ## 책임 경계
@@ -284,7 +284,7 @@ reset 없는 seed 반복 실행은 허용하지 않는다. 따라서 이전 Suit
 다음 실행에 누적되어 DB 크기와 index 상태를 바꾸는 경로가 없다.
 
 `concurrent_test_runs`는 단순 POST 동시 요청 수가 아니라 각 VU가 하나의 TestRun을 접수한 뒤
-`FINISHED`까지 polling하는 동안 살아 있는 비동기 TestRun 수에 가깝다. 현재 `small`은
+`FINISHED`까지 polling하는 동안 살아 있는 비동기 TestRun 수에 가깝다. 현재 `smoke`는
 `max_iterations_per_vu: 1`이므로 1 VU가 1건을 완료하고 끝나는 Smoke이며, `duration_seconds`
 동안 지속적으로 새 Run을 생성하는 Profile이 아니다. LOAD/STRESS/SOAK Profile에서는 이
 필드를 0(제한 없음) 또는 적절한 반복 수로 명시해 생성률과 완료 polling traffic을 함께

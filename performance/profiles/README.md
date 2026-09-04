@@ -22,7 +22,7 @@
 - completion timeout: `300s`
 - polling interval: `2s`
 
-`small.yaml`은 기존 Runner/문서 참조와의 호환을 위해 같은 설정을 유지하는 alias다. 새 실행과 새 문서는 `smoke.yaml`을 사용한다. 여기서 `small`은 Dataset Size를 뜻하지 않는다.
+`smoke.yaml`은 현재 유일한 실행 가능한 canonical Profile이다. Profile 이름은 Dataset Size나 Infrastructure Capacity를 의미하지 않는다.
 
 LOAD/PEAK/STRESS/SOAK의 구체적인 workload 값과 Dataset Size의 `SMALL/MEDIUM/LARGE` 경계는 사전에 고정하지 않는다. Smoke 결과와 이후 단계적 실험 결과를 보고 정한다. 새 Profile은 Runner 핵심 로직에 타입별 분기문을 추가하지 않고 동일 schema로 추가한다.
 
