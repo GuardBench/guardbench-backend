@@ -1,9 +1,11 @@
+# Backward-compatible alias for the canonical smoke profile.
+# New executions should use performance/profiles/smoke.yaml.
 test:
-  id: PERF-SMALL
+  id: PERF-SMOKE-01
   name: classifier pipeline smoke
   type: SMOKE
 
-# Profile은 실행량과 acceptance criteria만 소유한다. 어떤 TestCase를 실행할지는 Dataset이 소유한다.
+# Profile은 Test Type과 workload/acceptance criteria를 소유한다. Dataset 크기와 인프라 capacity는 별도 축이다.
 workload:
   concurrent_test_runs: 1
   ramp_up_seconds: 0
