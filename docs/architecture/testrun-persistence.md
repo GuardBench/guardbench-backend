@@ -2,65 +2,78 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Scope: GitHub Issues #14, #106, #110, #114, #116, #125, #128
-> Last reviewed: 2026-09-01
+> Last reviewed: 2026-09-04
 > Target architecture: [ADR 0013](../decisions/0013-response-behavior-classifier.md)
-> Related broad documentation issue: [#49](https://github.com/GuardBench/guardbench-backend/issues/49)
 
-이 문서는 PostgreSQL 물리 Persistence 산출물의 탐색 인덱스다. 새 동작, DB 제약 또는 Context 경계를 결정하지 않으며, 구현 판단은 아래 APPROVED ADR과 현재 Issue를 따른다.
+이 문서는 현재 PostgreSQL persistence 구현의 탐색 인덱스다. 현재 구현과 fresh database schema만 설명하며 이전 스키마에 대한 upgrade compatibility는 다루지 않는다.
 
-## 계약 층위
+## 현재 계약
 
-이 문서와 물리 ERD는 **current implementation**을 기록한다. 새 TestRun은 OpenAI-compatible `HTTP_ENDPOINT` Application Target과 classifier contract version을 고정한다. 과거 legacy 데이터 보존은 MVP 초기화 환경의 #173 범위에서 고려하지 않는다.
+- 신규 TestRun Target은 OpenAI-compatible `HTTP_ENDPOINT`만 허용한다.
+- TestRun은 하나의 `TargetReference`와 하나의 `EvaluatorReference`를 고정한다.
+- `EvaluatorReference`는 실행 당시 Response Behavior Classifier의 provider/model 식별자를 저장한다.
+- Snapshot당 `TestExecution`은 하나다.
+- 성공한 execution은 AI Application response와 classifier가 정규화한 `ALLOW | BLOCK` verdict를 저장한다.
+- Regression은 완료된 Run들의 Snapshot 정의와 저장 verdict를 조회해 계산하며 Application Target이나 classifier를 재호출하지 않는다.
 
-## 승인 계약
+## 물리 스키마
 
-- [ADR 0002: PostgreSQL 영속성 계약과 물리 ERD](../decisions/0002-postgresql-persistence-contract.md)
-- [ADR 0003: 실행·평가 결과 Aggregate와 write-side Port 경계](../decisions/0003-result-aggregate-and-write-port-boundaries.md)
-- [ADR 0006: 독립 Domain 경계와 Java 타입 격리](../decisions/0006-independent-domain-contract-boundaries.md)
-- [ADR 0008: 비동기 TestRun 물리 멱등성·claim·Outbox 계약](../decisions/0008-async-testrun-persistence-contract.md)
-- [ADR 0010: TestRun 단일 Target 실행 모델](../decisions/0010-single-target-test-run-model.md)
-- [ADR 0013: Response Behavior Classifier 실행 계약](../decisions/0013-response-behavior-classifier.md)
+현재 fresh database schema는 `src/main/resources/db/migration/V1__create_guardbench_schema.sql` 하나가 생성한다.
 
-## 실제 산출물
+주요 테이블은 다음과 같다.
 
-| 구분 | 위치 | 내용 |
-| --- | --- | --- |
-| Core schema | `src/main/resources/db/migration/V1__create_guardbench_schema.sql` | TestRun, Snapshot, Execution, Assertion, Change, Quality Gate 테이블·PK/FK/CHECK·index |
-| Async technical schema | `src/main/resources/db/migration/V2__create_async_testrun_technical_tables.sql` | HTTP idempotency, Outbox, resolution/execution claim 물리 계약 |
-| Single Target schema | `src/main/resources/db/migration/V3__single_target_execution_model.sql` | Target reference/provider table, 단일 execution·claim PK, pending v2 Outbox 이관 |
-| HTTP Endpoint Target schema | `src/main/resources/db/migration/V4__http_endpoint_target.sql`, `V7__openai_compatible_http_target.sql`, `V8__require_http_target_model.sql` | `HTTP_ENDPOINT` provider table, OpenAI-compatible `model` 저장 및 `NOT NULL` 제약 |
-| HTTP Endpoint URL constraint | `src/main/resources/db/migration/V5__strengthen_http_endpoint_url_constraint.sql` | `endpoint_url`의 HTTP/HTTPS scheme과 host 형태 DB 제약 강화 |
-| Classifier reference snapshot | `src/main/resources/db/migration/V6__evaluator_reference_and_profile.sql` | classifier contract version과 HTTP Target revision 고정 |
-| Application/Evaluator execution result | `src/main/resources/db/migration/V9__separate_application_and_evaluator_results.sql`, `V10__remove_legacy_actual_action.sql` | Application response, Evaluator verdict, 실패 단계와 legacy action column 제거 및 execution shape CHECK 제약 |
-| Current-run Quality Gate metrics | `src/main/resources/db/migration/V11__current_run_quality_gate_metrics.sql` | 현재 Run의 Assertion 통과율·실행 성공률과 `NOT_EVALUATED` 저장 shape |
-| ERD | [PlantUML ERD](../diagrams/guardbench-mvp-physical-erd.puml) | migration 적용 후 관계와 cardinality |
-| TestRun write adapters | `testrun/infrastructure/persistence` | TestRun, Snapshot, TestExecution, idempotency, Outbox, claim Adapter |
-| Target/Classifier adapters | `target/infrastructure/persistence`, `testrun/infrastructure/evaluator`, `evaluator/infrastructure/sagemaker` | HTTP Target 등록과 immutable classifier reference persistence |
-| Evaluation write adapters | `evaluation/infrastructure/persistence` | Assertion-only SnapshotEvaluation 및 NOT_EVALUATED QualityGateResult Adapter |
-| Evaluation write ports | `evaluation/domain/repository` | Evaluation 소유 local reference VO를 쓰는 write-side Port |
-| PostgreSQL integration tests | `src/test/java/com/guardbench/*Persistence*IntegrationTest.java`, `EvaluationPersistenceAdapterIntegrationTest.java` | Flyway schema와 Repository round-trip·제약 검증 |
+| 영역 | 테이블 |
+| --- | --- |
+| Test definition | `test_suite`, `test_case` |
+| TestRun | `test_run`, `test_case_snapshot`, `test_execution` |
+| Target / classifier | `target_reference`, `http_endpoint_target`, `evaluator_reference` |
+| Evaluation | `assertion_result`, `change_result`, `quality_gate_result` |
+| Async / concurrency | `test_run_idempotency`, `test_run_resolution_claim`, `test_execution_claim`, `outbox_event` |
 
-## HTTP Target persistence 계약
+편집 가능한 물리 ERD는 [PlantUML ERD](../diagrams/guardbench-mvp-physical-erd.puml)다.
 
-`http_endpoint_target.model`은 신규 MVP 데이터에서 필수다. `TargetReferenceReq.model`, Target 등록 값, DB column과 조회 응답이 모두 non-blank/non-null 의미로 정렬된다. MVP는 generic `{"input": ...}` / `{"response": ...}` Target 계약을 지원하지 않으므로 Target 종류를 구분하기 위한 nullable model을 두지 않는다.
+## Target persistence
 
-## 시각 소유권
+`target_reference.target_type`은 현재 `HTTP_ENDPOINT`만 허용한다.
 
-- Aggregate 생성·수정·lifecycle 시각은 Application이 주입받은 `Clock`으로 결정하고 Domain과 Persistence Adapter가 `Instant`를 보존한다.
-- Evaluation의 `SnapshotEvaluation.createdAt`과 `QualityGateResult.createdAt`은 해당 규칙을 따른다.
-- idempotency 만료와 resolution/execution claim lease·비교는 여러 Worker 간 동시성 경계이므로 ADR 0008대로 PostgreSQL `clock_timestamp()`을 사용한다.
+`http_endpoint_target`은 다음 값을 저장한다.
 
-## 목표 구조와의 차이
+- `endpoint_url`: 필수 HTTP/HTTPS URL
+- `model`: 필수 OpenAI-compatible model
+- `requested_revision`: 선택적 revision metadata
 
-#173에서 profile/catalog 경로를 제거하고 classifier contract snapshot으로 전환했다. #115/#125/#128의 OpenAI-compatible HTTP Application Target 경계와 Worker의 Application response → classifier verdict → Assertion 경계를 사용해 결과를 저장·조회한다. Application response는 내부 저장 값이며 public 결과에는 노출하지 않는다.
+TestRun 상세 조회와 Regression 조회는 `http_endpoint_target`을 직접 JOIN하며 provider fallback 경로를 사용하지 않는다.
 
-#119의 Regression은 별도 결과를 저장하지 않고 완료된 두 Run의 Snapshot 정의와 저장 verdict를 읽어 조회 시 계산한다. 고정 classifier contract version은 비교 후보 필터에 사용하며 Application Target/classifier 재호출은 없다.
+## Classifier reference
 
-Quality Gate는 #118에서 현재 Run의 평가 가능한 Assertion 통과율과 전체 실행 성공률을 저장하며, Regression 저장/API는 #119의 범위다.
+`evaluator_reference`는 다음 값을 저장한다.
 
-## 범위 제외
+- `provider_code`
+- `model_id`
 
-- QualityGateResult 저장과 TestRun `FINISHED` 전환의 Application 트랜잭션 조율은 ADR 0004 및 후속 Worker/finalization 범위다.
-- Queue, retry, DLQ, Worker 계약은 [ADR 0005](../decisions/0005-async-test-run-execution-contract.md)와 [비동기 TestRun 계약 맵](../contracts/README.md)이 소유하며 이 문서로 대체하지 않는다.
-- #19(통합·회귀 테스트)는 실제 PostgreSQL에서 접수·Worker 체인·결과 조회를 검증한다. SQS 전송·DLQ와 같은 비동기 인프라 경계는 이 Persistence 인덱스의 범위가 아니다.
+두 값은 nonblank이며 `test_run.evaluator_reference_id`는 필수 FK다. 사용자는 이 값을 TestRun 생성 요청에서 제출하지 않고 서버가 현재 classifier configuration을 등록한다.
+
+## Snapshot과 삭제
+
+- `test_case.test_suite_id`는 현재 편집 자산의 관계이므로 FK를 유지한다.
+- `test_case_snapshot.source_test_case_id`와 `test_run.test_suite_id`는 historical identity scalar이며 원본 row에 FK를 두지 않는다.
+- TestCase/TestSuite의 현재 정의를 삭제해도 이미 생성된 Snapshot과 TestRun 결과의 의미는 유지된다.
+
+## 비동기 persistence
+
+- HTTP idempotency는 `test_run_idempotency`가 담당한다.
+- resolution/execution lease는 각각 `test_run_resolution_claim`, `test_execution_claim`이 담당한다.
+- 비동기 이벤트는 `outbox_event`에 저장한다.
+- claim lease와 idempotency 만료 비교는 여러 Worker 간 동시성 경계이므로 PostgreSQL DB time을 사용한다.
+
+## 관련 구현
+
+- TestRun write/query adapters: `testrun/infrastructure/persistence`
+- HTTP Target persistence: `target/infrastructure/persistence`
+- Response Behavior Classifier adapter: `evaluator/infrastructure/sagemaker`
+- Evaluation persistence: `evaluation/infrastructure/persistence`
+- 스키마 검증: `PersistenceFoundationIntegrationTest` 및 각 persistence integration test
+
+## 운영 전제
+
+이 스키마는 이전 Flyway migration history와의 upgrade compatibility를 제공하지 않는다. 현재 모델을 ground truth로 사용하며, 적용 대상 database는 current V1 schema 기준으로 초기화한다.

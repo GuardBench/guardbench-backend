@@ -38,16 +38,15 @@ class TestRunDetailPersistenceAdapter implements LoadTestRunDetailPort {
     private static final String SELECT_SQL = """
             SELECT r.id, r.test_suite_id, r.status, r.test_case_count,
                    r.processed_test_case_count, r.target_reference_id, tr.target_type,
-                   COALESCE(bg.guardrail_identifier, he.endpoint_url) AS target_identifier,
-                   COALESCE(bg.requested_revision, he.requested_revision) AS target_revision,
+                   he.endpoint_url AS target_identifier,
+                   he.requested_revision AS target_revision,
                    he.model AS target_model,
                    r.execution_outcome,
                    r.created_at, r.started_at, r.completed_at, r.updated_at,
                    qgr.gate_status, qgr.assertion_pass_rate, qgr.execution_success_rate
             FROM test_run r
             JOIN target_reference tr ON tr.reference_id = r.target_reference_id
-            LEFT JOIN bedrock_guardrail_target bg ON bg.reference_id = tr.reference_id
-            LEFT JOIN http_endpoint_target he ON he.reference_id = tr.reference_id
+            JOIN http_endpoint_target he ON he.reference_id = tr.reference_id
             LEFT JOIN quality_gate_result qgr ON qgr.test_run_id = r.id
             WHERE r.id = ?
             """;

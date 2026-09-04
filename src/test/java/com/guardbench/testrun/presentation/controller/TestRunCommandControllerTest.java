@@ -134,7 +134,7 @@ class TestRunCommandControllerTest {
                     "identifier": "https://example.com/v1/chat/completions",
                     "model": "test-model"
                   },
-                  "evaluationProfile": { "checks": ["PII_LEAKAGE"], "strictness": "STANDARD" }
+                  "evaluationProfile": { "checks": ["CUSTOM_CHECK"], "strictness": "STANDARD" }
                 }
                 """;
 
@@ -149,22 +149,7 @@ class TestRunCommandControllerTest {
         String body = """
                 {
                   "testSuiteId": 1,
-                  "target": { "type": "HTTP", "identifier": "target-123", "revision": "DRAFT", "model": "test-model" }
-                }
-                """;
-
-        mockMvc.perform(post(BASE).contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.data.code").value("VALIDATION_ERROR"));
-    }
-
-    @Test
-    @DisplayName("BEDROCK_GUARDRAIL 신규 Target 요청이면 400 VALIDATION_ERROR를 반환한다")
-    void bedrockTargetRequestReturnsValidationError() throws Exception {
-        String body = """
-                {
-                  "testSuiteId": 1,
-                  "target": { "type": "BEDROCK_GUARDRAIL", "identifier": "guardrail-123", "revision": "1", "model": "test-model" }
+                  "target": { "type": "UNSUPPORTED", "identifier": "target-123", "revision": "v1", "model": "test-model" }
                 }
                 """;
 

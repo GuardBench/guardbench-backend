@@ -27,8 +27,8 @@ class TestRunRegressionPersistenceAdapter implements LoadTestRunRegressionPort {
 
     private static final String RUN_SELECT = """
             SELECT r.id, r.test_suite_id, r.status, r.target_reference_id, tr.target_type,
-                   COALESCE(bg.guardrail_identifier, he.endpoint_url) AS target_identifier,
-                   COALESCE(bg.requested_revision, he.requested_revision) AS target_revision,
+                   he.endpoint_url AS target_identifier,
+                   he.requested_revision AS target_revision,
                    he.model AS target_model,
                    r.completed_at,
                    CASE WHEN er.reference_id IS NULL THEN NULL
@@ -36,23 +36,21 @@ class TestRunRegressionPersistenceAdapter implements LoadTestRunRegressionPort {
                    END AS evaluator_config_key
             FROM test_run r
             JOIN target_reference tr ON tr.reference_id = r.target_reference_id
-            LEFT JOIN bedrock_guardrail_target bg ON bg.reference_id = tr.reference_id
-            LEFT JOIN http_endpoint_target he ON he.reference_id = tr.reference_id
+            JOIN http_endpoint_target he ON he.reference_id = tr.reference_id
             LEFT JOIN evaluator_reference er ON er.reference_id = r.evaluator_reference_id
             WHERE r.id = ?
             """;
 
     private static final String COMPARABLE_SELECT = """
             SELECT r.id, r.test_suite_id, r.status, r.target_reference_id, tr.target_type,
-                   COALESCE(bg.guardrail_identifier, he.endpoint_url) AS target_identifier,
-                   COALESCE(bg.requested_revision, he.requested_revision) AS target_revision,
+                   he.endpoint_url AS target_identifier,
+                   he.requested_revision AS target_revision,
                    he.model AS target_model,
                    r.completed_at,
                    er.provider_code || '|' || er.model_id AS evaluator_config_key
             FROM test_run r
             JOIN target_reference tr ON tr.reference_id = r.target_reference_id
-            LEFT JOIN bedrock_guardrail_target bg ON bg.reference_id = tr.reference_id
-            LEFT JOIN http_endpoint_target he ON he.reference_id = tr.reference_id
+            JOIN http_endpoint_target he ON he.reference_id = tr.reference_id
             JOIN evaluator_reference er ON er.reference_id = r.evaluator_reference_id
             WHERE r.id <> ?
               AND r.status = 'FINISHED'
