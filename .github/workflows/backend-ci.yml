@@ -20,8 +20,49 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: detect verification scope
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/dev')
+    runs-on: ubuntu-latest
+    outputs:
+      application_source: ${{ steps.scope.outputs.application_source }}
+      verification_required: ${{ steps.scope.outputs.verification_required }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect verification scope
+        id: scope
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$BASE" =~ ^0+$ ]] || ! git diff --quiet "$BASE" "$HEAD" -- src/; then
+            echo 'application_source=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'application_source=false' >> "$GITHUB_OUTPUT"
+          fi
+
+          if [[ "$BASE" =~ ^0+$ ]] || ! git diff --quiet "$BASE" "$HEAD" -- \
+            src/ build.gradle settings.gradle gradle/ gradlew gradlew.bat; then
+            echo 'verification_required=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'verification_required=false' >> "$GITHUB_OUTPUT"
+          fi
+
   verify:
     name: verify
+    needs: changes
+    if: >-
+      always() &&
+      (
+        (github.event_name == 'workflow_dispatch' && inputs.deployment_mode == 'source') ||
+        (github.event_name != 'workflow_dispatch' &&
+        needs.changes.result == 'success' &&
+        needs.changes.outputs.verification_required == 'true')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -34,36 +75,17 @@ jobs:
       - name: Build, test, and package
         run: ./gradlew clean check bootJar --no-daemon
 
-  changes:
-    name: detect deployment scope
-    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
-    runs-on: ubuntu-latest
-    outputs:
-      application_source: ${{ steps.application_source.outputs.changed }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Detect application source changes
-        id: application_source
-        env:
-          BEFORE: ${{ github.event.before }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "$BEFORE" =~ ^0+$ ]] \
-            || ! git diff --quiet "$BEFORE" "$GITHUB_SHA" -- src/; then
-            echo 'changed=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'changed=false' >> "$GITHUB_OUTPUT"
-          fi
-
   deploy:
     name: deploy dev
     needs: [verify, changes]
     if: >-
       always() &&
-      needs.verify.result == 'success' &&
+      (
+        needs.verify.result == 'success' ||
+        (github.event_name == 'workflow_dispatch' &&
+        inputs.deployment_mode == 'infrastructure' &&
+        needs.verify.result == 'skipped')
+      ) &&
       github.ref == 'refs/heads/dev' &&
       (
         (github.event_name == 'push' && needs.changes.outputs.application_source == 'true') ||
