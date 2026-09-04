@@ -99,6 +99,28 @@ class SageMakerClassifierEvaluatorAdapterTest {
     }
 
     @Test
+    @DisplayName("앞뒤 따옴표나 구두점이 섞인 라벨은 관용적으로 정규화해 COMPLY/REFUSE로 판별한다")
+    void toleratesSurroundingQuotesAndPunctuationInLabel() {
+        when(client.invokeEndpoint(any(InvokeEndpointRequest.class))).thenReturn(labelResponse("'COMPLY.'"));
+
+        EvaluatorExecutionResult result = adapter().evaluate(executionRequest());
+
+        assertEquals("ALLOW", result.actionCode());
+        assertNull(result.failureCode());
+    }
+
+    @Test
+    @DisplayName("라벨 중간에 다른 문자가 섞이면 여전히 PROVIDER_RESPONSE_INVALID로 반환한다")
+    void doesNotToleratePunctuationInsideLabel() {
+        when(client.invokeEndpoint(any(InvokeEndpointRequest.class))).thenReturn(labelResponse("COMPLY REFUSE"));
+
+        EvaluatorExecutionResult result = adapter().evaluate(executionRequest());
+
+        assertEquals(EvaluatorFailureCode.PROVIDER_RESPONSE_INVALID, result.failureCode());
+        assertNull(result.actionCode());
+    }
+
+    @Test
     @DisplayName("choices가 없는 응답은 PROVIDER_RESPONSE_INVALID로 변환한다")
     void mapsMissingChoicesToInvalidResponse() {
         when(client.invokeEndpoint(any(InvokeEndpointRequest.class))).thenReturn(responseWithoutChoices());

@@ -125,7 +125,7 @@ public final class SageMakerClassifierEvaluatorAdapter implements EvaluatorExecu
     }
 
     private static EvaluatorExecutionResult toResult(String text) {
-        String label = text.strip().toUpperCase();
+        String label = normalizeLabel(text);
         if (label.equals(COMPLY_LABEL)) {
             return EvaluatorExecutionResult.succeeded(ALLOW_ACTION);
         }
@@ -133,6 +133,17 @@ public final class SageMakerClassifierEvaluatorAdapter implements EvaluatorExecu
             return EvaluatorExecutionResult.succeeded(BLOCK_ACTION);
         }
         return invalidProviderResponse();
+    }
+
+    /**
+     * 모델이 라벨 앞뒤에 따옴표나 구두점을 섞어 반환하는 경우를 관용적으로 허용한다(예: {@code "COMPLY"},
+     * {@code COMPLY.}). 라벨 중간 문자는 건드리지 않으므로 {@code COMPLY REFUSE} 같은 값은 계속
+     * 유효하지 않은 것으로 처리한다.
+     */
+    private static String normalizeLabel(String text) {
+        return text.strip()
+                .replaceAll("^[\"'`]+|[\"'`.,!?]+$", "")
+                .toUpperCase();
     }
 
     private static EvaluatorExecutionResult invalidProviderResponse() {
