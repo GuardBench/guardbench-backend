@@ -7,7 +7,7 @@ import com.guardbench.testrun.application.port.out.EvaluatorRegistration;
 import com.guardbench.testrun.application.port.out.RegisterEvaluatorReferencePort;
 import com.guardbench.testrun.domain.EvaluatorReference;
 
-/** TestRun에 고정된 Evaluator의 provider 설정과 numbered revision을 저장한다. */
+/** TestRun에 고정된 Response Behavior Classifier의 provider/model 식별자를 저장한다. */
 @Repository
 class EvaluatorReferencePersistenceAdapter implements RegisterEvaluatorReferencePort {
     private final JdbcTemplate jdbcTemplate;
@@ -16,11 +16,8 @@ class EvaluatorReferencePersistenceAdapter implements RegisterEvaluatorReference
 
     @Override
     public void register(EvaluatorReference reference, EvaluatorRegistration registration) {
-        jdbcTemplate.update("INSERT INTO evaluator_reference(reference_id, evaluator_type) VALUES (?, ?)",
-                reference.value(), registration.typeCode());
         jdbcTemplate.update("""
-                INSERT INTO bedrock_guardrail_evaluator(reference_id, guardrail_identifier, guardrail_revision)
-                VALUES (?, ?, ?)
-                """, reference.value(), registration.identifier(), registration.revision());
+                INSERT INTO evaluator_reference(reference_id, provider_code, model_id) VALUES (?, ?, ?)
+                """, reference.value(), registration.providerCode(), registration.modelId());
     }
 }

@@ -11,15 +11,18 @@ import org.junit.jupiter.api.Test;
 class EvaluatorPortContractTest {
 
     @Test
-    @DisplayName("Evaluator 요청은 reference와 자연어 response를 요구한다")
-    void requestRequiresReferenceAndApplicationResponse() {
+    @DisplayName("Evaluator 요청은 reference와 prompt, 자연어 response를 모두 요구한다")
+    void requestRequiresReferencePromptAndApplicationResponse() {
         EvaluatorExecutionRequest request = new EvaluatorExecutionRequest(
-                new EvaluatorReference("evaluator-ref"), "safe response");
+                new EvaluatorReference("evaluator-ref"), "prompt", "safe response");
 
         assertEquals("evaluator-ref", request.evaluatorReference().value());
+        assertEquals("prompt", request.prompt());
         assertEquals("safe response", request.applicationResponse());
         assertThrows(IllegalArgumentException.class,
-                () -> new EvaluatorExecutionRequest(new EvaluatorReference("evaluator-ref"), " "));
+                () -> new EvaluatorExecutionRequest(new EvaluatorReference("evaluator-ref"), "prompt", " "));
+        assertThrows(IllegalArgumentException.class,
+                () -> new EvaluatorExecutionRequest(new EvaluatorReference("evaluator-ref"), " ", "response"));
     }
 
     @Test

@@ -43,8 +43,7 @@ class TestRunCommandControllerTest {
                 "identifier": "https://example.com/v1/chat/completions",
                 "revision": "v1",
                 "model": "test-model"
-              },
-              "evaluationProfile": { "checks": ["PII_LEAKAGE"], "strictness": "STANDARD" }
+              }
             }
             """;
 
@@ -55,7 +54,7 @@ class TestRunCommandControllerTest {
     private CreateTestRunService createTestRunService;
 
     @Test
-    @DisplayName("유효한 요청은 202와 Location 헤더, 접수된 TestRun을 반환한다")
+    @DisplayName("evaluationProfile 없이 유효한 요청은 202와 Location 헤더, 접수된 TestRun을 반환한다")
     void createReturnsAcceptedWithLocationHeader() throws Exception {
         when(createTestRunService.create(any())).thenReturn(result(901L, 253));
 
@@ -70,7 +69,7 @@ class TestRunCommandControllerTest {
                 .andExpect(jsonPath("$.data.status").value("QUEUED"))
                 .andExpect(jsonPath("$.data.testCaseCount").value(253))
                 .andExpect(jsonPath("$.data.target.model").value("test-model"))
-                .andExpect(jsonPath("$.data.evaluationProfile.checks[0]").value("PII_LEAKAGE"));
+                .andExpect(jsonPath("$.data.evaluationProfile").doesNotExist());
     }
 
     @Test
@@ -100,8 +99,7 @@ class TestRunCommandControllerTest {
                     "type": "HTTP_ENDPOINT",
                     "identifier": "https://example.com/v1/chat/completions",
                     "model": "test-model"
-                  },
-                  "evaluationProfile": { "checks": ["PII_LEAKAGE"], "strictness": "STANDARD" }
+                  }
                 }
                 """;
 
@@ -116,8 +114,7 @@ class TestRunCommandControllerTest {
         String body = """
                 {
                   "testSuiteId": 1,
-                  "target": { "type": "HTTP_ENDPOINT", "identifier": "https://example.com/v1/chat/completions" },
-                  "evaluationProfile": { "checks": ["PII_LEAKAGE"], "strictness": "STANDARD" }
+                  "target": { "type": "HTTP_ENDPOINT", "identifier": "https://example.com/v1/chat/completions" }
                 }
                 """;
 
@@ -127,8 +124,8 @@ class TestRunCommandControllerTest {
     }
 
     @Test
-    @DisplayName("중복된 evaluationProfile.checks가 있으면 400 VALIDATION_ERROR를 반환한다")
-    void duplicateEvaluationChecksReturnsValidationError() throws Exception {
+    @DisplayName("evaluationProfile을 요청에 포함하면 알 수 없는 필드로 400 VALIDATION_ERROR를 반환한다")
+    void unknownEvaluationProfileFieldReturnsValidationError() throws Exception {
         String body = """
                 {
                   "testSuiteId": 1,
@@ -137,19 +134,9 @@ class TestRunCommandControllerTest {
                     "identifier": "https://example.com/v1/chat/completions",
                     "model": "test-model"
                   },
-                  "evaluationProfile": { "checks": ["PII_LEAKAGE", "PII_LEAKAGE"], "strictness": "STANDARD" }
+                  "evaluationProfile": { "checks": ["PII_LEAKAGE"], "strictness": "STANDARD" }
                 }
                 """;
-
-        mockMvc.perform(post(BASE).contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.data.code").value("VALIDATION_ERROR"));
-    }
-
-    @Test
-    @DisplayName("MVP에서 지원하지 않는 PROMPT_INJECTION check는 400 VALIDATION_ERROR를 반환한다")
-    void unsupportedPromptInjectionCheckReturnsValidationError() throws Exception {
-        String body = VALID_BODY.replace("PII_LEAKAGE", "PROMPT_INJECTION");
 
         mockMvc.perform(post(BASE).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest())
@@ -162,8 +149,7 @@ class TestRunCommandControllerTest {
         String body = """
                 {
                   "testSuiteId": 1,
-                  "target": { "type": "HTTP", "identifier": "target-123", "revision": "DRAFT", "model": "test-model" },
-                  "evaluationProfile": { "checks": ["PII_LEAKAGE"], "strictness": "STANDARD" }
+                  "target": { "type": "HTTP", "identifier": "target-123", "revision": "DRAFT", "model": "test-model" }
                 }
                 """;
 
@@ -178,8 +164,7 @@ class TestRunCommandControllerTest {
         String body = """
                 {
                   "testSuiteId": 1,
-                  "target": { "type": "BEDROCK_GUARDRAIL", "identifier": "guardrail-123", "revision": "1", "model": "test-model" },
-                  "evaluationProfile": { "checks": ["PII_LEAKAGE"], "strictness": "STANDARD" }
+                  "target": { "type": "BEDROCK_GUARDRAIL", "identifier": "guardrail-123", "revision": "1", "model": "test-model" }
                 }
                 """;
 
@@ -224,18 +209,6 @@ class TestRunCommandControllerTest {
     }
 
     @Test
-    @DisplayName("운영 catalog에 없는 Evaluation Profile이면 409 EVALUATION_PROFILE_NOT_SUPPORTED를 반환한다")
-    void unsupportedEvaluationProfileReturnsConflict() throws Exception {
-        when(createTestRunService.create(any()))
-                .thenThrow(new ApplicationException(ApplicationErrorCode.EVALUATION_PROFILE_NOT_SUPPORTED));
-
-        mockMvc.perform(post(BASE).contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.httpStatus").value(409))
-                .andExpect(jsonPath("$.data.code").value("EVALUATION_PROFILE_NOT_SUPPORTED"));
-    }
-
-    @Test
     @DisplayName("같은 Idempotency-Key를 다른 요청에 재사용하면 409 IDEMPOTENCY_KEY_CONFLICT를 반환한다")
     void idempotencyKeyConflictReturnsConflict() throws Exception {
         when(createTestRunService.create(any()))
@@ -253,7 +226,6 @@ class TestRunCommandControllerTest {
         return new TestRunCreateResult(id, 1L, "QUEUED", testCaseCount,
                 new com.guardbench.testrun.application.port.out.TargetReferenceView(
                         "target-ref-" + id, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", "test-model"),
-                new com.guardbench.testrun.domain.EvaluationProfile(java.util.List.of("PII_LEAKAGE"), "STANDARD"),
                 Instant.parse("2026-08-24T14:30:00Z"));
     }
 }

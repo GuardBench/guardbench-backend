@@ -23,7 +23,6 @@ import com.guardbench.testrun.application.port.out.OutboxEventRecord;
 import com.guardbench.testrun.application.port.out.OutboxPort;
 import com.guardbench.testrun.application.port.out.RegisterTargetReferencePort;
 import com.guardbench.testrun.application.port.out.RegisterEvaluatorReferencePort;
-import com.guardbench.testrun.application.port.out.ResolveEvaluatorCatalogPort;
 import com.guardbench.testrun.application.port.out.EvaluatorRegistration;
 import com.guardbench.testrun.application.port.out.TargetRegistration;
 import com.guardbench.testrun.application.port.out.TestCaseSnapshotSource;
@@ -43,6 +42,10 @@ import com.guardbench.testrun.domain.repository.TestRunRepository;
  * <p>ADR 0010에 따라 Idempotency 판정, TestSuite/TestCase 확인, TestRun 접수, Target reference·Snapshot
  * 고정과 {@code TestRunRequested} Outbox 저장을 하나의 트랜잭션에서 조율한다. Target
  * preparation, resolution/execution claim과 fan-out은 이 Service의 책임이 아니다.
+ *
+ * <p>사용자는 evaluator/classifier 설정을 직접 제출하지 않는다. classifier는 서비스 전역 고정
+ * 설정({@code evaluatorRegistration})을 사용하며, TestRun은 실제 사용한 provider/model 식별자를
+ * {@link EvaluatorReference}로 사후 재식별할 수 있게 고정한다.
  */
 @Service
 public class CreateTestRunService {
@@ -59,8 +62,8 @@ public class CreateTestRunService {
     private final OutboxPort outboxPort;
     private final IdempotencyPort idempotencyPort;
     private final RegisterTargetReferencePort registerTargetReferencePort;
-    private final ResolveEvaluatorCatalogPort resolveEvaluatorCatalogPort;
     private final RegisterEvaluatorReferencePort registerEvaluatorReferencePort;
+    private final EvaluatorRegistration evaluatorRegistration;
     private final Clock clock;
 
     public CreateTestRunService(
@@ -73,8 +76,8 @@ public class CreateTestRunService {
             OutboxPort outboxPort,
             IdempotencyPort idempotencyPort,
             RegisterTargetReferencePort registerTargetReferencePort,
-            ResolveEvaluatorCatalogPort resolveEvaluatorCatalogPort,
             RegisterEvaluatorReferencePort registerEvaluatorReferencePort,
+            EvaluatorRegistration evaluatorRegistration,
             Clock clock
     ) {
         this.existsTestSuitePort = existsTestSuitePort;
@@ -86,8 +89,8 @@ public class CreateTestRunService {
         this.outboxPort = outboxPort;
         this.idempotencyPort = idempotencyPort;
         this.registerTargetReferencePort = registerTargetReferencePort;
-        this.resolveEvaluatorCatalogPort = resolveEvaluatorCatalogPort;
         this.registerEvaluatorReferencePort = registerEvaluatorReferencePort;
+        this.evaluatorRegistration = evaluatorRegistration;
         this.clock = clock;
     }
 
@@ -120,9 +123,6 @@ public class CreateTestRunService {
         if (!"HTTP_ENDPOINT".equals(command.targetType())) {
             throw new ApplicationException(ApplicationErrorCode.VALIDATION_ERROR);
         }
-        if (command.evaluationProfile() == null) {
-            throw new ApplicationException(ApplicationErrorCode.VALIDATION_ERROR);
-        }
         if (!existsTestSuitePort.existsBySourceTestSuiteId(command.testSuiteId())) {
             throw new ApplicationException(ApplicationErrorCode.TEST_SUITE_NOT_FOUND);
         }
@@ -135,8 +135,6 @@ public class CreateTestRunService {
         Instant now = clock.instant();
         TestRunId testRunId = nextTestRunIdPort.nextId();
         TargetReference targetReference = new TargetReference(UUID.randomUUID().toString());
-        EvaluatorRegistration evaluatorRegistration = resolveEvaluatorCatalogPort.resolve(command.evaluationProfile())
-                .orElseThrow(() -> new ApplicationException(ApplicationErrorCode.EVALUATION_PROFILE_NOT_SUPPORTED));
         EvaluatorReference evaluatorReference = new EvaluatorReference(UUID.randomUUID().toString());
 
         registerTargetReferencePort.register(
@@ -152,7 +150,6 @@ public class CreateTestRunService {
                 testRunId,
                 new SourceTestSuiteId(command.testSuiteId()),
                 targetReference,
-                command.evaluationProfile(),
                 evaluatorReference,
                 sources.size(),
                 now
@@ -180,13 +177,11 @@ public class CreateTestRunService {
         }
 
         log.info("TestRun을 접수했습니다. testRunId={} testCaseCount={} targetType={} targetIdentifier={} "
-                        + "targetRevision={} targetModel={} evaluatorReferenceId={} evaluatorTypeCode={} "
-                        + "evaluatorIdentifier={} evaluatorRevision={} evaluationChecks={} evaluationStrictness={} "
-                        + "eventId={} eventType={}",
+                        + "targetRevision={} targetModel={} evaluatorReferenceId={} evaluatorProviderCode={} "
+                        + "evaluatorModelId={} eventId={} eventType={}",
                 testRunId.value(), sources.size(), command.targetType(), command.targetIdentifier(),
                 command.targetRevision(), command.targetModel(), evaluatorReference.value(),
-                evaluatorRegistration.typeCode(), evaluatorRegistration.identifier(), evaluatorRegistration.revision(),
-                command.evaluationProfile().checks(), command.evaluationProfile().strictness(),
+                evaluatorRegistration.providerCode(), evaluatorRegistration.modelId(),
                 requestedEvent.eventId(), requestedEvent.eventType());
         return toResult(testRun, command);
     }
@@ -207,7 +202,6 @@ public class CreateTestRunService {
                 testRun.status().name(),
                 testRun.testCaseCount(),
                 new com.guardbench.testrun.application.port.out.TargetReferenceView(testRun.targetReference().value(), command.targetType(), command.targetIdentifier(), command.targetRevision(), command.targetModel()),
-                testRun.evaluationProfile(),
                 testRun.timeline().createdAt()
         );
     }

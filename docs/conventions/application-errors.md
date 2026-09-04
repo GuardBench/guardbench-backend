@@ -36,7 +36,6 @@ Validation을 제외한 오류는 다음 구조를 사용한다.
 | `TEST_CASE_NOT_FOUND` | 404 | 유효한 양의 ID에 해당하는 TestCase가 없음 |
 | `TEST_RUN_NOT_FOUND` | 404 | 유효한 양의 ID에 해당하는 TestRun이 없음 |
 | `TEST_SUITE_EMPTY` | 409 | TestRun 생성 시 활성 TestCase가 없음 |
-| `EVALUATION_PROFILE_NOT_SUPPORTED` | 409 | 운영 Evaluator catalog에 요청한 canonical Evaluation Profile이 없음 |
 | `IDEMPOTENCY_KEY_CONFLICT` | 409 | 같은 Idempotency-Key를 다른 TestRun 요청에 재사용 |
 | `TEST_RUN_NOT_FINISHED` | 409 | 종료가 필요한 결과·지표·비교 API에 FINISHED가 아닌 TestRun 사용 |
 | `TEST_RUNS_NOT_COMPARABLE` | 409 | 테스트 정의 또는 실제 Evaluator 설정이 다른 두 TestRun 비교 |
@@ -51,7 +50,6 @@ Validation을 제외한 오류는 다음 구조를 사용한다.
 | `TEST_CASE_NOT_FOUND` | TestCase를 찾을 수 없습니다. |
 | `TEST_RUN_NOT_FOUND` | TestRun을 찾을 수 없습니다. |
 | `TEST_SUITE_EMPTY` | 실행 가능한 TestCase가 없습니다. |
-| `EVALUATION_PROFILE_NOT_SUPPORTED` | 지원하는 Evaluator 설정을 찾을 수 없습니다. |
 | `IDEMPOTENCY_KEY_CONFLICT` | Idempotency-Key가 다른 요청에 이미 사용되었습니다. |
 | `TEST_RUN_NOT_FINISHED` | TestRun이 아직 종료되지 않았습니다. |
 | `TEST_RUNS_NOT_COMPARABLE` | 두 TestRun은 비교할 수 없습니다. |
@@ -125,11 +123,6 @@ TestRun 상세 또는 개별 결과 조회의 양의 ID가 존재하지 않을 �
 
 TestSuite는 존재하지만 TestCase가 0개여서 TestRun을 생성할 수 없을 때 사용한다.
 
-### EVALUATION_PROFILE_NOT_SUPPORTED
-
-TestRun 생성 요청의 `checks`와 `strictness`를 canonicalize했을 때 운영자가 사전 provisioning한
-Evaluator catalog entry가 없으면 사용한다. PII-only profile은 strictness를 collapse한 canonical key로
-조회한다. 요청에 provider 또는 Guardrail identifier/version을 직접 추가해 해결할 수 있는 오류가 아니다.
 
 ### IDEMPOTENCY_KEY_CONFLICT
 
@@ -216,7 +209,7 @@ TestRun 재전송은 Validation 후 Idempotency 기록을 먼저 확인한다.
 이 code는 `com.guardbench.testrun.domain.TestExecutionErrorCode`에 정의되어 있으며, Application Target과 Evaluator는 각각 소비자 소유 Port의 `TargetFailureCode`와 `EvaluatorFailureCode`를 사용한다. `PROVIDER_UNAVAILABLE`과 `PROVIDER_TIMEOUT`만 재시도 가능하다(ADR 0005의 대체되지 않은 retry 계약 참고). Evaluator 실패로 terminal 결과를 저장할 때는 Application response를 보존하지만 EvaluationResult와 Assertion은 생성하지 않는다.
 
 - 각 code는 고정된 안전한 message를 사용하며 Provider 원문, SDK 예외 메시지, stack trace, ARN, 자격 증명, 내부 endpoint를 노출하지 않는다.
-- HTTP Target 예외 → `TargetFailureCode` 매핑과 Bedrock Evaluator 예외 → `EvaluatorFailureCode` 매핑은 각각 해당 Adapter가 소유하고, Port 오류 → `TestExecutionErrorCode`·terminal 저장은 Worker Application Service가 소유한다.
+- HTTP Target 예외 → `TargetFailureCode` 매핑과 SageMaker Evaluator 예외 → `EvaluatorFailureCode` 매핑은 각각 해당 Adapter가 소유하고, Port 오류 → `TestExecutionErrorCode`·terminal 저장은 Worker Application Service가 소유한다.
 - 이 표에 없는 code를 추가하거나 기존 code의 terminal 상태·의미를 바꾸는 것은 공개 API 계약 변경이며 별도 ADR 또는 Issue 승인이 필요하다.
 
 공개 shape은 `error.stage = APPLICATION_TARGET | EVALUATOR`로 실패 경계를 구분한다. 구체 code와 terminal 상태 매핑은 #115~#117이 확정한다.

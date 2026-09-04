@@ -1,4 +1,4 @@
-package com.guardbench.evaluator.infrastructure.bedrock;
+package com.guardbench.evaluator.infrastructure.sagemaker;
 
 import java.net.URI;
 import java.time.Duration;
@@ -10,34 +10,39 @@ import org.springframework.context.annotation.Configuration;
 
 import com.guardbench.testrun.application.port.out.EvaluatorExecutionPort;
 
+import tools.jackson.databind.ObjectMapper;
+
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.awscore.client.builder.AwsClientBuilder;
 import software.amazon.awssdk.awscore.retry.AwsRetryStrategy;
 import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.retries.api.RetryStrategy;
-import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
+import software.amazon.awssdk.services.sagemakerruntime.SageMakerRuntimeClient;
 
-/** Worker 모드에서 Bedrock Guardrail Evaluator adapter를 조립한다. */
+/** Worker 모드에서 SageMaker Response Behavior Classifier adapter를 조립한다. */
 @Configuration
 @ConditionalOnProperty(name = "guardbench.worker.enabled", havingValue = "true")
-@EnableConfigurationProperties(BedrockProperties.class)
-class BedrockEvaluatorConfiguration {
+@EnableConfigurationProperties(SageMakerProperties.class)
+class SageMakerEvaluatorConfiguration {
 
     @Bean
-    BedrockRuntimeClient bedrockRuntimeClient(BedrockProperties properties) {
-        return configure(BedrockRuntimeClient.builder(), properties).build();
+    SageMakerRuntimeClient sageMakerRuntimeClient(SageMakerProperties properties) {
+        return configure(SageMakerRuntimeClient.builder(), properties).build();
     }
 
     @Bean
     EvaluatorExecutionPort evaluatorExecutionPort(
-            BedrockRuntimeClient bedrockRuntimeClient,
-            BedrockGuardrailEvaluatorStore evaluatorStore
+            SageMakerRuntimeClient sageMakerRuntimeClient,
+            SageMakerClassifierEvaluatorStore evaluatorStore,
+            SageMakerClassifierProperties classifierProperties,
+            ObjectMapper objectMapper
     ) {
-        return new BedrockGuardrailEvaluatorAdapter(bedrockRuntimeClient, evaluatorStore);
+        return new SageMakerClassifierEvaluatorAdapter(
+                sageMakerRuntimeClient, evaluatorStore, classifierProperties, objectMapper);
     }
 
-    private static <B extends AwsClientBuilder<B, ?>> B configure(B builder, BedrockProperties properties) {
+    private static <B extends AwsClientBuilder<B, ?>> B configure(B builder, SageMakerProperties properties) {
         builder.region(Region.of(properties.region()))
                 .credentialsProvider(DefaultCredentialsProvider.create())
                 .overrideConfiguration(overrideConfiguration(properties));
@@ -49,7 +54,7 @@ class BedrockEvaluatorConfiguration {
         return builder;
     }
 
-    static ClientOverrideConfiguration overrideConfiguration(BedrockProperties properties) {
+    static ClientOverrideConfiguration overrideConfiguration(SageMakerProperties properties) {
         RetryStrategy retryStrategy = AwsRetryStrategy.standardRetryStrategy()
                 .toBuilder()
                 .maxAttempts(properties.maxAttempts())
