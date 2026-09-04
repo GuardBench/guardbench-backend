@@ -226,7 +226,8 @@ def _report(result: dict[str, Any]) -> str:
         "",
         "## Next experiment",
         "",
-        "- 동일 Dataset과 Profile을 유지한 채 Capacity Target과 인프라 설정 변경 전후를 비교한다.",
+        "- 동일 Dataset과 Infrastructure Capacity에서 Workload만 변경해 포화 구간을 찾는다.",
+        "- 인프라 효과를 볼 때는 동일 Dataset/Workload를 유지하고 Infrastructure Capacity만 변경한다.",
         "- 목표값을 바꾸어 결과를 맞추지 말고 실행 전에 Profile을 확정한다.",
     ]
     return "\n".join(lines) + "\n"
@@ -321,7 +322,7 @@ def execute(args: argparse.Namespace) -> int:
 def parser() -> argparse.ArgumentParser:
     root = _repo_root()
     command = argparse.ArgumentParser(description="Run a repeatable GuardBench performance profile.")
-    command.add_argument("--profile", default=str(root / "performance/profiles/small.yaml"))
+    command.add_argument("--profile", default=str(root / "performance/profiles/smoke.yaml"))
     command.add_argument("--dataset", default=str(root / "performance/datasets/baseline-v1.yaml"))
     command.add_argument("--result-dir")
     command.add_argument("--reset", action="store_true", help="Reset and migrate only a guarded performance DB.")

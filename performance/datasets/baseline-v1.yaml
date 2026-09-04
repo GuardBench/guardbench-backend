@@ -11,5 +11,7 @@ generation:
   method: existing Notion testset import fixture
   source: "http/testsets/notion-testset-import.http"
   note: >-
-    The source fixture is the 78-case demo dataset. Do not edit it in place after
-    a baseline has been used; add baseline-v2 or another version for changes.
+    The source fixture is the 78-case demo dataset. It remains the fixed workload
+    input for performance comparisons; classifier quality is not benchmarked by
+    this dataset. Do not edit the fixture in place after a performance baseline
+    has been used; add a new dataset version for workload changes.

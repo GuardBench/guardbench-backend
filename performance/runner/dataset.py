@@ -21,7 +21,7 @@ def load_seed_payload(manifest_path: Path) -> tuple[dict[str, Any], int]:
     expected_sha256 = manifest["source"].get("sha256")
     actual_sha256 = hashlib.sha256(source_bytes).hexdigest()
     if expected_sha256 and actual_sha256 != expected_sha256:
-        raise ConfigurationError(f"Dataset source checksum이 baseline과 다릅니다: {source_path}")
+        raise ConfigurationError(f"Dataset source checksum이 고정된 manifest와 다릅니다: {source_path}")
 
     start = source.find("\n{")
     if start < 0:

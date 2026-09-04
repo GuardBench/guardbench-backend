@@ -1,5 +1,3 @@
-# Backward-compatible alias for the canonical smoke profile.
-# New executions should use performance/profiles/smoke.yaml.
 test:
   id: PERF-SMOKE-01
   name: classifier pipeline smoke
