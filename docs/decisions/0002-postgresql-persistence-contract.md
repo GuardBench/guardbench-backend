@@ -1,566 +1,142 @@
 # 0002. PostgreSQL 영속성 계약과 물리 ERD
 
-> ⚠️ Baseline/Candidate TestRun·복합 execution PK 부분은 [ADR 0010](0010-single-target-test-run-model.md)이 대체한다.
->
-> ⚠️ TestSuite/TestCase 삭제와 historical identity 부분은 [ADR 0012](0012-testdefinition-hard-delete-and-historical-identity.md)가 대체한다.
-
 > Status: APPROVED
 > Owner: Backend
-> Last reviewed: 2026-08-25
+> Last reviewed: 2026-09-04
 > Canonical source: GitHub
 > Origin: [GitHub Issue #4](https://github.com/GuardBench/guardbench-backend/issues/4)
+> Related: [ADR 0010](0010-single-target-test-run-model.md), [ADR 0012](0012-testdefinition-hard-delete-and-historical-identity.md), [ADR 0013](0013-response-behavior-classifier.md)
 
 - ADR Status: ACCEPTED
 - Decision date: 2026-08-24
 - Related Issue: #4
-- Superseded in part by: [ADR 0006](0006-independent-domain-contract-boundaries.md) — Context 밖 Java ID VO 재사용과 직접 Repository 호출 해석
-- Extended by: [ADR 0008](0008-async-testrun-persistence-contract.md) — Outbox, claim과 HTTP Idempotency 물리 계약
-- Superseded in part by: [ADR 0013](0013-response-behavior-classifier.md) — Target과 Quality Gate 역할. 이 ADR의 schema는 이전 current implementation 기록
 
 ## Context
 
-GuardBench는 PostgreSQL에 TestSuite, TestCase, TestRun, Snapshot, 실행 결과와 평가 결과를 저장해야 한다. 승인된 API·도메인·평가 계약은 다음 불변식을 요구하지만 구체적인 Persistence 기술과 물리 스키마는 정하지 않았다.
+GuardBench는 TestSuite, TestCase, TestRun, Snapshot, AI Application 실행 결과, 평가 결과와 비동기 처리 상태를 PostgreSQL에 저장한다.
 
-- Domain은 JPA, Spring Data, JDBC 같은 Persistence 기술에 의존하지 않는다.
-- `TestSuite`, `TestCase`, `TestRun`, `TestCaseSnapshot`은 각각 별도 Aggregate Root이며 객체 참조 대신 전용 식별자를 사용한다.
-- TestCase는 현재 정의를 보유하며 삭제해도 기존 Snapshot과 실행·평가 결과에는 삭제를 전파하지 않는다.
-- Snapshot은 실행 당시 TestCase의 `name`, `input`, `ExpectedResult.action`, `severity`, `category`를 불변 복제한다.
-- TestRun은 `QUEUED → PREPARING → RUNNING → FINISHED` 수명주기, 고정 `testCaseCount`, 처리 진행률과 nullable 종료 결과를 보존한다.
-- Candidate DRAFT는 접수 시점이 아니라 `PREPARING`에서 numbered version으로 materialize한다.
-- `SUCCEEDED` 실행에만 ActualResult가 있고, Assertion과 Change는 필요한 실행 결과가 있을 때만 생성한다.
-- 평가 전 `qualityGate = null`과 종료 후 `NOT_EVALUATED`를 구분하며, `NOT_EVALUATED`의 metrics는 `null`이다.
-- Offset Pagination, 필터와 안정적인 다중 정렬을 Spring 타입의 Domain 유출 없이 지원한다.
-
-선행 [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md)은 타입 소유권과 기본 Aggregate 경계를 확정했다. 후속 [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md)은 실행·평가 결과 Aggregate와 write-side Repository Port를, [ADR 0004](0004-testrun-finalization-atomicity.md)는 TestRun 최종 평가의 원자성과 재호출 의미를 제안한다. 이 ADR은 그 Domain 경계를 물리 테이블에 매핑하며, 물리 테이블 하나가 곧 Aggregate 하나라는 뜻은 아니다.
-
-기존 [Notion ERD](https://app.notion.com/p/3c0eeed6b62d81c78d3bd38dc386a97f)는 2026-08-21의 과거 초안이다. 핵심 관계는 참고할 수 있지만 `updated_at`, TestCase 삭제 정책, Snapshot의 `name`, TestRun lifecycle, Candidate materialization 시점, `NOT_EVALUATED`의 nullable metrics가 현재 계약과 다르므로 물리 계약이나 Migration으로 사용하지 않는다.
+현재 구현과 fresh database schema를 ground truth로 사용한다. 이전 Guardrail 중심 스키마의 데이터와 Flyway upgrade compatibility는 보존하지 않는다.
 
 ## Decision
 
-### Persistence와 Migration
+### Persistence 기술
 
-- Aggregate 저장 Adapter는 **Spring Data JPA**를 사용한다.
-- Domain 객체와 분리된 Persistence Entity/Model을 각 소유 도메인의 `infrastructure/persistence`에 둔다.
-- Infrastructure Mapper가 Domain 객체와 Persistence Model을 명시적으로 변환한다. Domain 클래스에는 JPA annotation을 붙이지 않는다.
-- 저장용 Domain Repository Port는 ADR 0001의 네 Port와 ADR 0003의 `TestExecutionRepository`, `SnapshotEvaluationRepository`, `QualityGateResultRepository`를 사용한다.
-- `AssertionResult`와 `ChangeResult`는 `SnapshotEvaluation`의 내부 결과로 저장하며 별도 Repository Port를 만들지 않는다. 여러 Root를 감추는 범용 `EvaluationResultStore`도 도입하지 않는다.
-- `evaluation/application`은 ADR 0004에 따라 `QualityGateResultRepository`와 `TestRunRepository`를 하나의 PostgreSQL 트랜잭션에서 조율한다.
-- 실행·평가 조합 조회는 ADR 0001의 `testrun/application/query` 소비자 소유 Projection Port를 `evaluation/infrastructure/query`가 구현한다.
-- 복잡한 조회는 custom JPA repository, JPQL 또는 PostgreSQL native query로 구현할 수 있지만 Spring `Page`, `Pageable`, `Sort`, JPA Entity를 Application과 Domain에 노출하지 않는다.
-- 스키마 변경은 **Flyway SQL versioned migration**만 사용한다. Hibernate `ddl-auto`는 개발·운영 스키마 생성에 사용하지 않고 실제 구현 시 `validate`를 기본값으로 사용한다.
-- 이 ADR은 라이브러리 선택 계약만 확정한다. 실제 의존성, datasource, Flyway 파일, Entity와 Adapter 구현은 후속 Issue 범위다.
+- PostgreSQL을 사용한다.
+- Aggregate 저장 Adapter는 Spring Data JPA 또는 명시적 JDBC query를 사용한다.
+- Domain 객체에는 JPA annotation을 두지 않고 persistence model과 mapper를 분리한다.
+- Spring `Page`, `Pageable`, JPA Entity 같은 persistence 타입을 Domain/Application 경계 밖으로 노출하지 않는다.
+- Hibernate `ddl-auto`로 스키마를 생성하지 않고 Flyway를 사용한다.
+
+### Migration 기준
+
+현재 fresh database schema는 `src/main/resources/db/migration/V1__create_guardbench_schema.sql` 하나가 정의한다.
+
+이 V1은 현재 모델을 직접 생성하며 다음 과거 스키마를 만들지 않는다.
+
+- Bedrock Guardrail Target / Evaluator 전용 테이블
+- Baseline / Candidate 전용 TestRun 컬럼
+- Candidate DRAFT materialization 컬럼
+- evaluator profile / checks / strictness 컬럼
+- 복합 `(snapshot_id, target_type)` execution/claim key
+
+기존 migration history에 대한 upgrade path는 제공하지 않는다. 적용 대상 database는 현재 V1 기준으로 초기화한다.
+
+### Test definition
+
+- `test_suite`와 `test_case`는 현재 편집 가능한 테스트 정의를 저장한다.
+- `test_case.test_suite_id`는 현재 자산 관계이므로 FK를 유지한다.
+- TestCase 삭제는 물리 삭제다.
+- TestRun 생성 시 `test_case_snapshot`이 `name`, `input`, `expected_action`, `severity`, `category`를 복제한다.
+- `test_case_snapshot.source_test_case_id`와 `test_run.test_suite_id`는 historical identity scalar이며 원본 row에 FK를 두지 않는다.
+
+### TestRun과 Target
+
+- TestRun은 하나의 `target_reference_id`를 가진다.
+- `target_reference.target_type`은 현재 `HTTP_ENDPOINT`만 허용한다.
+- `http_endpoint_target`은 `endpoint_url`, 필수 `model`, 선택적 `requested_revision`을 저장한다.
+- 하나의 TargetReference는 하나의 TestRun에 고정되도록 `test_run.target_reference_id`에 UNIQUE를 둔다.
+- TestRun 상세/Regression 조회는 `http_endpoint_target`을 직접 조회하며 provider fallback을 사용하지 않는다.
+
+### Response Behavior Classifier
+
+- `evaluator_reference`는 실행 당시 Response Behavior Classifier의 `provider_code`, `model_id`를 저장한다.
+- 사용자가 classifier 설정을 TestRun 요청으로 제출하지 않는다.
+- 서버가 현재 배포 configuration을 등록하고 TestRun이 해당 reference를 보존한다.
+- 현재 classifier 실행 세부 계약은 ADR 0013을 따른다.
+
+### TestExecution
+
+- Snapshot당 `test_execution`은 최대 한 행이며 PK는 `snapshot_id`다.
+- 상태는 `SUCCEEDED | FAILED | TIMED_OUT | NOT_STARTED`다.
+- 성공 시 `application_response`와 `evaluator_verdict(ALLOW | BLOCK)`가 존재한다.
+- 실패/timeout 시 `error_stage`, `error_code`, `error_message`를 저장한다.
+- `error_stage`는 현재 `APPLICATION_TARGET | EVALUATOR`다.
+- 실행 시각은 `TIMESTAMPTZ(6)`으로 저장하고 Java에서는 `Instant`를 사용한다.
+
+### Evaluation
+
+- `assertion_result`는 Snapshot의 expected action과 evaluator verdict 비교 결과를 저장한다.
+- `quality_gate_result`는 TestRun 최종 Quality Gate 상태와 `assertion_pass_rate`, `execution_success_rate`를 저장한다.
+- `NOT_EVALUATED`이면 두 metric은 `NULL`이고 `PASS | FAIL`이면 두 metric이 존재한다.
+- 현재 존재하는 `change_result` persistence shape는 평가 저장 경계가 소유하며, Regression API는 완료된 Run의 Snapshot 정의와 저장 verdict를 조회해 비교한다.
+
+### 비동기 처리
+
+- `test_run_idempotency`: HTTP 생성 요청 멱등성
+- `test_run_resolution_claim`: TestRun resolution lease
+- `test_execution_claim`: Snapshot execution lease
+- `outbox_event`: 비동기 이벤트의 transactional outbox
+
+claim lease 및 idempotency 만료처럼 여러 Worker가 공유하는 동시성 시간 비교는 PostgreSQL DB time을 사용한다.
 
 ### ID와 시각
 
-- 공개 `int64` 계약과 일치하도록 Aggregate 식별자는 PostgreSQL `BIGINT`와 테이블별 sequence를 사용한다.
-- JPA sequence allocation과 DB sequence `INCREMENT BY`는 같은 값으로 맞춘다. MVP 권고값은 50이며 ID 연속성을 비즈니스 의미로 사용하지 않는다.
-- 결과 저장에는 다음 식별자를 사용하며 별도 scalar DB ID나 sequence를 추가하지 않는다.
-  - TestExecution Domain ID: `TestExecutionId(TestCaseSnapshotId, TargetType)`
-  - SnapshotEvaluation Domain ID: 기존 `TestCaseSnapshotId`
-  - QualityGateResult Domain ID: 기존 `TestRunId`
-  - TestExecution PK: `(snapshot_id, target_type)`
-  - AssertionResult PK: `snapshot_id`
-  - ChangeResult PK: `snapshot_id`
-  - QualityGateResult PK: `test_run_id`
-- 모든 시각은 PostgreSQL `TIMESTAMPTZ(6)`과 Java `Instant`로 매핑한다.
-- Application이 주입된 `Clock`으로 생성·수정·삭제·수명주기 시각을 결정하고 Persistence Adapter가 그대로 저장한다. DB trigger와 암묵적인 last-modified 갱신은 사용하지 않는다.
-- `TestSuite.updated_at`은 TestSuite의 `name` 또는 `description`이 실제로 바뀔 때만 변경한다. TestCase 추가·수정·삭제는 별도 Aggregate인 TestSuite의 `updated_at`을 변경하지 않는다.
-- TestCase no-op PATCH는 UPDATE를 실행하지 않고 `updated_at`을 유지한다.
-- TestRun의 `updated_at`은 status, target resolution, 진행률, execution outcome이 바뀔 때 갱신한다.
-
-### 값 저장과 삭제
-
-- 현재 계약의 식별자, 문자열, Enum, target, 실행 결과와 Quality Gate metrics는 **정규 컬럼**으로 저장한다.
-- 확장 가능성만을 이유로 JSONB를 선제 도입하지 않는다. Provider 원문, effects, outputs, Stack Trace와 임의 configuration은 현재 저장 범위가 아니다.
-- 공개 API에 최대 길이가 없는 `name`, `input`, `category`, Guardrail ID는 `TEXT`로 저장해 숨은 길이 제한을 만들지 않는다.
-- nonblank 문자열의 DB 방어 검증은 POSIX 문자 클래스의 `[:space:]`를 사용해 일반 공백뿐 아니라 탭과 개행으로만 구성된 값도 거부한다. Unicode 전체의 공백 의미는 Application의 Domain 검증을 최종 기준으로 유지한다.
-- Enum은 PostgreSQL enum type 대신 `VARCHAR`와 `CHECK`를 사용한다. 값 추가 시 새 Migration으로 CHECK를 변경한다.
-- TestCase 삭제는 Application Service가 Repository를 통해 물리 삭제한다. 과거 실행 데이터는 Snapshot에
-  복제되어 있으므로 원본 삭제에 영향을 받지 않는다.
-
-### 기존 ERD와의 차이
-
-| 기존 ERD | 현재 결정 | 변경 근거 |
-| --- | --- | --- |
-| TestSuite/TestCase에 `created_at`만 존재 | 두 테이블에 `updated_at` 추가 | PATCH 응답과 no-op 수정 시각 계약 |
-| TestCase 삭제 컬럼 없음 | 삭제 컬럼 없이 물리 삭제 | 현재 편집 자산과 과거 Snapshot 수명 분리 |
-| Snapshot에 `name` 없음 | 다섯 실행 정의 필드를 모두 복제 | 원본 수정·삭제와 무관한 결과 조회 계약 |
-| 생성 전에 두 target을 JSONB로 resolve | Candidate 요청 source와 nullable resolved version 분리 | `PREPARING` materialization lifecycle |
-| TestRun에 lifecycle·진행률 컬럼 없음 | status, 고정 count, processed count와 세 시각 추가 | Polling·목록·진행률 계약 |
-| Execution status 값이 미확정 | 네 터미널 상태와 Actual/Error CHECK | 승인된 실행 결과 계약 |
-| Quality Gate metrics가 `NOT NULL JSONB` | `NOT_EVALUATED`이면 전부 null인 정규 컬럼 | 평가 계약의 nullable metrics |
-| 입력·Expected·Actual·target이 JSONB 중심 | 승인된 scalar 값을 정규 컬럼으로 저장 | 무결성, filter, sort와 index 요구 |
-
-### 물리 테이블과 관계
-
-편집 가능한 원본과 렌더링 결과는 각각 [PlantUML ERD](../diagrams/guardbench-mvp-physical-erd.puml)와 [PNG ERD](../diagrams/guardbench-mvp-physical-erd.png)다.
-
-| 테이블 | 식별자 | 역할과 주요 규칙 |
-| --- | --- | --- |
-| `test_suite` | `id` | TestSuite 현재 정의. 이름 중복을 허용하고 TestCase 수는 저장하지 않고 조회 시 집계한다. |
-| `test_case` | `id` | 현재 편집 가능한 TestCase 정의. 삭제 시 행을 제거한다. |
-| `test_run` | `id` | 수명주기, 요청·고정 target, 고정 Snapshot 수와 진행률, 종료 결과를 저장한다. |
-| `test_case_snapshot` | `id` | Run 시점의 TestCase 다섯 필드를 복제하며 `(test_run_id, source_test_case_id)`가 유일하다. |
-| `test_execution` | `(snapshot_id, target_type)` | Snapshot별 BASELINE/CANDIDATE 터미널 실행 결과를 최대 한 행씩 저장한다. |
-| `assertion_result` | `snapshot_id` | `SnapshotEvaluation`의 필수 부분이다. Candidate ActualResult가 있을 때만 Snapshot당 한 행을 저장한다. |
-| `change_result` | `snapshot_id` | `SnapshotEvaluation`의 선택적 부분이다. 양쪽 ActualResult가 있을 때만 Snapshot당 한 행을 저장한다. |
-| `quality_gate_result` | `test_run_id` | FINISHED TestRun의 최종 평가를 정확히 한 행으로 저장한다. FINISHED 이전에는 행을 두지 않는다. |
-
-현재 자산의 `test_case.test_suite_id` FK는 TestSuite 삭제 시 Application Service가 TestCase를 먼저 삭제하므로
-`ON DELETE RESTRICT`를 유지한다. Snapshot의 `source_test_case_id`와 TestRun의 `test_suite_id`는
-historical identity이며 원본 행을 참조하는 FK를 두지 않는다. TestRun, Snapshot과 결과는 일반 사용자 동작으로
-물리 삭제하지 않으며 운영 보존 기간과 물리 삭제 순서는 후속 운영 정책에서 정한다.
-
-TestRun 접수 트랜잭션은 현재 결정의 `test_run`과 `test_case_snapshot` 외에 Outbox와 요청 멱등성 정보도 함께 저장해야 한다. 이 ERD와 참고 DDL은 기존 결과 스키마만 표현하며, Outbox·claim·Idempotency 물리 스키마는 [ADR 0008](0008-async-testrun-persistence-contract.md)이 소유한다. 따라서 아래 DDL만으로 TestRun 접수 기능 전체가 구현된 것으로 간주하지 않는다.
-
-### TestRun과 nullable 결과
-
-- `QUEUED`: `started_at`, `completed_at`, `candidate_resolved_version`, `execution_outcome`이 `null`이고 처리 건수는 0이다.
-- `PREPARING`: `started_at`이 있고 Candidate materialization 전에는 `candidate_resolved_version`이 `null`일 수 있다.
-- `RUNNING`: Candidate numbered version이 고정되어 있고 `candidate_resolved_version`이 반드시 존재한다.
-- `FINISHED`: `completed_at`, `execution_outcome`이 있고 모든 Snapshot이 터미널 처리되어 `processed_test_case_count = test_case_count`다.
-- Candidate materialization 실패로 `FINISHED / ERROR`가 되면 `candidate_resolved_version`은 `null`일 수 있다.
-- `SUCCEEDED` TestExecution은 `actual_action`이 있고 오류가 없다. 그 밖의 상태는 ActualResult가 없다.
-- `FAILED`와 `TIMED_OUT`의 안전한 오류는 code와 message가 함께 있거나 함께 없다. `NOT_STARTED`에는 ActualResult와 오류, 실행 시각이 없다.
-- `FINISHED` 이전에는 `quality_gate_result` 행이 없어 평가 전임을 표현한다.
-- `FINISHED`이면 `quality_gate_result` 행이 정확히 하나 존재한다. 행의 status가 `NOT_EVALUATED`이면 모든 metric은 `null`이고 `PASS` 또는 `FAIL`이면 모든 metric이 존재한다.
-
-### TestRun 최종 평가 원자성
-
-- `evaluation/application`이 QualityGateResult 저장과 TestRun의 `FINISHED` 전환을 하나의 PostgreSQL 트랜잭션으로 조율한다.
-- 두 저장 중 하나라도 실패하면 전체를 롤백한다. 일반 FK와 행 단위 CHECK로 강제할 수 없는 `FINISHED -> QualityGateResult 존재` 조건은 Application 트랜잭션과 통합 테스트로 보장한다.
-- 이미 FINISHED이고 QualityGateResult가 있는 TestRun의 최종화 재호출은 기존 결과를 반환하며 재계산하거나 upsert하지 않는다.
-- 계산 예외와 저장·commit 실패를 `NOT_EVALUATED`로 변환하지 않는다. 기술적 실패의 retry와 Worker 동시 실행 제어는 #5 범위다.
-
-### 인덱스와 Offset Pagination
-
-다음 인덱스를 MVP의 주요 조회 경로로 확정한다.
-
-- TestSuite 기본 목록: `(updated_at DESC, id DESC)`
-- TestCase 기본 목록: `(test_suite_id, created_at, id)`
-- TestCase Enum filter: Suite와 `category`, `expected_action`, `severity`별 인덱스
-- TestRun 기본 목록: `(created_at DESC, id DESC)`
-- TestSuite별 TestRun: `(test_suite_id, created_at DESC, id DESC)`
-- TestRun 상태·outcome filter: `(status, created_at DESC, id DESC)`, `(execution_outcome, created_at DESC, id DESC)`
-- Snapshot 결과 기본 목록: `(test_run_id, id)`
-- Snapshot 결과 Enum filter: Run과 `category`, `expected_action`, `severity`별 인덱스
-- Quality Gate 상태 filter: `(gate_status, test_run_id)`
-
-`name`과 `input`의 대소문자 무시 부분 검색은 `lower(column) LIKE '%...%'`로 정확성을 먼저 구현한다. 선행 wildcard 때문에 일반 B-tree가 이 조회를 가속하지 못하므로 `pg_trgm` extension과 GIN index는 데이터 규모와 운영 권한이 확인된 후 별도 승인한다.
-
-TestSuite의 `testCaseCount`는 TestCase를 집계한 읽기 Projection이다. 별도 Aggregate인 TestSuite에 counter를 중복 저장하지 않는다. `testCaseCount` 정렬·필터는 Infrastructure query가 집계한 전체 결과에 적용한 다음 Offset Pagination한다.
-
-Presentation은 외부 `page`, `size`, `sort`를 검증해 프로젝트 자체 조회 조건으로 변환한다. Application Query Port는 요청 page와 size, 허용된 scalar sort/filter만 표현하며 Spring 타입을 사용하지 않는다. Infrastructure가 `(page - 1) * size`를 안전하게 계산하고 전체 filter·sort 이후 `LIMIT/OFFSET`과 별도 count query를 수행한다.
-
-### 참고 SQL DDL
-
-다음 SQL은 결정 내용을 사람이 검토하기 위한 **참고 DDL**이다. Flyway Migration은 아니지만 문서에 포함된 전체 DDL과 대표 CHECK 위반 예시는 PostgreSQL에서 직접 실행해 문법과 제약 동작을 검증한다. 후속 구현 Issue는 이 계약을 기준으로 실제 Migration을 만들고 애플리케이션 통합 테스트를 추가해야 한다.
-
-```sql
-CREATE SEQUENCE test_suite_id_seq AS BIGINT START WITH 1 INCREMENT BY 50;
-CREATE SEQUENCE test_case_id_seq AS BIGINT START WITH 1 INCREMENT BY 50;
-CREATE SEQUENCE test_run_id_seq AS BIGINT START WITH 1 INCREMENT BY 50;
-CREATE SEQUENCE test_case_snapshot_id_seq AS BIGINT START WITH 1 INCREMENT BY 50;
-
-CREATE TABLE test_suite (
-    id          BIGINT PRIMARY KEY DEFAULT nextval('test_suite_id_seq'),
-    name        TEXT NOT NULL,
-    description TEXT,
-    created_at  TIMESTAMPTZ(6) NOT NULL,
-    updated_at  TIMESTAMPTZ(6) NOT NULL,
-
-    CONSTRAINT ck_test_suite_name_nonblank CHECK (name ~ '[^[:space:]]'),
-    CONSTRAINT ck_test_suite_time_order CHECK (updated_at >= created_at)
-);
-
-ALTER SEQUENCE test_suite_id_seq OWNED BY test_suite.id;
-
-CREATE INDEX idx_test_suite_updated
-    ON test_suite(updated_at DESC, id DESC);
-
-CREATE TABLE test_case (
-    id              BIGINT PRIMARY KEY DEFAULT nextval('test_case_id_seq'),
-    test_suite_id   BIGINT NOT NULL,
-    name            TEXT NOT NULL,
-    input           TEXT NOT NULL,
-    expected_action VARCHAR(16) NOT NULL,
-    severity        VARCHAR(16) NOT NULL,
-    category        TEXT NOT NULL,
-    created_at      TIMESTAMPTZ(6) NOT NULL,
-    updated_at      TIMESTAMPTZ(6) NOT NULL,
-
-    CONSTRAINT fk_test_case_suite
-        FOREIGN KEY (test_suite_id) REFERENCES test_suite(id) ON DELETE RESTRICT,
-    CONSTRAINT ck_test_case_name_nonblank CHECK (name ~ '[^[:space:]]'),
-    CONSTRAINT ck_test_case_input_nonblank CHECK (input ~ '[^[:space:]]'),
-    CONSTRAINT ck_test_case_category_nonblank CHECK (category ~ '[^[:space:]]'),
-    CONSTRAINT ck_test_case_expected_action CHECK (expected_action IN ('ALLOW', 'BLOCK')),
-    CONSTRAINT ck_test_case_severity
-        CHECK (severity IN ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')),
-    CONSTRAINT ck_test_case_time_order
-        CHECK (updated_at >= created_at)
-);
-
-ALTER SEQUENCE test_case_id_seq OWNED BY test_case.id;
-
-CREATE INDEX idx_test_case_suite_created
-    ON test_case(test_suite_id, created_at, id);
-
-CREATE INDEX idx_test_case_suite_category
-    ON test_case(test_suite_id, category, created_at, id);
-
-CREATE INDEX idx_test_case_suite_expected_action
-    ON test_case(test_suite_id, expected_action, created_at, id);
-
-CREATE INDEX idx_test_case_suite_severity
-    ON test_case(test_suite_id, severity, created_at, id);
-
-CREATE TABLE test_run (
-    id                        BIGINT PRIMARY KEY DEFAULT nextval('test_run_id_seq'),
-    test_suite_id             BIGINT NOT NULL,
-    status                    VARCHAR(16) NOT NULL,
-    test_case_count           INTEGER NOT NULL,
-    processed_test_case_count INTEGER NOT NULL DEFAULT 0,
-    baseline_guardrail_id     TEXT NOT NULL,
-    baseline_version          TEXT NOT NULL,
-    candidate_guardrail_id    TEXT NOT NULL,
-    candidate_requested_source VARCHAR(16) NOT NULL,
-    candidate_resolved_version TEXT,
-    execution_outcome         VARCHAR(16),
-    created_at                TIMESTAMPTZ(6) NOT NULL,
-    started_at                TIMESTAMPTZ(6),
-    completed_at              TIMESTAMPTZ(6),
-    updated_at                TIMESTAMPTZ(6) NOT NULL,
-
-    CONSTRAINT fk_test_run_suite
-        FOREIGN KEY (test_suite_id) REFERENCES test_suite(id) ON DELETE RESTRICT,
-    CONSTRAINT ck_test_run_status
-        CHECK (status IN ('QUEUED', 'PREPARING', 'RUNNING', 'FINISHED')),
-    CONSTRAINT ck_test_run_count
-        CHECK (
-            test_case_count > 0
-            AND processed_test_case_count BETWEEN 0 AND test_case_count
-        ),
-    CONSTRAINT ck_test_run_guardrail_ids
-        CHECK (
-            baseline_guardrail_id ~ '[^[:space:]]'
-            AND candidate_guardrail_id ~ '[^[:space:]]'
-            AND baseline_guardrail_id = candidate_guardrail_id
-        ),
-    CONSTRAINT ck_test_run_versions
-        CHECK (
-            baseline_version ~ '^[0-9]+$'
-            AND (
-                candidate_resolved_version IS NULL
-                OR candidate_resolved_version ~ '^[0-9]+$'
-            )
-        ),
-    CONSTRAINT ck_test_run_candidate_source
-        CHECK (candidate_requested_source = 'DRAFT'),
-    CONSTRAINT ck_test_run_execution_outcome
-        CHECK (
-            execution_outcome IS NULL
-            OR execution_outcome IN ('COMPLETED', 'INCOMPLETE', 'ERROR')
-        ),
-    CONSTRAINT ck_test_run_time_order
-        CHECK (
-            updated_at >= created_at
-            AND (started_at IS NULL OR started_at >= created_at)
-            AND (completed_at IS NULL OR completed_at >= started_at)
-        ),
-    CONSTRAINT ck_test_run_lifecycle
-        CHECK (
-            (
-                status = 'QUEUED'
-                AND started_at IS NULL
-                AND completed_at IS NULL
-                AND candidate_resolved_version IS NULL
-                AND execution_outcome IS NULL
-                AND processed_test_case_count = 0
-            )
-            OR (
-                status = 'PREPARING'
-                AND started_at IS NOT NULL
-                AND completed_at IS NULL
-                AND execution_outcome IS NULL
-            )
-            OR (
-                status = 'RUNNING'
-                AND started_at IS NOT NULL
-                AND completed_at IS NULL
-                AND candidate_resolved_version IS NOT NULL
-                AND execution_outcome IS NULL
-            )
-            OR (
-                status = 'FINISHED'
-                AND started_at IS NOT NULL
-                AND completed_at IS NOT NULL
-                AND execution_outcome IS NOT NULL
-                AND processed_test_case_count = test_case_count
-                AND (
-                    candidate_resolved_version IS NOT NULL
-                    OR execution_outcome = 'ERROR'
-                )
-            )
-        )
-);
-
-ALTER SEQUENCE test_run_id_seq OWNED BY test_run.id;
-
-CREATE INDEX idx_test_run_created
-    ON test_run(created_at DESC, id DESC);
-
-CREATE INDEX idx_test_run_suite_created
-    ON test_run(test_suite_id, created_at DESC, id DESC);
-
-CREATE INDEX idx_test_run_status_created
-    ON test_run(status, created_at DESC, id DESC);
-
-CREATE INDEX idx_test_run_outcome_created
-    ON test_run(execution_outcome, created_at DESC, id DESC)
-    WHERE execution_outcome IS NOT NULL;
-
-CREATE TABLE test_case_snapshot (
-    id                  BIGINT PRIMARY KEY DEFAULT nextval('test_case_snapshot_id_seq'),
-    test_run_id         BIGINT NOT NULL,
-    source_test_case_id BIGINT NOT NULL,
-    name                TEXT NOT NULL,
-    input               TEXT NOT NULL,
-    expected_action     VARCHAR(16) NOT NULL,
-    severity            VARCHAR(16) NOT NULL,
-    category            TEXT NOT NULL,
-    created_at          TIMESTAMPTZ(6) NOT NULL,
-
-    CONSTRAINT fk_snapshot_test_run
-        FOREIGN KEY (test_run_id) REFERENCES test_run(id) ON DELETE RESTRICT,
-    CONSTRAINT uk_snapshot_run_source_test_case
-        UNIQUE (test_run_id, source_test_case_id),
-    CONSTRAINT ck_snapshot_name_nonblank CHECK (name ~ '[^[:space:]]'),
-    CONSTRAINT ck_snapshot_input_nonblank CHECK (input ~ '[^[:space:]]'),
-    CONSTRAINT ck_snapshot_category_nonblank CHECK (category ~ '[^[:space:]]'),
-    CONSTRAINT ck_snapshot_expected_action
-        CHECK (expected_action IN ('ALLOW', 'BLOCK')),
-    CONSTRAINT ck_snapshot_severity
-        CHECK (severity IN ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW'))
-);
-
-ALTER SEQUENCE test_case_snapshot_id_seq OWNED BY test_case_snapshot.id;
-
-CREATE INDEX idx_snapshot_run_id
-    ON test_case_snapshot(test_run_id, id);
-
-CREATE INDEX idx_snapshot_source_test_case_id
-    ON test_case_snapshot(source_test_case_id);
-
-CREATE INDEX idx_snapshot_run_category
-    ON test_case_snapshot(test_run_id, category, id);
-
-CREATE INDEX idx_snapshot_run_expected_action
-    ON test_case_snapshot(test_run_id, expected_action, id);
-
-CREATE INDEX idx_snapshot_run_severity
-    ON test_case_snapshot(test_run_id, severity, id);
-
-CREATE TABLE test_execution (
-    snapshot_id   BIGINT NOT NULL,
-    target_type   VARCHAR(16) NOT NULL,
-    result_status VARCHAR(16) NOT NULL,
-    actual_action VARCHAR(16),
-    error_code    TEXT,
-    error_message TEXT,
-    started_at    TIMESTAMPTZ(6),
-    completed_at  TIMESTAMPTZ(6),
-
-    CONSTRAINT pk_test_execution PRIMARY KEY (snapshot_id, target_type),
-    CONSTRAINT fk_execution_snapshot
-        FOREIGN KEY (snapshot_id) REFERENCES test_case_snapshot(id) ON DELETE RESTRICT,
-    CONSTRAINT ck_execution_target_type
-        CHECK (target_type IN ('BASELINE', 'CANDIDATE')),
-    CONSTRAINT ck_execution_result_status
-        CHECK (result_status IN ('SUCCEEDED', 'FAILED', 'TIMED_OUT', 'NOT_STARTED')),
-    CONSTRAINT ck_execution_actual_action
-        CHECK (actual_action IS NULL OR actual_action IN ('ALLOW', 'BLOCK')),
-    CONSTRAINT ck_execution_error_pair
-        CHECK (
-            (error_code IS NULL AND error_message IS NULL)
-            OR (error_code IS NOT NULL AND error_message IS NOT NULL)
-        ),
-    CONSTRAINT ck_execution_result_shape
-        CHECK (
-            (
-                result_status = 'SUCCEEDED'
-                AND actual_action IS NOT NULL
-                AND error_code IS NULL
-                AND error_message IS NULL
-                AND started_at IS NOT NULL
-                AND completed_at IS NOT NULL
-            )
-            OR (
-                result_status IN ('FAILED', 'TIMED_OUT')
-                AND actual_action IS NULL
-                AND started_at IS NOT NULL
-                AND completed_at IS NOT NULL
-            )
-            OR (
-                result_status = 'NOT_STARTED'
-                AND actual_action IS NULL
-                AND error_code IS NULL
-                AND error_message IS NULL
-                AND started_at IS NULL
-                AND completed_at IS NULL
-            )
-        ),
-    CONSTRAINT ck_execution_time_order
-        CHECK (completed_at IS NULL OR completed_at >= started_at)
-);
-
-CREATE TABLE assertion_result (
-    snapshot_id      BIGINT PRIMARY KEY,
-    assertion_status VARCHAR(16) NOT NULL,
-    created_at       TIMESTAMPTZ(6) NOT NULL,
-
-    CONSTRAINT fk_assertion_snapshot
-        FOREIGN KEY (snapshot_id) REFERENCES test_case_snapshot(id) ON DELETE RESTRICT,
-    CONSTRAINT ck_assertion_status
-        CHECK (assertion_status IN ('PASS', 'FAIL'))
-);
-
-CREATE TABLE change_result (
-    snapshot_id          BIGINT PRIMARY KEY,
-    comparability_status VARCHAR(32) NOT NULL,
-    change_type          VARCHAR(64),
-    created_at           TIMESTAMPTZ(6) NOT NULL,
-
-    CONSTRAINT fk_change_snapshot
-        FOREIGN KEY (snapshot_id) REFERENCES test_case_snapshot(id) ON DELETE RESTRICT,
-    CONSTRAINT ck_change_comparability
-        CHECK (comparability_status IN ('COMPARABLE', 'NOT_COMPARABLE')),
-    CONSTRAINT ck_change_type
-        CHECK (
-            change_type IS NULL
-            OR change_type IN (
-                'NO_CHANGE',
-                'SECURITY_REGRESSION',
-                'USABILITY_REGRESSION',
-                'IMPROVEMENT',
-                'POLICY_BEHAVIOR_CHANGED'
-            )
-        ),
-    CONSTRAINT ck_change_result_shape
-        CHECK (
-            (comparability_status = 'COMPARABLE' AND change_type IS NOT NULL)
-            OR (comparability_status = 'NOT_COMPARABLE' AND change_type IS NULL)
-        )
-);
-
-CREATE TABLE quality_gate_result (
-    test_run_id                      BIGINT PRIMARY KEY,
-    gate_status                      VARCHAR(32) NOT NULL,
-    assertion_pass_rate              DOUBLE PRECISION,
-    execution_success_rate           DOUBLE PRECISION,
-    created_at                       TIMESTAMPTZ(6) NOT NULL,
-
-    CONSTRAINT fk_quality_gate_test_run
-        FOREIGN KEY (test_run_id) REFERENCES test_run(id) ON DELETE RESTRICT,
-    CONSTRAINT ck_quality_gate_status
-        CHECK (gate_status IN ('PASS', 'FAIL', 'NOT_EVALUATED')),
-    CONSTRAINT ck_quality_gate_metric_ranges
-        CHECK (
-            (assertion_pass_rate IS NULL
-                OR assertion_pass_rate BETWEEN 0.0 AND 1.0)
-            AND (execution_success_rate IS NULL
-                OR execution_success_rate BETWEEN 0.0 AND 1.0)
-        ),
-    CONSTRAINT ck_quality_gate_result_shape
-        CHECK (
-            (
-                gate_status = 'NOT_EVALUATED'
-                AND assertion_pass_rate IS NULL
-                AND execution_success_rate IS NULL
-            )
-            OR (
-                gate_status IN ('PASS', 'FAIL')
-                AND assertion_pass_rate IS NOT NULL
-                AND execution_success_rate IS NOT NULL
-            )
-        )
-);
-
-CREATE INDEX idx_quality_gate_status_run
-    ON quality_gate_result(gate_status, test_run_id);
-```
-
-## Alternatives
-
-### Persistence 접근
-
-| 선택지 | 구현 복잡도 | Domain 격리 | 조회 통제 | MVP 판단 |
-| --- | --- | --- | --- | --- |
-| Spring Data JPA + 별도 Persistence Model | CRUD와 트랜잭션 반복 코드가 적음 | 높음 | custom query로 보완 가능 | 선택 |
-| Spring Data JPA + Domain 직접 mapping | 초기 클래스 수가 적음 | JPA annotation과 lazy-loading이 Domain에 침투 | 보통 | 기각 |
-| Spring Data JDBC 또는 JdbcTemplate 중심 | SQL 통제가 명시적 | 별도 mapping으로 높게 유지 가능 | 높음 | 8개 테이블 매핑과 CRUD 반복 코드가 MVP에 큼 |
-
-JPA는 Infrastructure 구현 도구일 뿐 Domain 모델과 Aggregate 경계를 결정하지 않는다. 읽기 Projection에 필요한 SQL이 복잡해져도 Domain을 JPA Entity로 바꾸지 않고 custom query로 해결한다.
-
-### Migration
-
-| 선택지 | 장점 | 비용과 판단 |
-| --- | --- | --- |
-| Flyway SQL | PostgreSQL DDL을 그대로 검토하고 version 순서를 단순하게 관리 | 선택 |
-| Liquibase | XML/YAML/JSON 모델과 rollback 기능이 풍부함 | 단일 PostgreSQL MVP에는 도구·changelog 복잡도가 큼 |
-| 미도입 또는 Hibernate 자동 DDL | 초기 설정이 적음 | 환경별 schema drift와 변경 이력 부재로 기각 |
-
-### ID
-
-| 선택지 | 장점 | 비용과 판단 |
-| --- | --- | --- |
-| 테이블별 BIGINT sequence | API int64와 일치하고 다건 저장 allocation을 제어할 수 있음 | 선택. gap을 허용함 |
-| identity/BIGSERIAL | DDL이 단순함 | 다건 insert 최적화 제어와 명시성이 sequence보다 낮음 |
-| UUID/ULID 등 애플리케이션 ID | DB 왕복 없이 생성 가능 | 공개 int64 계약과 맞지 않고 타입 변환이 추가되어 기각 |
-
-### 삭제와 구조화 값
-
-| 선택지 | 장점 | 비용과 판단 |
-| --- | --- | --- |
-| 물리 삭제 | 현재 자산을 단순하게 제거하고 조회 조건을 없앰 | 과거 실행 데이터와의 FK를 분리해야 함. 선택 |
-| 논리 삭제 | 원본 행과 삭제 시각을 보존 | 모든 현재 조회에 조건이 필요해 기각 |
-| 계약 필드 정규 컬럼 | CHECK, filter, sort, index와 nullable 불변식이 명확함 | 필드 추가에 Migration 필요. 선택 |
-| JSONB 중심 | 확장이 빠름 | 현재 고정 계약의 무결성과 조회가 약해져 기각 |
-| 혼합 | 확정 필드와 확장 payload를 분리 가능 | 현재 승인된 확장 payload가 없으므로 선제 도입하지 않음 |
-
-## Consequences
-
-장점은 다음과 같다.
-
-- Domain은 Persistence 기술과 객체 lifecycle에서 격리된다.
-- TestCase 물리 삭제 후에도 Snapshot과 결과가 유지된다.
-- Snapshot과 target이 실행 시점 값으로 보존되고 현재 TestCase 변경과 분리된다.
-- lifecycle, 실행 실패, 평가 전, `NOT_EVALUATED`와 nullable metrics를 손실 없이 표현한다.
-- result 테이블의 공유 PK가 cardinality를 직접 강제하고 중복 `test_run_id`와 execution ID의 교차 참조 오류를 없앤다.
-- PostgreSQL CHECK와 부분 인덱스로 핵심 불변식과 기본 조회를 검증할 수 있다.
-
-비용과 위험은 다음과 같다.
-
-- Domain과 Persistence Model 사이 Mapper 코드가 필요하다.
-- Enum 추가, 새 filter와 JSON 구조 도입은 Migration과 ADR 검토를 요구한다.
-- TestSuite `testCaseCount` 집계 정렬은 데이터 규모가 커지면 비용이 증가할 수 있다. 측정 없이 중복 counter를 선제 도입하지 않는다.
-- `ILIKE '%...%'` 검색은 B-tree로 가속되지 않는다. 필요 시 PostgreSQL extension과 운영 권한을 별도로 검토해야 한다.
-- JPA sequence allocation 설정과 DB sequence 증가값이 다르면 식별자 생성 오류가 생길 수 있으므로 통합 테스트가 필요하다.
-- 참고 DDL의 cross-row/cross-table 불변식, 예를 들어 Assertion은 Candidate 성공 시에만 생성되고 FINISHED와 Quality Gate가 정확히 함께 존재한다는 규칙은 ADR 0004의 Application 트랜잭션과 통합 테스트로 보완한다.
-- Outbox, claim과 Idempotency 테이블은 ADR 0008에서 확정했으므로, #14는 해당 ADR의 DDL·ERD·통합 테스트 계약을 함께 구현해야 한다.
-
-이 결정을 되돌리려면 새 ADR로 Persistence 접근이나 스키마 표현을 supersede하고 새 Flyway migration으로 roll-forward한다. 이미 적용된 versioned migration을 수정하거나 운영 DB를 Hibernate 자동 DDL로 역변경하지 않는다.
+- 주요 Aggregate 식별자는 PostgreSQL `BIGINT`를 사용한다.
+- sequence allocation increment는 50으로 맞춘다.
+- 생성/수정/lifecycle 시각은 Application이 주입된 `Clock`으로 결정하고 persistence가 그대로 저장한다.
+- DB trigger를 통한 암묵적 updated-at 갱신은 사용하지 않는다.
+
+### 값과 제약
+
+- 현재 계약의 scalar 값은 정규 컬럼으로 저장한다.
+- Enum은 PostgreSQL enum type 대신 `VARCHAR + CHECK`를 사용한다.
+- nonblank DB 방어 검증에는 POSIX `[:space:]` 기반 CHECK를 사용한다.
+- Outbox payload처럼 구조 자체가 기술 계약인 경우에만 JSONB를 사용한다.
+
+## 물리 테이블
+
+| 테이블 | 역할 |
+| --- | --- |
+| `test_suite` | TestSuite 현재 정의 |
+| `test_case` | TestCase 현재 정의 |
+| `target_reference` | HTTP Application Target reference |
+| `http_endpoint_target` | HTTP endpoint/model/revision 상세 |
+| `evaluator_reference` | Response Behavior Classifier 식별 정보 |
+| `test_run` | 실행 수명주기, Target/Classifier reference, 진행률 |
+| `test_case_snapshot` | Run 시점 TestCase 정의 snapshot |
+| `test_execution` | Snapshot 단일 실행 결과 |
+| `assertion_result` | expected action과 evaluator verdict 비교 결과 |
+| `change_result` | 평가 persistence shape |
+| `quality_gate_result` | TestRun 최종 평가 |
+| `test_run_idempotency` | 생성 요청 멱등성 |
+| `test_run_resolution_claim` | resolution lease |
+| `test_execution_claim` | execution lease |
+| `outbox_event` | transactional outbox |
+
+편집 가능한 물리 ERD는 [PlantUML ERD](../diagrams/guardbench-mvp-physical-erd.puml)다.
+
+## TestRun lifecycle
+
+- `QUEUED`: 시작/완료 시각과 execution outcome이 없고 processed count는 0이다.
+- `PREPARING`: 시작 시각이 있고 완료 시각/outcome은 없다.
+- `RUNNING`: 시작 시각이 있고 완료 시각/outcome은 없다.
+- `FINISHED`: 완료 시각과 execution outcome이 있으며 processed count가 test case count와 같다.
 
 ## Validation
 
-1. ADR 0001과 ADR 0003의 Aggregate Root, 식별자와 Repository Port 경계 및 ADR 0004의 최종화 트랜잭션을 유지하고 결과 내부 객체별 Repository를 선제 도입하지 않았는지 확인한다.
-2. `docs/domain/core-model.md`, `docs/domain/evaluation-contract.md`, `docs/api/README.md`, `docs/api/openapi.yaml`의 필드, Enum, nullable 규칙을 테이블·CHECK와 대조한다.
-3. TestCase를 물리 삭제해도 Snapshot의 historical identity와 실행·평가 결과가 유지되는지 검토한다.
-4. Snapshot이 `name`, `input`, `expectedAction`, `severity`, `category`를 모두 보존하며 Run 안에서 원본 TestCase당 하나인지 확인한다.
-5. `QUEUED`, Candidate materialization 실패, 정상 `RUNNING`, `FINISHED / INCOMPLETE`, `NOT_EVALUATED` 예시 행이 CHECK를 만족하고 FINISHED와 Quality Gate가 하나의 commit으로 관찰되는지 검토한다.
-6. 승인된 목록 filter·sort와 기본 정렬마다 실행 가능한 query와 주요 인덱스 경로가 있는지 검토한다.
-7. PlantUML 원본, PNG 관계와 참고 DDL의 PK·FK·cardinality가 일치하는지 확인한다.
-8. 참고 DDL 전체를 PostgreSQL에 적용하고 일반 공백·탭·개행만 포함한 nonblank 대상 값이 CHECK 위반으로 거부되는지 확인한다.
-9. 문서와 다이어그램 외 production/test dependency, datasource, Migration, Entity, Repository Adapter가 변경되지 않았는지 확인한다.
-
-검증 기록(2026-08-24): PostgreSQL 16.15에 참고 DDL 전체를 적용해 8개 테이블과 모든 제약·인덱스가 생성됨을 확인했다. TestSuite, TestCase, TestRun Guardrail ID와 Snapshot의 모든 nonblank 대상 컬럼은 일반 공백·탭·개행만 포함한 대표 입력을 CHECK 위반으로 거부했고, 유효한 문자열은 저장됐다.
+- `PersistenceFoundationIntegrationTest`가 fresh PostgreSQL에 현재 V1만 적용되는지 검증한다.
+- 현재 schema에는 Guardrail 전용 persistence object가 존재하지 않아야 한다.
+- `target_reference.target_type`은 `HTTP_ENDPOINT` 외 값을 허용하지 않는다.
+- HTTP Target URL/model DB 제약을 통합 테스트로 검증한다.
+- TestRun 상세/Regression persistence integration test는 HTTP Target과 classifier reference 기준으로 검증한다.
+- 물리 ERD와 V1 schema는 동일한 테이블/관계를 설명해야 한다.
