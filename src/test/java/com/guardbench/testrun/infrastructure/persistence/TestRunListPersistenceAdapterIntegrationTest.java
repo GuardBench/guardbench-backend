@@ -122,17 +122,26 @@ class TestRunListPersistenceAdapterIntegrationTest {
         boolean finished = status == TestRunStatus.FINISHED;
         boolean started = status != TestRunStatus.QUEUED;
         String targetReference = "target-ref-" + id;
-        jdbcTemplate.update("INSERT INTO target_reference(reference_id, target_type) VALUES (?, 'BEDROCK_GUARDRAIL')",
+        String evaluatorReference = "evaluator-ref-" + id;
+        jdbcTemplate.update("INSERT INTO target_reference(reference_id, target_type) VALUES (?, 'HTTP_ENDPOINT')",
                 targetReference);
+        jdbcTemplate.update("""
+                INSERT INTO http_endpoint_target(reference_id, endpoint_url, model)
+                VALUES (?, 'https://example.com/v1/chat/completions', 'test-model')
+                """, targetReference);
+        jdbcTemplate.update("""
+                INSERT INTO evaluator_reference(reference_id, provider_code, model_id)
+                VALUES (?, 'SAGEMAKER', 'classifier-endpoint')
+                """, evaluatorReference);
         jdbcTemplate.update("""
                 INSERT INTO test_run (
                     id, test_suite_id, status, test_case_count, processed_test_case_count,
-                    target_reference_id, execution_outcome,
+                    target_reference_id, evaluator_reference_id, execution_outcome,
                     created_at, started_at, completed_at, updated_at)
-                VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 id, suiteId, status.name(), finished ? 1 : 0,
-                targetReference,
+                targetReference, evaluatorReference,
                 outcome == null ? null : outcome.name(),
                 Timestamp.from(createdAt),
                 started ? Timestamp.from(createdAt) : null,
