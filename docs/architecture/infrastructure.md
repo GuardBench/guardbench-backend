@@ -161,6 +161,33 @@ docker push {account}.dkr.ecr.ap-northeast-2.amazonaws.com/guardbench-dev:{git-s
 - rolling deployment는 `minimumHealthyPercent=100`, `maximumPercent=200`, deployment circuit breaker rollback을 사용한다.
 - Log Group `/ecs/guardbench-dev/app`을 Task 전에 만들고 14일 보존한다.
 
+### Performance Backend application revision ownership
+
+Performance Backend도 dev Backend와 같은 application revision 배포 경계를 사용한다. Terraform은
+Performance ECS Service의 shape, capacity, environment/secrets, IAM, networking/logging과
+bootstrap Task Definition을 소유한다. Backend CI는 `workflow_dispatch`에서 `performance`
+Environment를 선택했을 때 immutable Git SHA image를 사용해 최신 ACTIVE infrastructure Task
+Definition을 base로 새 application revision을 등록하고 Performance ECS Service만 갱신한다.
+
+`dev`와 `performance` GitHub Environment는 각각 별도의 OIDC role과 해당 Environment subject를
+허용하는 trust policy를 제공해야 한다. Performance Environment의 허용 branch는 `dev`이며,
+Performance role trust policy는 `sts:AssumeRoleWithWebIdentity`에 다음 두 조건을 `StringEquals`로
+설정한다.
+
+```text
+token.actions.githubusercontent.com:aud = sts.amazonaws.com
+token.actions.githubusercontent.com:sub = repo:GuardBench/guardbench-backend:environment:performance
+```
+
+role ARN만 설정하고 trust policy를 갱신하지 않으면 OIDC AssumeRole 단계에서 실패한다. 각
+Environment는 다음 ECS/ECR 식별자를 제공해야 한다:
+`AWS_REGION`, `ECR_REPOSITORY`, `ECS_CLUSTER`, `ECS_SERVICE`,
+`ECS_CONTAINER_NAME`, `ECS_TASK_DEFINITION_FAMILY`. CI는 service가 configured task-definition
+family와 일치하는지, source image repository가 immutable tag 정책인지, rollout 후 실제
+service task definition과 primary rollout state가 요청한 값인지 검증한다. Infrastructure
+configuration 변경은 Terraform apply로 최신 bootstrap revision을 만든 뒤, Backend CI가 그
+revision을 다음 application revision의 base로 사용한다.
+
 ### Task 환경변수
 
 | 이름 | 값 또는 주입원 | 이유 |
