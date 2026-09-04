@@ -66,7 +66,7 @@ TestCaseSnapshot → OpenAI-compatible AI Application Target → Natural Languag
 ### TestSuite와 TestCase
 
 - TestSuite는 TestCase 없이 만들 수 있다. 생성 요청의 `testCases` 생략·`null`·빈 배열은 빈 컬렉션으로 정규화한다.
-- 초기 TestCase가 있으면 TestSuite와 한 트랜잭션에서 생성하며 최대 100개다.
+- 초기 TestCase가 있으면 TestSuite와 한 트랜잭션에서 생성하며 최대 1000개다.
 - 이름 중복은 허용하고 ID로 식별한다. `category`는 고정 Enum이 아닌 비어 있지 않은 문자열이다.
 - TestCase는 독립 Aggregate다. 목록은 별도 API로 조회하며 TestSuite 응답에는 전체 배열 대신 `testCaseCount`가 있다.
 - TestCase 수정은 과거 TestRun의 Snapshot을 바꾸지 않는다. 삭제는 영구 삭제이며 과거 실행 결과는 유지한다.

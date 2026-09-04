@@ -26,7 +26,7 @@ import jakarta.persistence.EntityManager;
  *
  * <p>식별자가 저장 전에 부여되므로 Spring Data는 모든 Entity를 기존 행으로 판단해 {@code merge}를
  * 호출하고, 신규 저장에도 INSERT 앞에 SELECT가 하나씩 붙는다. 승인된 API 계약이 TestSuite 생성 시 초기
- * TestCase를 최대 100개까지 허용하므로 배치에서는 이 비용이 건수만큼 늘어난다.
+ * TestCase를 최대 1000개까지 허용하므로 배치에서는 이 비용이 건수만큼 늘어난다.
  *
  * <p>그래서 {@code saveAll}은 식별자 전체를 한 번의 query로 확인해 이미 저장된 것만 가려낸 뒤, 신규는
  * {@code persist}로 SELECT 없이 넣고 기존은 {@code merge}로 반영한다. 배치 크기와 무관하게 확인 query가
