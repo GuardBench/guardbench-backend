@@ -1,6 +1,6 @@
 @startuml
 !pragma layout smetana
-title GuardBench MVP PostgreSQL Physical ERD
+title GuardBench MVP Current PostgreSQL ERD
 
 hide methods
 hide stereotypes
@@ -54,14 +54,6 @@ entity "target_reference" as target_reference {
   * reference_id : TEXT <<PK>>
   --
   * target_type : VARCHAR(32)
-}
-
-entity "bedrock_guardrail_target\n[LEGACY - no new writes]" as bedrock_target {
-  * reference_id : TEXT <<PK, FK>>
-  --
-  * guardrail_identifier : TEXT
-  * requested_revision : TEXT
-    resolved_revision : TEXT
 }
 
 entity "http_endpoint_target" as http_endpoint_target {
@@ -175,7 +167,6 @@ entity "outbox_event" as outbox {
 test_suite ||--o{ test_case : contains
 test_suite ||..o{ test_run : historical identity
 target_reference ||--o| test_run : referenced by
-target_reference ||--o| bedrock_target : legacy provider detail
 target_reference ||--o| http_endpoint_target : current provider detail
 evaluator_reference ||--o{ test_run : immutable evaluator snapshot
 test_run ||--|{ snapshot : fixes
@@ -185,24 +176,15 @@ snapshot ||--o| execution_claim : technical lease
 test_run ||--o| idempotency : request replay
 test_run ||--o| resolution_claim : technical lease
 snapshot ||--o| assertion : expected vs evaluated behavior
-snapshot ||--o| change_result : legacy, no new writes
+snapshot ||--o| change_result : historical comparison result
 test_run ||--o| quality_gate : final evaluation
 outbox ..> test_run : payload reference only
 
 note right of target_reference
   Current contract: HTTP_ENDPOINT AI Application Target only.
-  New TestRuns do not register Bedrock Guardrail targets.
-  bedrock_guardrail_target remains only because this is a
-  physical ERD reflecting historical Flyway migrations.
+  Public TestRun creation does not expose provider-specific target types.
   test_run.target_reference_id is NOT NULL with a UNIQUE
   constraint, so at most one TestRun per target_reference.
-end note
-
-note right of bedrock_target
-  LEGACY PHYSICAL TABLE.
-  Retained for migration history / schema compatibility only.
-  It is not part of the current public TestRun target contract.
-  See ADR 0010 and ADR 0013 for the current model.
 end note
 
 note right of evaluator_reference
@@ -215,9 +197,6 @@ end note
 
 note right of http_endpoint_target
   Current AI Application Target persistence.
-  V4 adds HTTP_ENDPOINT persistence; V6 adds requested revision.
-  V5 requires an http/https URL with host-like text.
-  V7 adds the OpenAI-compatible model; V8 makes it NOT NULL.
   Public API accepts HTTP_ENDPOINT only.
 end note
 
@@ -234,9 +213,7 @@ note bottom of execution
 end note
 
 note bottom of change_result
-  Legacy physical table retained from the old comparison model.
-  V3 removes existing rows; single-target TestRun creates no new rows.
-  Current regression comparison reuses compatible historical Run results.
+  Current regression comparison can reuse compatible historical Run results.
 end note
 
 note bottom of quality_gate
@@ -245,10 +222,8 @@ note bottom of quality_gate
 end note
 
 legend left
-  CURRENT: HTTP_ENDPOINT target + Response Behavior Classifier.
-  LEGACY tables remain visible only because this diagram mirrors
-  the physical schema produced by Flyway V1 through V13.
-  Historical tables must not be interpreted as current API contracts.
+  This diagram documents the current GuardBench model,
+  not every historical table introduced by past Flyway migrations.
 
   Current TestCase → TestSuite uses ON DELETE RESTRICT.
   Snapshot source and TestRun suite IDs are historical scalars without FKs.
