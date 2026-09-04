@@ -120,6 +120,12 @@ HTTP Application Target 실행, OpenAI-compatible response 정규화, inline Eva
 - Application의 자연어 응답은 내부 Evaluator 입력이지만 public DTO에는 `applicationResponse`, `targetResponse`, `naturalLanguageResponse` 어떤 이름으로도 노출하지 않는다.
 - `error.stage`는 `APPLICATION_TARGET | EVALUATOR`로 실패 단계를 구분한다. code의 구체 taxonomy는 #117이 소유하며 provider 원문, stack trace, credential과 ARN은 노출하지 않는다.
 - `evaluationOutcome` 필터는 `TRUE_POSITIVE | TRUE_NEGATIVE | FALSE_POSITIVE | FALSE_NEGATIVE` 상세 조회에 사용한다.
+- `attentionType`은 `FALSE_NEGATIVE | FALSE_POSITIVE | EXECUTION_FAILED | TIMED_OUT | NOT_STARTED`이며,
+  반복 값은 OR, 다른 필터와는 AND로 결합한다. 결과 항목에는 처리 미완료를 우선한 대표 유형 하나만 반환한다.
+- `includeFacets=attention`이면 선택한 `attentionType`은 제외하고 나머지 일반 필터를 반영한 전체 결과 수와
+  유형별 집계를 반환한다. 따라서 사용자가 일부 chip을 선택해도 선택하지 않은 chip의 집계가 유지된다.
+- Attention 필터에 명시 정렬이 없으면 `severity DESC` → `FALSE_NEGATIVE`, `EXECUTION_FAILED`,
+  `TIMED_OUT`, `FALSE_POSITIVE`, `NOT_STARTED` → `snapshotId ASC` 순으로 정렬한 뒤 페이지를 적용한다.
 - Evaluator metrics의 분류는 다음과 같다.
 
 | ExpectedResult | Evaluator verdict | Evaluation outcome |
