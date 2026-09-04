@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Related Issue: #140
+> Related Issue: #140, #187
 
 ## 목적과 원칙
 
@@ -10,6 +10,17 @@ GuardBench 성능 테스트는 현재 ECS 설정값을 목표로 삼지 않고, 
 뒤 동일한 workload를 반복 실행해 Baseline과 인프라 변경 전후를 비교하기 위한 도구다.
 TestRun은 `POST /api/v1/test-runs`의 `202 Accepted`에서 끝나지 않고 SQS/Worker를 거쳐
 `FINISHED`가 되므로 HTTP latency와 비동기 완료 시간을 분리해서 측정한다.
+
+현재 E2E 실행 경로는 다음과 같다.
+
+```text
+TestRun → Application Target → SageMaker Response Behavior Classifier
+        → ALLOW/BLOCK 정규화 → Assertion → Metrics / Quality Gate
+```
+
+성능 Profile은 Application Target과 workload/acceptance criteria만 입력으로 소유한다.
+`evaluationProfile`, `checks`, `strictness` 같은 evaluator 설정은 TestRun 생성 계약이 아니며,
+classifier endpoint/prompt 등은 Backend 배포 설정이 소유한다.
 
 실험 순서는 다음과 같다.
 
@@ -31,7 +42,8 @@ Dataset은 무엇을 실행할지, Profile은 얼마나 실행할지를 소유�
 | Profile | 동시 TestRun 수, ramp-up, duration, test type, acceptance criteria | `small`, `SMOKE` |
 
 `performance/datasets/baseline-v1.yaml`은 기존 데모용 78건 import fixture를 immutable
-source로 고정한다. 기준으로 사용한 Dataset은 조용히 수정하지 않는다. TestCase를 추가하거나
+source로 고정한다. 이 Dataset은 classifier 정확도 benchmark가 아니라 반복 가능한 performance
+workload다. 기준으로 사용한 Dataset은 조용히 수정하지 않는다. TestCase를 추가하거나
 생성 규칙을 바꾸려면 `baseline-v2` 또는 `perf-medium-v1`처럼 새 버전을 만들고 metadata에
 생성 방법을 남긴다. `500 TestCases`는 Dataset 크기이며 `TARGET` Capacity와 같은 뜻이 아니다.
 
@@ -52,7 +64,7 @@ Profile type은 다음 의미를 갖는다.
 Python Runner: profile/dataset 검증 · preflight · reset/seed · k6 orchestration
                                       · async drain · AWS metric · report/판정
 k6: POST latency/error · TestRun 상태 polling · completion duration/failure metric
-AWS collector: ECS/SQS/RDS CloudWatch 시계열
+AWS collector: ECS/SQS/RDS/SageMaker CloudWatch 시계열
 ```
 
 k6가 종료됐다는 사실만으로 테스트를 종료하지 않는다. Runner는 생성 구간의 TestRun이
@@ -80,6 +92,8 @@ export AWS_REGION=ap-northeast-2
 export PERF_ECS_CLUSTER=<cluster-name>
 export PERF_ECS_SERVICE=<service-name>
 export PERF_RDS_INSTANCE_ID=<db-instance-id>
+export PERF_SAGEMAKER_ENDPOINT_NAME=<classifier-endpoint-name>
+export PERF_SAGEMAKER_VARIANT_NAME=<classifier-variant-name>
 # CloudWatch SQS QueueName dimensions (source + DLQ)
 export PERF_SOURCE_QUEUE_RESOLVE_NAME=<resolve-queue-name>
 export PERF_SOURCE_QUEUE_WORK_ITEMS_NAME=<work-items-queue-name>
@@ -210,12 +224,24 @@ Runner assertion은 k6 종료 후에도 평가한다.
 - source queue가 drain됐는지와 drain 시간
 - DLQ visible message 수
 
-CloudWatch는 실행 시작~완료 구간으로 ECS `CPUUtilization`, `MemoryUtilization`,
-`RunningTaskCount`, SQS visible/oldest age, RDS `CPUUtilization`과
-`DatabaseConnections`를 수집한다. 리소스 이름은 `performance/metrics/aws.yaml`과 환경변수에
-두며 Runner는 ECS 단일 Service인지 API/Worker 분리인지 가정하지 않는다. 리소스 dimension이
-없는 metric은 `aws-metrics.json`에 `skipped`로 남긴다. AWS acceptance는 요청 성공만으로
-통과하지 않으며 ECS·SQS·RDS 각 그룹에 실제 datapoint가 하나 이상 있어야 통과한다.
+CloudWatch는 실행 시작~완료 구간으로 다음 시계열을 수집한다.
+
+- ECS: `CPUUtilization`, `MemoryUtilization`, `RunningTaskCount`
+- SQS: source/DLQ visible messages, source oldest message age
+- RDS: `CPUUtilization`, `DatabaseConnections`
+- SageMaker classifier: `Invocations`, `ModelLatency`, `OverheadLatency`,
+  `Invocation4XXErrors`, `Invocation5XXErrors`
+
+SageMaker metric은 `EndpointName + VariantName` dimension으로 조회한다. 성능 Baseline에서는
+classifier가 실제 E2E 경로의 일부이므로 ECS·SQS·RDS와 함께 SageMaker datapoint도 있어야
+AWS metric 수집 acceptance가 통과한다. 리소스 이름은 `performance/metrics/aws.yaml`과
+환경변수에 두며, dimension이 비어 있는 metric은 `aws-metrics.json`에 `skipped`로 남긴다.
+
+`TestRun create 202`는 E2E 성공과 다르다. k6는 `FINISHED`까지 polling하고
+`executionOutcome=COMPLETED`인지 별도로 확인한다. Classifier provider 실패는 임의 ALLOW/BLOCK으로
+fallback하지 않으며 execution failure로 반영된다. 병목 분석에서는 TestRun completion과
+ECS/SQS/RDS를 SageMaker latency/error 시계열과 함께 확인해 GuardBench 내부 적체와 classifier
+provider 지연을 구분한다.
 
 HTTP threshold나 시스템 assertion을 위반하면 결과는 `FAIL`로 저장된다. Profile 목표값을
 실행 후 바꾸어 결과를 PASS로 만들지 않는다. `report.md`의 metric 시계열과 workload를 함께

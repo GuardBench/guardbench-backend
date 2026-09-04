@@ -1,6 +1,6 @@
 test:
   id: PERF-SMALL
-  name: baseline smoke
+  name: classifier pipeline smoke
   type: SMOKE
 
 # Profile은 실행량과 acceptance criteria만 소유한다. 어떤 TestCase를 실행할지는 Dataset이 소유한다.
@@ -12,7 +12,7 @@ workload:
   completion_timeout_seconds: 300
   polling_interval_seconds: 2
 
-# 배포별 URL·model은 환경변수로 주입한다. Profile을 복사해 target/peak/stress/soak를 만들 수 있다.
+# 배포별 URL·model은 환경변수로 주입한다. Classifier 설정은 TestRun 입력이 아니라 Backend 배포가 소유한다.
 target:
   type: HTTP_ENDPOINT
   identifier: "${PERF_TARGET_URL}"
