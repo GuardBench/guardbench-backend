@@ -1,10 +1,15 @@
 # 0007. TestRun Candidate 입력은 DRAFT만 허용
 
-> ⚠️ Candidate 전용 입력 계약은 [ADR 0010](0010-single-target-test-run-model.md)의 단일 Target `revision` 계약이 대체한다.
+> ⚠️ **HISTORICAL ADR — 현재 TestRun 계약이 아니다.**
+>
+> 이 문서는 Bedrock Guardrail의 Baseline/Candidate 및 Candidate DRAFT materialization을 사용하던 과거 설계를 기록한다.
+> 현재 TestRun은 [ADR 0010](0010-single-target-test-run-model.md)의 단일 Target 실행 모델을 따르며,
+> AI Application Target과 평가 계약은 [ADR 0013](0013-response-behavior-classifier.md)이 정의한다.
+> 현재 API나 도메인 모델을 해석할 때 아래 Candidate/Guardrail 계약을 사용하지 않는다.
 
 > Status: SUPERSEDED
 > Owner: Backend
-> Last reviewed: 2026-08-25
+> Last reviewed: 2026-09-04
 > Canonical source: GitHub
 > Origin: [GitHub Issue #32](https://github.com/GuardBench/guardbench-backend/issues/32)
 
