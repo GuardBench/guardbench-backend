@@ -8,6 +8,7 @@ from unittest.mock import patch
 from performance.runner.acceptance import evaluate
 from performance.runner.config import ConfigurationError, load_profile, load_yaml
 from performance.runner.dataset import load_seed_payload
+from performance.runner.aws import InfrastructureCapacityCollector
 from performance.runner.cli import K6_THRESHOLD_FAILURE_EXIT_CODE, RunnerError, reset_database, run_k6
 from performance.runner.safety import migration_jdbc_url, validate_reset_safety
 from performance.runner.storage import RESULT_FILENAMES, ResultUploadError, upload_result_directory
@@ -45,6 +46,81 @@ def k6_profile() -> dict:
 
 
 class PerformanceRunnerTest(unittest.TestCase):
+    def test_infrastructure_capacity_snapshot_collects_configured_capacity(self):
+        class FakeEcs:
+            def describe_services(self, **kwargs):
+                self.service_request = kwargs
+                return {"services": [{
+                    "taskDefinition": "arn:aws:ecs:region:account:task-definition/app:7",
+                    "desiredCount": 2,
+                    "runningCount": 2,
+                }]}
+
+            def describe_task_definition(self, **kwargs):
+                self.task_request = kwargs
+                return {"taskDefinition": {"cpu": "512", "memory": "1024"}}
+
+        class FakeRds:
+            def describe_db_instances(self, **kwargs):
+                self.request = kwargs
+                return {"DBInstances": [{
+                    "DBInstanceIdentifier": "guardbench-dev",
+                    "DBInstanceClass": "db.t4g.medium",
+                }]}
+
+        class FakeSageMaker:
+            def describe_endpoint(self, **kwargs):
+                self.request = kwargs
+                return {"ProductionVariants": [{
+                    "VariantName": "AllTraffic",
+                    "InstanceType": "ml.g4dn.xlarge",
+                    "DesiredInstanceCount": 1,
+                    "CurrentInstanceCount": 1,
+                }]}
+
+        with patch.dict(os.environ, {
+            "PERF_ECS_CLUSTER": "guardbench-dev",
+            "PERF_ECS_SERVICE": "app",
+            "PERF_RDS_INSTANCE_ID": "guardbench-dev",
+            "PERF_SAGEMAKER_ENDPOINT_NAME": "classifier",
+            "PERF_SAGEMAKER_VARIANT_NAME": "AllTraffic",
+        }, clear=True):
+            snapshot = InfrastructureCapacityCollector(
+                ecs_client=FakeEcs(), rds_client=FakeRds(), sagemaker_client=FakeSageMaker()
+            ).collect()
+
+        self.assertEqual("guardbench-dev", snapshot["ecs"]["cluster_identifier"])
+        self.assertEqual(2, snapshot["ecs"]["desired_count"])
+        self.assertEqual("512", snapshot["ecs"]["task_cpu"])
+        self.assertEqual("db.t4g.medium", snapshot["rds"]["db_instance_class"])
+        self.assertEqual("ml.g4dn.xlarge", snapshot["sagemaker"]["instance_type"])
+        self.assertEqual(1, snapshot["sagemaker"]["current_instance_count"])
+        self.assertIn("captured_at", snapshot)
+
+    def test_infrastructure_capacity_snapshot_requires_all_resource_identifiers(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(ConfigurationError):
+                InfrastructureCapacityCollector(
+                    ecs_client=object(), rds_client=object(), sagemaker_client=object()
+                ).collect()
+
+    def test_infrastructure_capacity_snapshot_fails_when_resource_lookup_fails(self):
+        class FailingEcs:
+            def describe_services(self, **kwargs):
+                raise RuntimeError("access denied")
+
+        with patch.dict(os.environ, {
+            "PERF_ECS_CLUSTER": "cluster",
+            "PERF_ECS_SERVICE": "service",
+            "PERF_RDS_INSTANCE_ID": "db",
+            "PERF_SAGEMAKER_ENDPOINT_NAME": "endpoint",
+            "PERF_SAGEMAKER_VARIANT_NAME": "variant",
+        }, clear=True):
+            with self.assertRaisesRegex(ConfigurationError, "Infrastructure Capacity 조회에 실패했습니다"):
+                InfrastructureCapacityCollector(
+                    ecs_client=FailingEcs(), rds_client=object(), sagemaker_client=object()
+                ).collect()
+
     def test_small_profile_is_valid_and_does_not_embed_dataset(self):
         with patch.dict(os.environ, {
             "PERF_TARGET_URL": "https://target.example.test/v1/chat/completions",
@@ -291,6 +367,13 @@ class PerformanceRunnerTest(unittest.TestCase):
         self.assertIn('--tag "$image_ref"', build_script)
         self.assertIn('docker push "$1"', publish_script)
         self.assertNotIn("guardbench", build_script)
+
+    def test_shell_script_line_endings_are_pinned_to_lf(self):
+        attributes = (ROOT.parent / ".gitattributes").read_text(encoding="utf-8")
+        build_script = (ROOT / "build-runner-image.sh").read_bytes()
+
+        self.assertIn("*.sh text eol=lf", attributes)
+        self.assertNotIn(b"\r\n", build_script)
 
     def test_image_build_passes_one_git_sha_to_tag_and_revision(self):
         with tempfile.TemporaryDirectory() as directory:

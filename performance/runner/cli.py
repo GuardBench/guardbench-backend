@@ -16,7 +16,7 @@ from typing import Any
 
 from .acceptance import evaluate
 from .api import ApiClient, ApiError
-from .aws import CloudWatchMetricCollector, QueueInspector, queue_urls_from_environment
+from .aws import CloudWatchMetricCollector, InfrastructureCapacityCollector, QueueInspector, queue_urls_from_environment
 from .config import ConfigurationError, load_dataset, load_profile
 from .dataset import load_seed_payload
 from .safety import EXPECTED_DATABASE_NAME, migration_jdbc_url, validate_reset_safety
@@ -195,6 +195,7 @@ def _report(result: dict[str, Any]) -> str:
     profile = result["profile"]
     workload = profile["workload"]
     acceptance = profile["acceptance"]
+    capacity = result["infrastructure_capacity"]
     decision = result.get("acceptance", {}).get("status", "FAIL")
     lines = [
         f"# {profile['test']['id']} performance report",
@@ -219,6 +220,14 @@ def _report(result: dict[str, Any]) -> str:
         f"- Queue drain: {result['drain']}",
         f"- AWS metrics: `aws-metrics.json` ({result['aws_metrics'].get('status')})",
         f"- Decision: **{decision}**",
+        "",
+        "## Infrastructure Capacity Snapshot",
+        "",
+        f"- Captured at: {capacity['captured_at']}",
+        f"- ECS: cluster `{capacity['ecs']['cluster_identifier']}`, service `{capacity['ecs']['service_identifier']}`, desired {capacity['ecs']['desired_count']}, running {capacity['ecs']['running_task_count']}, task CPU {capacity['ecs']['task_cpu']}, task memory {capacity['ecs']['task_memory']}",
+        f"- RDS: instance `{capacity['rds']['db_instance_identifier']}`, class `{capacity['rds']['db_instance_class']}`",
+        f"- SageMaker: endpoint `{capacity['sagemaker']['endpoint_name']}`, variant `{capacity['sagemaker']['production_variant_name']}`, type `{capacity['sagemaker']['instance_type']}`, desired {capacity['sagemaker']['desired_instance_count']}, current {capacity['sagemaker']['current_instance_count']}",
+        "- 위 값은 실행 전 configured capacity snapshot이며, 실행 중 관측값은 `aws-metrics.json`에 별도로 저장한다.",
         "",
         "## Bottleneck observations",
         "",
@@ -261,6 +270,10 @@ def execute(args: argparse.Namespace) -> int:
     source_urls, dlq_urls = queue_urls_from_environment()
     inspector = QueueInspector()
     preflight = _assert_preflight(api, inspector, source_urls, dlq_urls)
+    revisions = {"application": os.environ.get("APP_REVISION", "unknown"),
+                 "infrastructure": os.environ.get("INFRA_REVISION", "unknown")}
+    infrastructure_capacity = InfrastructureCapacityCollector().collect()
+    infrastructure_capacity["revisions"] = revisions
     if args.reset:
         environment = dict(os.environ)
         reset_database(environment)
@@ -290,8 +303,8 @@ def execute(args: argparse.Namespace) -> int:
         "run_id": run_id,
         "started_at": _iso(started_at),
         "finished_at": _iso(finished_at),
-        "revisions": {"application": os.environ.get("APP_REVISION", "unknown"),
-                       "infrastructure": os.environ.get("INFRA_REVISION", "unknown")},
+        "revisions": revisions,
+        "infrastructure_capacity": infrastructure_capacity,
         "dataset": {"id": load_dataset(dataset_path).get("id", dataset_path.stem), "test_case_count": test_case_count,
                     "suite_id": suite_id},
         "profile": profile,
