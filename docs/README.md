@@ -37,24 +37,23 @@
 | 성능 테스트 | [성능 테스트 운영](performance-testing.md) | APPROVED | Backend | 2026-09-01 | 없음 |
 | 아키텍처 | [시스템 개요](architecture/system-overview.md) | APPROVED | Backend | 2026-09-01 | [도메인 모델 정의](https://app.notion.com/p/3c0eeed6b62d81b48c03ed6034440936) |
 | 아키텍처 | [인프라](architecture/infrastructure.md) | APPROVED | Infra | 2026-08-27 | [인프라 구성 설계](https://app.notion.com/p/3c0eeed6b62d81269f60e1c69fbf9fcc) |
-| 아키텍처 | [TestRun Persistence 구현 인덱스](architecture/testrun-persistence.md) | APPROVED | Backend | 2026-09-01 | 없음 |
+| 아키텍처 | [TestRun Persistence 구현 인덱스](architecture/testrun-persistence.md) | APPROVED | Backend | 2026-09-04 | 없음 |
 | 아키텍처 | [비동기 신뢰성 및 테스트 원칙](architecture/async-reliability-and-testing.md) | DRAFT | Backend | 2026-09-02 | 없음 |
 | 아키텍처 | [TestRun CloudWatch Logs Insights 조회 가이드](architecture/testrun-cloudwatch-logs-guide.md) | DRAFT | Backend | 2026-09-03 | 없음 |
 | 계약 라우팅 | [비동기 TestRun 계약 맵](contracts/README.md) | APPROVED | Backend | 2026-08-31 | 없음 |
 | 통합 | [SageMaker Response Behavior Classifier Adapter](integrations/sagemaker-classifier-adapter.md) | APPROVED | Backend | 2026-09-04 | 없음 |
 | 통합 | [HTTP Endpoint Application Target Adapter](integrations/http-endpoint-target.md) | APPROVED | Backend | 2026-09-01 | 없음 |
-| 결정 | [ADR 안내](decisions/README.md) | APPROVED | Team | 2026-08-27 | 없음 |
+| 결정 | [ADR 안내](decisions/README.md) | APPROVED | Team | 2026-09-04 | 없음 |
 | 결정 | [ADR 0001: 도메인 타입 소유권과 Aggregate 경계](decisions/0001-domain-type-ownership-and-aggregate-boundaries.md) | APPROVED | Backend | 2026-08-24 | 없음 |
-| 결정 | [ADR 0002: PostgreSQL 영속성 계약과 물리 ERD](decisions/0002-postgresql-persistence-contract.md) | APPROVED | Backend | 2026-08-24 | 없음 |
+| 결정 | [ADR 0002: PostgreSQL 영속성 계약과 물리 ERD](decisions/0002-postgresql-persistence-contract.md) | APPROVED | Backend | 2026-09-04 | 없음 |
 | 결정 | [ADR 0003: 실행·평가 결과 Aggregate와 write-side Port 경계](decisions/0003-result-aggregate-and-write-port-boundaries.md) | APPROVED | Backend | 2026-08-24 | 없음 |
 | 결정 | [ADR 0004: TestRun 최종 평가와 종료의 원자성](decisions/0004-testrun-finalization-atomicity.md) | APPROVED | Backend | 2026-08-24 | 없음 |
 | 결정 | [ADR 0005: 비동기 TestRun 실행 계약](decisions/0005-async-test-run-execution-contract.md) | APPROVED | Backend | 2026-08-27 | 없음 |
 | 결정 | [ADR 0006: 독립 도메인 개발을 위한 경계 계약과 Java 타입 격리](decisions/0006-independent-domain-contract-boundaries.md) | APPROVED | Backend | 2026-08-25 | 없음 |
-| 결정 | [ADR 0007: TestRun Candidate 입력은 DRAFT만 허용](decisions/0007-testrun-candidate-draft-input.md) | SUPERSEDED | Backend | 2026-08-25 | 없음 |
 | 결정 | [ADR 0008: 비동기 TestRun 물리 멱등성·claim·Outbox 계약](decisions/0008-async-testrun-persistence-contract.md) | APPROVED | Backend | 2026-08-25 | 없음 |
 | 결정 | [ADR 0009: TestCase 논리 삭제의 동시 요청 처리](decisions/0009-testcase-soft-delete-concurrency.md) | SUPERSEDED | Backend | 2026-08-25 | 없음 |
+| 결정 | [ADR 0010: TestRun 단일 Target 실행 모델](decisions/0010-single-target-test-run-model.md) | APPROVED | Backend | 2026-09-04 | 없음 |
 | 결정 | [ADR 0012: TestSuite/TestCase 영구 삭제와 historical identity](decisions/0012-testdefinition-hard-delete-and-historical-identity.md) | APPROVED | Backend | 2026-09-03 | 없음 |
-| 결정 | [ADR 0010: TestRun 단일 Target 실행 모델](decisions/0010-single-target-test-run-model.md) | APPROVED | Backend | 2026-08-30 | 없음 |
 | 결정 | [ADR 0013: Response Behavior Classifier 실행 계약](decisions/0013-response-behavior-classifier.md) | APPROVED | Backend | 2026-09-04 | 없음 |
 | AI 개발 | [작업 워크플로](ai-development/workflow.md) | APPROVED | Team | 2026-09-01 | 현재 대화에서 승격 |
 | AI 개발 | [Backend CI와 dev Merge Gate](ai-development/backend-ci-merge-gate.md) | DRAFT | Backend | 2026-08-26 | 없음 |
