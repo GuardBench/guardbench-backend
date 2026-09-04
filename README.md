@@ -1,21 +1,21 @@
 # GuardBench Backend
 
-AI Application의 자연어 응답을 Evaluator로 판정하고, 기대 동작 위반과 저장된 실행 결과의 Regression을 구분하는 AI Application Test Platform입니다. Evaluator는 Response Behavior Classifier이며, Amazon SageMaker endpoint에 직접 서빙한 텍스트 모델은 첫 번째 구현입니다.
+AI Application의 자연어 응답을 Response Behavior Classifier로 판정하고, 기대 동작 위반과 저장된 실행 결과의 Regression을 구분하는 AI Application Test Platform입니다. Classifier는 SageMaker Runtime endpoint에서 실행됩니다.
 
 ## MVP 범위
 
 - TestSuite와 TestCase로 정책 테스트 자산 관리
 - TestRun 시점의 TestCaseSnapshot 고정
 - 하나의 TestRun에서 하나의 `HTTP_ENDPOINT` AI Application Target 실행
-- Response Behavior Classifier가 prompt와 Application 응답으로 실제 응답 행동(`COMPLY | REFUSE`)을 관측
-- `COMPLY -> ALLOW`, `REFUSE -> BLOCK`으로 정규화한 EvaluationResult를 Evaluator가 `ALLOW | BLOCK`으로 판정
+- 고정된 Response Behavior Classifier로 Application 응답의 행동을 분류
+- Application 자연어 응답을 Evaluator가 `ALLOW | BLOCK`으로 판정
 - ExpectedResult와 EvaluationResult의 Assertion
 - 현재 TestRun의 Assertion 기반 Quality Gate
 - 완료된 두 TestRun의 저장 결과 기반 Regression
 
 ## 구현 상태
 
-목표 계약은 [ADR 0011](docs/decisions/0011-ai-application-target-and-guardrail-evaluator.md), [ADR 0013](docs/decisions/0013-response-behavior-classifier.md)과 [OpenAPI](docs/api/openapi.yaml)다. 현재 코드는 OpenAI-compatible `HTTP_ENDPOINT` Application Target만 접수하고, immutable `EvaluatorReference`를 고정하며, Amazon SageMaker endpoint 기반 Response Behavior Classifier를 Evaluator Adapter로 구현했다. inline Evaluation Profile과 Evaluator catalog는 제거되었다. Worker는 아직 Evaluator를 호출하지 않지만, Quality Gate는 현재 Run의 평가 가능한 Assertion 통과율과 전체 실행 성공률을 집계한다. #117의 Worker orchestration과 #119의 Regression이 남아 있다.
+목표 계약은 [Response Behavior Classifier Adapter](docs/integrations/sagemaker-classifier-adapter.md)와 [OpenAPI](docs/api/openapi.yaml)다. 현재 실행은 OpenAI-compatible `HTTP_ENDPOINT` Application Target의 응답과 원래 prompt를 SageMaker Runtime classifier에 전달하고, `COMPLY | REFUSE`를 `ALLOW | BLOCK`으로 정규화한다. Worker는 classifier 실패를 임의 action으로 대체하지 않으며, Quality Gate는 현재 Run의 평가 가능한 Assertion 통과율과 전체 실행 성공률을 집계한다.
 
 ## 로컬 개발
 
@@ -52,7 +52,7 @@ cp .env.example .env
 ## 기술 방향
 
 - Java, Spring Boot, Gradle
-- PostgreSQL, Amazon SQS, Amazon SageMaker
+- PostgreSQL, Amazon SQS, Amazon SageMaker Runtime
 - Docker, GitHub Actions, Amazon CloudWatch
 
 ## 문서

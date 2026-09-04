@@ -5,13 +5,13 @@ info:
   description: |
     Status: APPROVED
     Owner: Backend
-    Last reviewed: 2026-09-01
+    Last reviewed: 2026-09-04
     Canonical source: GitHub
     Origin: https://app.notion.com/p/3c0eeed6b62d805dac0be8db487b1359
     HTTP 상태와 GuardBench의 실행·판정 상태는 서로 독립적이다.
-    이 schema는 ADR 0011의 합의된 AI Application Target + Evaluator 목표 계약을 명세한다.
-    #114의 EvaluatorReference 고정, #115/#125/#128의 OpenAI-compatible HTTP Application Target 계약,
-    #116~#117의 Evaluator Adapter·Worker orchestration과 결과 경계는 구현되었고,
+    이 schema는 ADR 0013의 합의된 AI Application Target + Response Behavior Classifier 계약을 명세한다.
+    #115/#125/#128의 OpenAI-compatible HTTP Application Target 계약, #173의 classifier 전환,
+    #117의 Worker orchestration과 결과 경계는 구현되었고,
     #118의 현재 Run Quality Gate가 구현되었으며 #119가 Regression을 담당한다.
 servers:
   - url: http://localhost:8080
@@ -339,10 +339,9 @@ paths:
       summary: TestRun 비동기 실행 요청
       description: |
         실행 완료가 아니라 TestRun 실행 요청을 안전하게 접수한다.
-        요청은 하나의 OpenAI-compatible HTTP AI Application Target을 포함한다.
-        사용자는 Evaluator/classifier type, provider 또는 model 식별자를 제출하지 않는다.
-        GuardBench가 서비스 전역 고정 Response Behavior Classifier로 실제 응답 행동을 평가하며 실행 조건과
-        현재 TestCase의 불변 Snapshot을 고정한다. HTTP Target의 identifier와 model도 실행 조건으로 고정한다.
+        요청은 하나의 OpenAI-compatible HTTP AI Application Target만 포함한다.
+        Classifier provider, endpoint, model과 prompt는 서버 deployment configuration이 관리한다.
+        실행 조건과 현재 TestCase의 불변 Snapshot을 고정하며 HTTP Target의 identifier와 model도 실행 조건으로 고정한다.
         커밋 후 발생한 SQS 발행·Application 실행·Evaluator 오류는 이 HTTP 요청의 실패로 바꾸지 않고 TestRun 결과로 기록한다.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -1018,7 +1017,7 @@ components:
                 message: 두 TestRun은 비교할 수 없습니다.
                 data: { code: TEST_RUNS_NOT_COMPARABLE }
     TestRunCreateConflict:
-      description: TestRun을 접수할 수 없는 현재 상태, 지원하지 않는 Evaluation Profile 또는 Idempotency-Key 충돌
+      description: TestRun을 접수할 수 없는 현재 상태 또는 Idempotency-Key 충돌
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorApiResponse' }
@@ -1179,7 +1178,7 @@ components:
       type: object
       description: |
         TestRun이 실행할 단일 AI Application Target이다.
-        MVP는 OpenAI-compatible chat completions HTTP/HTTPS endpoint만 허용하며 Guardrail identifier는 Target으로 받지 않는다.
+        MVP는 OpenAI-compatible chat completions HTTP/HTTPS endpoint만 허용한다.
       required: [type, identifier, model]
       additionalProperties: false
       properties:
@@ -1207,8 +1206,7 @@ components:
       description: |
         TestSuite의 현재 TestCase 전체를 실행 대상으로 사용하며 TestCase ID 목록은 받지 않는다.
         TestCase가 없으면 409 TEST_SUITE_EMPTY로 응답한다.
-        사용자는 Evaluator/classifier 설정을 제출하지 않는다. 서비스 전역 고정 Response Behavior
-        Classifier가 실제 응답 행동을 평가한다.
+        classifier 설정은 서버 deployment configuration으로 관리하며 요청에서 받지 않는다.
       required: [testSuiteId, target]
       additionalProperties: false
       properties:

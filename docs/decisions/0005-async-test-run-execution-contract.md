@@ -12,7 +12,7 @@
 - Decision date: 2026-08-25
 - Related Issue: #5
 - Superseded in part by: [ADR 0006](0006-independent-domain-contract-boundaries.md) — `evaluation -> testrun` Java Domain 의존 해석
-- Superseded in part by: [ADR 0011](0011-ai-application-target-and-guardrail-evaluator.md) — Application 실행 → Evaluator → Assertion 흐름. claim·retry·Outbox 보장은 유지
+- Superseded in part by: [ADR 0013](0013-response-behavior-classifier.md) — Application 실행 → classifier → Assertion 흐름. claim·retry·Outbox 보장은 유지
 - Extended by: [ADR 0008](0008-async-testrun-persistence-contract.md) — Outbox, claim과 HTTP Idempotency 물리 계약
 - Implementation map: [비동기 TestRun 계약 맵](../contracts/README.md) (`DRAFT`; 계약 키별 Primary contract와 보조 참조를 찾게 할 뿐 ADR의 승인 내용을 대체하지 않음)
 - Implementation docs:
@@ -36,7 +36,7 @@ TestRun 접수 뒤 Candidate DRAFT를 고정하고, Snapshot별 Baseline/Candida
 
 - SQS Standard의 중복 전달과 순서 뒤바뀜을 정상 상황으로 취급한다.
 - 동일한 TestExecution을 여러 Executor가 동시에 받아도 터미널 결과는 하나로 수렴해야 한다. lease 만료 경계의 중복 Provider 호출은 허용하되 claim으로 빈도와 저장 영향을 제한한다.
-- Bedrock 호출 중 DB 트랜잭션, row lock 또는 connection을 유지하지 않는다.
+- classifier 호출 중 DB 트랜잭션, row lock 또는 connection을 유지하지 않는다.
 - 메시지는 실행 입력이나 결과를 복제하지 않고 불변 식별자만 전달한다.
 - PostgreSQL의 TestRun, TestExecution과 Evaluation 결과를 현재 상태의 Source of Truth로 사용한다.
 - `TestExecution`에는 `QUEUED`나 `RUNNING`을 추가하지 않고 승인된 네 터미널 상태만 저장한다.
@@ -59,7 +59,7 @@ gb-run-resolve (SQS Standard)
 
 gb-workitems (SQS Standard)
   -> Executor ECS Fargate Service
-  -> Bedrock ApplyGuardrail + terminal TestExecution
+  -> SageMaker Runtime classifier + terminal TestExecution
 
 gb-run-finalize (SQS Standard)
   -> Orchestrator ECS Fargate Service
@@ -123,7 +123,7 @@ gb-run-finalize (SQS Standard)
 }
 ```
 
-메시지에는 입력, ExpectedResult, ActualResult, Guardrail 설정 전문, Provider 오류 원문을 넣지 않는다. 완료 메시지에도 `executionStatus`를 복제하지 않으며 Orchestrator가 DB의 terminal TestExecution을 조회한다.
+메시지에는 입력, ExpectedResult, ActualResult, classifier 설정 전문, Provider 오류 원문을 넣지 않는다. 완료 메시지에도 `executionStatus`를 복제하지 않으며 Orchestrator가 DB의 terminal TestExecution을 조회한다.
 
 알 수 없는 optional 필드는 무시한다. 필수 필드 누락, 알 수 없는 `eventType`, 잘못된 필드 타입과 지원하지 않는 `schemaVersion`은 처리하지 않고 DLQ로 격리한다. optional 필드 추가는 v1에서 허용하고 기존 필드의 삭제·이름·타입·의미 변경은 새 schema version으로 올린다.
 
@@ -133,7 +133,7 @@ Queue의 작업 단위는 TestExecution 하나, 즉 `(snapshotId, targetType)` �
 
 Orchestrator는 `testRunId` 기준의 기술적 resolution claim/lease를 획득하고 TestRun을 `QUEUED -> PREPARING`으로 전환한다. Candidate DRAFT materialization은 DB 트랜잭션 밖에서 수행한다.
 
-- Bedrock `CreateGuardrailVersion`에는 `guardbench-test-run-{testRunId}` 형태의 결정적 `clientRequestToken`을 전달한다.
+- SageMaker classifier 호출에는 provider가 제공하는 idempotency token을 임의로 가정하지 않는다.
 - materialization 성공 후 현재 claim 소유를 재검증한다.
 - 다음 항목을 하나의 DB 트랜잭션으로 저장한다.
   - `candidateResolvedVersion`
@@ -170,13 +170,13 @@ PK: (snapshot_id, target_type)
 - JPA Entity와 조건부 INSERT/UPDATE Adapter는 `testrun/infrastructure/persistence`에 둔다.
 - claim 테이블과 Port는 Aggregate Repository가 아니라 정상적인 lease 기간의 중복 외부 호출을 줄이고 stale 결과 저장을 차단하는 기술 계약이다.
 - 동일 실행 ID에 claim이 없거나 lease가 만료됐을 때만 새 token으로 선점한다.
-- Bedrock 호출 전 짧은 트랜잭션에서 선점하고 DB connection을 반환한다.
+- classifier 호출 전 짧은 트랜잭션에서 선점하고 DB connection을 반환한다.
 - 결과 저장 시 현재 token과 같은지 다시 확인해 만료된 Worker의 늦은 결과를 거부한다.
 - terminal TestExecution과 `TestExecutionCompleted` Outbox를 하나의 트랜잭션으로 최초 저장한다.
 - 같은 ID의 terminal 결과를 다른 의미의 결과로 덮어쓰지 않는다.
 - 이미 terminal 결과가 있으면 기존 결과를 인정하고 원본 메시지를 삭제한다.
 
-[`ApplyGuardrail`](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ApplyGuardrail.html)은 idempotency 또는 fencing token을 받지 않는다. Worker A가 호출 도중 멈추고 lease가 만료된 뒤 Worker B가 새 claim으로 호출하면 A와 B의 Provider 호출이 겹칠 수 있다. 따라서 Provider 호출의 exactly-once는 보장하지 않으며, MVP의 보장 경계는 다음과 같다.
+SageMaker Runtime classifier 호출은 application-level idempotency 또는 fencing token을 보장하지 않는다. Worker A가 호출 도중 멈추고 lease가 만료된 뒤 Worker B가 새 claim으로 호출하면 A와 B의 Provider 호출이 겹칠 수 있다. 따라서 Provider 호출의 exactly-once는 보장하지 않으며, MVP의 보장 경계는 다음과 같다.
 
 - Provider 호출은 lease 만료 경계에서 at-least-once가 될 수 있다.
 - Provider timeout보다 긴 claim lease로 정상 흐름의 중복 호출 가능성을 낮춘다.
@@ -222,13 +222,13 @@ PK: (snapshot_id, target_type)
 | `PROVIDER_RESPONSE_INVALID` | `FAILED` |
 | `PROVIDER_TIMEOUT` | `TIMED_OUT` |
 
-각 code에는 고정된 안전한 메시지를 사용한다. Provider 원문, SDK 예외 메시지, stack trace, ARN, 자격 증명과 내부 endpoint는 공개하지 않는다. 실제 Bedrock 응답·예외 매핑과 ActualResult 정규화는 Issue #17의 책임이다.
+각 code에는 고정된 안전한 메시지를 사용한다. Provider 원문, SDK 예외 메시지, stack trace, ARN, 자격 증명과 내부 endpoint는 공개하지 않는다. 실제 classifier 응답·예외 매핑과 ActualResult 정규화는 classifier Adapter의 책임이다.
 
 ### 완료 평가와 최종화
 
 모든 terminal TestExecution은 `TestExecutionCompleted`를 발행한다. 마지막 Worker를 별도로 판별하지 않는다.
 
-Orchestrator는 각 완료 메시지를 받을 때 Bedrock 호출이 끝난 뒤 TestRun 행을 `FOR UPDATE`로 짧게 잠그고 다음을 수행한다.
+Orchestrator는 각 완료 메시지를 받을 때 classifier 호출이 끝난 뒤 TestRun 행을 `FOR UPDATE`로 짧게 잠그고 다음을 수행한다.
 
 1. 같은 Snapshot의 Baseline/Candidate terminal TestExecution을 조회한다.
 2. 둘 중 하나가 아직 없으면 평가하지 않는다.
@@ -287,7 +287,7 @@ INDEX: (status, created_at)
 - PUBLISHED Outbox 보존 기간과 cleanup
 - stale TestRun과 영구 PENDING 자동 Reconciler
 - DLQ 자동 redrive와 운영 절차 자동화
-- Provider가 지원하는 fencing/idempotency 또는 더 강한 `ApplyGuardrail` 중복 호출 억제
+- Provider가 지원하는 fencing/idempotency 또는 더 강한 classifier 중복 호출 억제
 
 ## Alternatives
 
@@ -345,8 +345,8 @@ visibility 만료와 Worker 장애 뒤 재전달에서는 활성 Worker의 소�
 - API Task 하나를 항상 유지해야 Outbox Publisher가 진행된다.
 - `FOR UPDATE SKIP LOCKED` Publisher는 SQS batch 발행 동안 짧은 DB 트랜잭션을 유지한다.
 - PENDING Outbox나 DLQ 메시지가 영구적으로 남으면 자동 종결되지 않으므로 운영 경보와 수동 복구가 필요하다.
-- lease 만료 경계에서 `ApplyGuardrail`이 중복 호출되어 비용이 늘 수 있지만 stale 응답은 terminal 결과에 반영되지 않는다.
-- 초기 timeout, lease와 retry 값은 실제 Bedrock 지연과 부하를 관찰해 조정해야 한다.
+- lease 만료 경계에서 classifier가 중복 호출되어 비용이 늘 수 있지만 stale 응답은 terminal 결과에 반영되지 않는다.
+- 초기 timeout, lease와 retry 값은 실제 SageMaker 지연과 부하를 관찰해 조정해야 한다.
 
 이 결정을 되돌리려면 새 ADR로 메시지와 처리 의미를 supersede한다. 이미 발행된 v1 메시지의 필드 의미를 조용히 바꾸거나 완료된 TestExecution과 QualityGateResult를 덮어쓰지 않는다.
 

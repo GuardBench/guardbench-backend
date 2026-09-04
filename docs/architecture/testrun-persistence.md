@@ -2,16 +2,16 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Scope: GitHub Issues #14, #106, #110, #114, #116, #125, #128, #173
-> Last reviewed: 2026-09-04
-> Target architecture: [ADR 0011](../decisions/0011-ai-application-target-and-guardrail-evaluator.md), [ADR 0013](../decisions/0013-response-behavior-classifier.md)
+> Scope: GitHub Issues #14, #106, #110, #114, #116, #125, #128
+> Last reviewed: 2026-09-01
+> Target architecture: [ADR 0013](../decisions/0013-response-behavior-classifier.md)
 > Related broad documentation issue: [#49](https://github.com/GuardBench/guardbench-backend/issues/49)
 
 이 문서는 PostgreSQL 물리 Persistence 산출물의 탐색 인덱스다. 새 동작, DB 제약 또는 Context 경계를 결정하지 않으며, 구현 판단은 아래 APPROVED ADR과 현재 Issue를 따른다.
 
 ## 계약 층위
 
-이 문서와 물리 ERD는 **current implementation**을 기록한다. 새 TestRun은 OpenAI-compatible `HTTP_ENDPOINT` Application Target을 요구하고, 서비스 전역 고정 Response Behavior Classifier의 provider/model 식별자를 담은 immutable `EvaluatorReference`를 함께 고정한다. inline `EvaluationProfile`과 Evaluator catalog는 #173에서 제거되었다. 과거 legacy 데이터 보존은 MVP 초기화 환경의 #128/#173 범위에서 고려하지 않는다.
+이 문서와 물리 ERD는 **current implementation**을 기록한다. 새 TestRun은 OpenAI-compatible `HTTP_ENDPOINT` Application Target과 classifier contract version을 고정한다. 과거 legacy 데이터 보존은 MVP 초기화 환경의 #173 범위에서 고려하지 않는다.
 
 ## 승인 계약
 
@@ -20,8 +20,7 @@
 - [ADR 0006: 독립 Domain 경계와 Java 타입 격리](../decisions/0006-independent-domain-contract-boundaries.md)
 - [ADR 0008: 비동기 TestRun 물리 멱등성·claim·Outbox 계약](../decisions/0008-async-testrun-persistence-contract.md)
 - [ADR 0010: TestRun 단일 Target 실행 모델](../decisions/0010-single-target-test-run-model.md)
-- [ADR 0011: AI Application Target과 Guardrail Evaluator 역할 분리](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)
-- [ADR 0013: Guardrail Evaluator를 Response Behavior Classifier로 대체](../decisions/0013-response-behavior-classifier.md)
+- [ADR 0013: Response Behavior Classifier 실행 계약](../decisions/0013-response-behavior-classifier.md)
 
 ## 실제 산출물
 
@@ -32,13 +31,12 @@
 | Single Target schema | `src/main/resources/db/migration/V3__single_target_execution_model.sql` | Target reference/provider table, 단일 execution·claim PK, pending v2 Outbox 이관 |
 | HTTP Endpoint Target schema | `src/main/resources/db/migration/V4__http_endpoint_target.sql`, `V7__openai_compatible_http_target.sql`, `V8__require_http_target_model.sql` | `HTTP_ENDPOINT` provider table, OpenAI-compatible `model` 저장 및 `NOT NULL` 제약 |
 | HTTP Endpoint URL constraint | `src/main/resources/db/migration/V5__strengthen_http_endpoint_url_constraint.sql` | `endpoint_url`의 HTTP/HTTPS scheme과 host 형태 DB 제약 강화 |
-| Evaluator reference and Profile snapshot | `src/main/resources/db/migration/V6__evaluator_reference_and_profile.sql` (superseded by V13) | Evaluator provider/revision 고정, TestRun profile snapshot 및 HTTP Target revision (역사적 기록) |
+| Classifier reference snapshot | `src/main/resources/db/migration/V6__evaluator_reference_and_profile.sql` | classifier contract version과 HTTP Target revision 고정 |
 | Application/Evaluator execution result | `src/main/resources/db/migration/V9__separate_application_and_evaluator_results.sql`, `V10__remove_legacy_actual_action.sql` | Application response, Evaluator verdict, 실패 단계와 legacy action column 제거 및 execution shape CHECK 제약 |
 | Current-run Quality Gate metrics | `src/main/resources/db/migration/V11__current_run_quality_gate_metrics.sql` | 현재 Run의 Assertion 통과율·실행 성공률과 `NOT_EVALUATED` 저장 shape |
-| Response Behavior Classifier evaluator reference | `src/main/resources/db/migration/V13__response_behavior_classifier_evaluator_reference.sql` | `test_run.evaluation_checks/strictness` 제거, `bedrock_guardrail_evaluator` catalog 테이블 제거, `evaluator_reference`를 `provider_code`/`model_id`로 단순화 |
 | ERD | [PlantUML ERD](../diagrams/guardbench-mvp-physical-erd.puml) | migration 적용 후 관계와 cardinality |
 | TestRun write adapters | `testrun/infrastructure/persistence` | TestRun, Snapshot, TestExecution, idempotency, Outbox, claim Adapter |
-| Target/Evaluator adapters | `target/infrastructure/persistence`, `testrun/infrastructure/evaluator`, `evaluator/infrastructure/sagemaker` | HTTP Target 등록, 서비스 전역 고정 classifier registration, immutable EvaluatorReference persistence와 `evaluator_reference` 조회 |
+| Target/Classifier adapters | `target/infrastructure/persistence`, `testrun/infrastructure/evaluator`, `evaluator/infrastructure/sagemaker` | HTTP Target 등록과 immutable classifier reference persistence |
 | Evaluation write adapters | `evaluation/infrastructure/persistence` | Assertion-only SnapshotEvaluation 및 NOT_EVALUATED QualityGateResult Adapter |
 | Evaluation write ports | `evaluation/domain/repository` | Evaluation 소유 local reference VO를 쓰는 write-side Port |
 | PostgreSQL integration tests | `src/test/java/com/guardbench/*Persistence*IntegrationTest.java`, `EvaluationPersistenceAdapterIntegrationTest.java` | Flyway schema와 Repository round-trip·제약 검증 |
@@ -55,13 +53,11 @@
 
 ## 목표 구조와의 차이
 
-#114의 evaluator reference 고정과 #115/#125/#128의 OpenAI-compatible HTTP Application Target 경계가 구현되어 있다. #116에서 Bedrock Guardrail Evaluator Adapter가 추가되었으나 #173에서 Response Behavior Classifier Adapter로 대체되었다. #117에서 Worker가 prompt와 Application response → Evaluator verdict → Assertion 경계를 사용해 결과를 저장·조회한다. Application response는 내부 저장 값이며 public 결과에는 노출하지 않는다.
+#173에서 profile/catalog 경로를 제거하고 classifier contract snapshot으로 전환했다. #115/#125/#128의 OpenAI-compatible HTTP Application Target 경계와 Worker의 Application response → classifier verdict → Assertion 경계를 사용해 결과를 저장·조회한다. Application response는 내부 저장 값이며 public 결과에는 노출하지 않는다.
 
-#119의 Regression은 별도 결과를 저장하지 않고 완료된 두 Run의 Snapshot 정의와 저장 verdict를 읽어 조회 시 계산한다. 고정 Evaluator provider/model은 비교 후보 필터에 사용하며 Application Target/Evaluator 재호출은 없다.
+#119의 Regression은 별도 결과를 저장하지 않고 완료된 두 Run의 Snapshot 정의와 저장 verdict를 읽어 조회 시 계산한다. 고정 classifier contract version은 비교 후보 필터에 사용하며 Application Target/classifier 재호출은 없다.
 
 Quality Gate는 #118에서 현재 Run의 평가 가능한 Assertion 통과율과 전체 실행 성공률을 저장하며, Regression 저장/API는 #119의 범위다.
-
-#173에서 inline `EvaluationProfile(checks + strictness)`과 Evaluator catalog(`ResolveEvaluatorCatalogPort`, `EvaluatorCatalogPersistenceAdapter`, `bedrock_guardrail_evaluator` 테이블)를 제거했다. `EvaluatorReference`는 catalog 없이 서비스 전역 고정 classifier의 `provider_code`/`model_id`만 저장한다([ADR 0013](../decisions/0013-response-behavior-classifier.md)).
 
 ## 범위 제외
 

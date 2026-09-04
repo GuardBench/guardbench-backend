@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Team
-> Last reviewed: 2026-08-31
+> Last reviewed: 2026-09-04
 > Canonical source: GitHub
 > Origin: 없음
 
@@ -18,7 +18,7 @@
 | PostgreSQL, JPA, Flyway, 물리 스키마 | [ADR 0002](0002-postgresql-persistence-contract.md), [ADR 0006](0006-independent-domain-contract-boundaries.md) | 결과 테이블과 Repository 매핑은 [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), 최종화 제약은 [ADR 0004](0004-testrun-finalization-atomicity.md), Outbox·idempotency·claim DDL은 [ADR 0008](0008-async-testrun-persistence-contract.md) |
 | TestSuite/TestCase 영구 삭제와 historical identity | [ADR 0012](0012-testdefinition-hard-delete-and-historical-identity.md), [ADR 0002](0002-postgresql-persistence-contract.md) | Domain·Port 경계를 바꾸면 [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md)과 [ADR 0006](0006-independent-domain-contract-boundaries.md) |
 | TestRun Target HTTP 입력 | [ADR 0010](0010-single-target-test-run-model.md), [API 안내](../api/README.md) | 접수+Outbox 원자 저장은 ADR 0005와 ADR 0008을 추가한다. |
-| AI Application Target, Evaluator, Quality Gate와 Regression 역할 | [ADR 0011](0011-ai-application-target-and-guardrail-evaluator.md) | 현재 API·DB 구현 확인은 [API 안내](../api/README.md)와 [TestRun Persistence 인덱스](../architecture/testrun-persistence.md)를 추가한다. |
+| AI Application Target, Response Behavior Classifier, Quality Gate와 Regression 역할 | [ADR 0013](0013-response-behavior-classifier.md) | 현재 API·DB 구현 확인은 [API 안내](../api/README.md)와 [TestRun Persistence 인덱스](../architecture/testrun-persistence.md)를 추가한다. |
 | TestExecution·SnapshotEvaluation·QualityGateResult Aggregate와 write-side Repository | [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md), [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), [ADR 0006](0006-independent-domain-contract-boundaries.md) | 물리 매핑은 [ADR 0002](0002-postgresql-persistence-contract.md), TestRun 최종화는 [ADR 0004](0004-testrun-finalization-atomicity.md), Worker 중복 처리는 [ADR 0005](0005-async-test-run-execution-contract.md) |
 | TestRun `FINISHED` 전환과 Quality Gate 원자 저장 | [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), [ADR 0004](0004-testrun-finalization-atomicity.md), [ADR 0006](0006-independent-domain-contract-boundaries.md) | PostgreSQL 제약은 [ADR 0002](0002-postgresql-persistence-contract.md), Worker 선점·잠금/CAS·retry는 [ADR 0005](0005-async-test-run-execution-contract.md) |
 | Context 간 Port, Integration Adapter, 로컬 ID·VO와 Java 타입 격리 | [ADR 0006](0006-independent-domain-contract-boundaries.md) | Aggregate 저장 경계는 [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md)과 [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), 최종화는 [ADR 0004](0004-testrun-finalization-atomicity.md) |
@@ -45,14 +45,14 @@ ADR 0009  ADR 0002의 활성 행 조건을 동시 TestCase 논리 삭제의 원�
 └─ ADR 0012  TestSuite/TestCase 영구 삭제와 historical identity로 대체
 
 ADR 0010  ADR 0002·0003·0005·0007·0008의 Baseline/Candidate 부분을 단일 Target 모델로 대체
-└─ ADR 0011  단일 Target은 유지하고 SUT를 AI Application으로, Guardrail을 Evaluator로 재정의
-             현재 Run Quality Gate와 저장 결과 Regression을 분리
+└─ ADR 0011  이전 provider-specific evaluator 역할 결정 (ADR 0013으로 대체)
+   └─ ADR 0013  Response Behavior Classifier 실행, Quality Gate와 저장 결과 Regression을 분리
 
 ADR 0006  0001·0002·0003·0004·0005의 경계 간 Java 타입 공유와 직접 의존만 부분 대체
           Aggregate·Persistence·최종화·비동기 실행 결정은 유지
 ```
 
-ADR 0010이 명시적으로 대체한 Baseline/Candidate·role 메시지·복합 key 부분은 이전 ADR을 현재 계약으로 사용하지 않는다. ADR 0011은 ADR 0010의 단일 Target 결정을 유지하면서 Guardrail Target/SUT와 Quality Gate 의미를 대체한다. Target/Evaluator 역할과 Regression은 ADR 0011을 사용하고, 현재 Run Quality Gate 집계 정책은 #118 구현과 평가 계약을 사용한다. 그 외 ADR 0003의 결과 저장 경계, ADR 0004의 최종화 원자성, ADR 0008의 claim·Outbox·HTTP Idempotency 기술 보장, ADR 0006의 Context 간 타입 격리는 후속 구현에서 재검토될 때까지 유지한다.
+ADR 0010이 명시적으로 대체한 Baseline/Candidate·role 메시지·복합 key 부분은 이전 ADR을 현재 계약으로 사용하지 않는다. Target/classifier 역할과 Regression은 ADR 0013을 사용하고, 현재 Run Quality Gate 집계 정책은 #118 구현과 평가 계약을 사용한다. 그 외 ADR 0003의 결과 저장 경계, ADR 0004의 최종화 원자성, ADR 0008의 claim·Outbox·HTTP Idempotency 기술 보장, ADR 0006의 Context 간 타입 격리는 후속 구현에서 재검토될 때까지 유지한다.
 
 ## 상태와 작성
 

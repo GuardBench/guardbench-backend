@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Last reviewed: 2026-08-31
+> Last reviewed: 2026-09-04
 > Canonical source: GitHub
 > Origin: [Notion 애플리케이션 오류 코드](https://app.notion.com/p/3c1eeed6b62d81d3a7c9f014bb788aa8)
 
@@ -123,7 +123,6 @@ TestRun 상세 또는 개별 결과 조회의 양의 ID가 존재하지 않을 �
 
 TestSuite는 존재하지만 TestCase가 0개여서 TestRun을 생성할 수 없을 때 사용한다.
 
-
 ### IDEMPOTENCY_KEY_CONFLICT
 
 - 같은 Key와 같은 요청: 새 TestRun을 만들지 않고 기존 TestRun을 `202 Accepted`로 반환한다.
@@ -187,8 +186,8 @@ TestRun 재전송은 Validation 후 Idempotency 기록을 먼저 확인한다.
 
 ## TestExecution 실행 오류 Code
 
-> Current implementation contract: [ADR 0011: AI Application Target과 Guardrail Evaluator](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)
-> Target architecture: [ADR 0011: AI Application Target과 Guardrail Evaluator](../decisions/0011-ai-application-target-and-guardrail-evaluator.md)
+> Current implementation contract: [ADR 0013: Response Behavior Classifier](../decisions/0013-response-behavior-classifier.md)
+> Target architecture: [ADR 0013: Response Behavior Classifier](../decisions/0013-response-behavior-classifier.md)
 
 이 섹션은 current implementation의 공개 가능한 TestExecution 오류 code를 나열한다. retry·timeout의 운영 근거는 ADR 0005의 대체되지 않은 부분을 참고하며, 이 표는 API·Adapter 구현이 참조할 확정된 code 목록이다. `stage`는 Application Target 실패와 Evaluator 실패를 구분한다.
 
@@ -209,7 +208,7 @@ TestRun 재전송은 Validation 후 Idempotency 기록을 먼저 확인한다.
 이 code는 `com.guardbench.testrun.domain.TestExecutionErrorCode`에 정의되어 있으며, Application Target과 Evaluator는 각각 소비자 소유 Port의 `TargetFailureCode`와 `EvaluatorFailureCode`를 사용한다. `PROVIDER_UNAVAILABLE`과 `PROVIDER_TIMEOUT`만 재시도 가능하다(ADR 0005의 대체되지 않은 retry 계약 참고). Evaluator 실패로 terminal 결과를 저장할 때는 Application response를 보존하지만 EvaluationResult와 Assertion은 생성하지 않는다.
 
 - 각 code는 고정된 안전한 message를 사용하며 Provider 원문, SDK 예외 메시지, stack trace, ARN, 자격 증명, 내부 endpoint를 노출하지 않는다.
-- HTTP Target 예외 → `TargetFailureCode` 매핑과 SageMaker Evaluator 예외 → `EvaluatorFailureCode` 매핑은 각각 해당 Adapter가 소유하고, Port 오류 → `TestExecutionErrorCode`·terminal 저장은 Worker Application Service가 소유한다.
+- HTTP Target 예외 → `TargetFailureCode` 매핑과 SageMaker classifier 예외 → `EvaluatorFailureCode` 매핑은 각각 해당 Adapter가 소유하고, Port 오류 → `TestExecutionErrorCode`·terminal 저장은 Worker Application Service가 소유한다.
 - 이 표에 없는 code를 추가하거나 기존 code의 terminal 상태·의미를 바꾸는 것은 공개 API 계약 변경이며 별도 ADR 또는 Issue 승인이 필요하다.
 
 공개 shape은 `error.stage = APPLICATION_TARGET | EVALUATOR`로 실패 경계를 구분한다. 구체 code와 terminal 상태 매핑은 #115~#117이 확정한다.

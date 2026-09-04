@@ -34,7 +34,7 @@ testrun/
 - Repository 계약 예: `testrun/domain/repository/TestRunRepository.java`
 - 기술 구현 예: `testrun/infrastructure/persistence/TestRunRepositoryAdapter.java`
 - API DTO 예: `testrun/presentation/dto/TestRunCreateReq.java`
-- AWS Adapter 예: `evaluator/infrastructure/bedrock/BedrockGuardrailEvaluatorAdapter.java`
+- AWS Adapter 예: `evaluator/infrastructure/sagemaker/SageMakerResponseBehaviorClassifierAdapter.java`
 - AI Application Target Adapter 예: `target/infrastructure/http/HttpEndpointExecutionAdapter.java`
 - Context 연동 Port 예: `testrun/application/port/out/LoadTestCaseSnapshotSourcesPort.java`
 - Context 연동 Adapter 예: `testrun/infrastructure/integration/testdefinition/TestDefinitionSnapshotSourceAdapter.java`

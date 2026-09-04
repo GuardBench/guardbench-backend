@@ -11,7 +11,7 @@
 - Decision date: 2026-08-24
 - Related Issue: #3
 - Superseded in part by: [ADR 0006](0006-independent-domain-contract-boundaries.md) — Context 밖 Java Domain 타입·ID VO 재사용과 패키지 의존 방향
-- Superseded in part by: [ADR 0011](0011-ai-application-target-and-guardrail-evaluator.md) — AI Application Target, Evaluator와 EvaluationResult 역할
+- Superseded in part by: [ADR 0013](0013-response-behavior-classifier.md) — AI Application Target, classifier와 EvaluationResult 역할
 
 ## Context
 
@@ -30,7 +30,7 @@
 | 항목 | 선택지 1의 결정 내용 | 경계와 이유 |
 | --- | --- | --- |
 | `ExpectedResult` | `testdefinition/domain`이 소유하는 불변 Value Object | 사용자가 작성하는 현재 TestCase 정의의 일부다. Snapshot은 그 값을 복제해 보존하되 별도 `ExpectedResult` 타입을 만들지 않는다. |
-| `ActualResult` | `testrun/domain`이 소유하는 불변 Value Object | 정규화된 실행 산출물이며 `SUCCEEDED`인 `TestExecution`에만 존재한다. Guardrail Adapter는 AWS 응답을 이 타입으로 변환하고 Evaluation은 읽기 전용 입력으로 사용한다. |
+| `ActualResult` | `testrun/domain`이 소유하는 불변 Value Object | 정규화된 실행 산출물이며 `SUCCEEDED`인 `TestExecution`에만 존재한다. Classifier Adapter는 provider 응답을 이 타입으로 변환하고 Evaluation은 읽기 전용 입력으로 사용한다. |
 | `Action` | `testdefinition/domain`이 소유하는 `Action` Enum | 값은 `ALLOW`와 `BLOCK`이다. `ExpectedResult`와 `ActualResult`가 같은 타입을 사용한다. |
 | `TestSuite`와 `TestCase` | `testdefinition` 안의 별도 Aggregate Root | `TestCase`는 불변 `TestSuiteId`로 소속을 가리키며 `TestSuite`는 가변 TestCase 컬렉션을 Aggregate 내부에 보유하지 않는다. 독립 조회·수정·영구 삭제와 페이지 조회를 지원하고 큰 Aggregate의 동시 수정 충돌을 피한다. |
 | `TestRun`과 `TestCaseSnapshot` | `testrun` 안의 별도 Aggregate Root | TestRun은 대상 `TestSuiteId`를 보유한다. Snapshot은 `TestRunId`와 원본 `TestCaseId`를 식별 정보로 보유하고 생성 후 실행 정의를 바꾸지 않는다. TestRun은 Snapshot 객체 컬렉션을 Aggregate 내부에 보유하지 않고 접수 시 고정한 `testCaseCount`를 관리한다. |
@@ -60,7 +60,7 @@ TestCaseSnapshot은 `name`, `input`, `ExpectedResult`, `severity`, `category`를
 | `testdefinition` | `TestSuite`, `TestCase` | `TestSuiteId`, `TestCaseId`, `ExpectedResult`, `Action`, `Severity` | TestCase의 현재 `name`, `input`, `severity`, `category` 정의를 함께 소유한다. TestSuite와 TestCase는 별도 Aggregate이며 각 식별자와 `Action`도 `testdefinition`이 소유한다. `category`는 승인된 API 계약과 같이 문자열 값으로 둔다. |
 | `testrun` | `TestRun`, `TestCaseSnapshot` | `TestRunId`, `TestCaseSnapshotId`, `TestExecution`, `ActualResult`, `TestRunExecutionOutcome` | 실행 수명주기와 실행 상태를 소유한다. `TestExecution`의 세부 Aggregate·저장 경계는 이 ADR에서 확정하지 않는다. |
 | `evaluation` | 이 ADR에서 확정하지 않음 | `AssertionResult`, `ChangeResult`, `QualityGateResult`, `AssertionStatus`, `ComparabilityStatus`, `ChangeType`, `QualityGateStatus` | 평가 결과의 세부 Aggregate·저장 경계는 실제 저장 구현 전에 별도 확인한다. |
-| `guardrail` | 없음 | MVP에서 소유하는 Core Domain 타입 없음 | Bedrock Guardrails 대상 준비·실행 Adapter와 AWS 응답 Normalizer를 제공한다. |
+| `classifier` | 없음 | MVP에서 소유하는 Core Domain 타입 없음 | SageMaker Response Behavior Classifier 실행 Adapter와 provider 응답 Normalizer를 제공한다. |
 | `common` | 없음 | MVP에서 소유하는 Domain 타입 없음 | 패키지는 비어 있어도 된다. 검증된 횡단 관심사가 생기기 전에는 타입을 선제 도입하지 않는다. |
 
 객체의 소유 패키지가 정해졌다는 사실만으로 그 객체를 Aggregate Root나 독립 저장 대상으로 간주하지 않는다. 각 Aggregate 식별자는 해당 Aggregate의 소유 패키지에 두며 공통 식별자 계층을 만들지 않는다.
@@ -117,8 +117,8 @@ src/main/java/com/guardbench/
 │   └── infrastructure/
 │       ├── query/                                 [testrun 조회 Port 구현과 실행·평가 조합]
 │       └── persistence/                           [평가 저장 경계 확정 후 Repository 구현]
-├── guardrail/
-│   └── infrastructure/bedrock/                    [testrun Port의 Bedrock 구현]
+├── classifier/
+│   └── infrastructure/sagemaker/                  [testrun Port의 SageMaker 구현]
 └── common/                                        [MVP Domain 타입 없음]
 ```
 
@@ -138,7 +138,7 @@ src/main/java/com/guardbench/
 | --- | --- | --- |
 | `TestSuite` - `TestCase` | `testdefinition` 안의 별도 AR | `TestCase`에는 `TestSuiteId`를 저장한다. `TestSuiteRepository`와 `TestCaseRepository`를 분리하고, 함께 생성할 때 `testdefinition/application`이 두 Port를 한 트랜잭션에서 호출한다. |
 | `TestRun` - `TestCaseSnapshot` | `testrun` 안의 별도 AR | TestRun에는 대상 `TestSuiteId`, Snapshot에는 `TestRunId`와 원본 `TestCaseId`를 저장한다. 두 Repository Port를 분리하고, 접수 시 `testrun/application`이 TestRun·Snapshot·Outbox 저장을 한 트랜잭션으로 조정한다. |
-| `ActualResult` - Evaluation | `ActualResult`는 `testrun`의 VO이고 Evaluation은 읽기 입력으로만 사용 | Guardrail Adapter가 `ActualResult`를 만들고 `evaluation/application`이 `ExpectedResult`와 함께 평가 Domain 타입에 전달한다. |
+| `ActualResult` - Evaluation | `ActualResult`는 `testrun`의 VO이고 Evaluation은 읽기 입력으로만 사용 | Classifier Adapter가 `ActualResult`를 만들고 `evaluation/application`이 `ExpectedResult`와 함께 평가 Domain 타입에 전달한다. |
 
 ### 패키지 의존 방향
 
@@ -148,11 +148,11 @@ src/main/java/com/guardbench/
 testrun    -> testdefinition   (TestSuiteId, TestCaseId, ExpectedResult, Action, Severity를 사용)
 evaluation -> testdefinition   (ExpectedResult와 Action을 평가 입력으로 사용)
 evaluation -> testrun          (Snapshot, TestExecution, ActualResult를 사용하고 조회 Port를 구현)
-guardrail  -> testdefinition   (ActualResult 정규화 시 Action을 사용)
-guardrail  -> testrun          (실행 Port 구현과 ActualResult 정규화)
+classifier -> testdefinition   (ActualResult 정규화 시 Action을 사용)
+classifier -> testrun           (실행 Port 구현과 ActualResult 정규화)
 ```
 
-역방향 의존은 허용하지 않는다. 특히 `testdefinition`은 `testrun`, `evaluation`, `guardrail`을 모르고 `testrun`은 `evaluation`이나 구체 Guardrail Adapter를 모른다. TestRun 실행에 필요한 외부 호출 계약은 소비자인 `testrun` 쪽에 두고 `guardrail/infrastructure`가 구현한다. Guardrail Adapter는 `ActualResult`를 만들 때 `testdefinition`의 `Action`을 사용한다. 평가를 시작하고 TestRun 완료 상태를 반영하는 오케스트레이션은 `evaluation/application`이 `testrun`의 공개 Domain/Application 계약을 사용한다.
+역방향 의존은 허용하지 않는다. 특히 `testdefinition`은 `testrun`, `evaluation`, `classifier`를 모르고 `testrun`은 `evaluation`이나 구체 Classifier Adapter를 모른다. TestRun 실행에 필요한 외부 호출 계약은 소비자인 `testrun` 쪽에 두고 `classifier/infrastructure`가 구현한다. Classifier Adapter는 `ActualResult`를 만들 때 `testdefinition`의 `Action`을 사용한다. 평가를 시작하고 TestRun 완료 상태를 반영하는 오케스트레이션은 `evaluation/application`이 `testrun`의 공개 Domain/Application 계약을 사용한다.
 
 MVP에서 `common`이 소유하는 Domain 타입은 없다. `common`은 비어 있어도 되며 도메인 의존을 우회하는 허브로 사용하지 않는다. `Action`, `ExpectedResult`, `ActualResult`, 식별자, Repository Port 또는 평가 Enum을 `common/domain`에 두지 않는다. `ApiResponse`, 오류 Envelope, Pagination처럼 여러 경계에서 사용할 수 있는 기술 계약도 Domain 타입이 아니며 이 ADR의 소유권 결정 대상이 아니다. 실제 횡단 관심사가 확인되면 변경 이유와 사용 경계를 검토하고 별도 승인 후 `common` 사용 여부를 결정한다.
 
@@ -173,7 +173,7 @@ MVP에서 `common`이 소유하는 Domain 타입은 없다. `common`은 비어 �
 | `testdefinition` | 현재 TestSuite·TestCase 자산, ExpectedResult, Action과 편집 불변식 | Snapshot, 실행 결과, 평가 결과 |
 | `testrun` | TestRun 수명주기, 고정 Target, Snapshot, TestExecution, ActualResult, 실행에 필요한 Port와 모든 TestRun API의 조회 Projection | 현재 TestCase 편집, Assertion·Change·Quality Gate 규칙, AWS SDK 타입 |
 | `evaluation` | Assertion, 비교 가능성, 변화 분류, Metric, Quality Gate와 TestRun 조회 Port 구현 | 실행 호출, TestRun 수명주기·Presentation, ExpectedResult·ActualResult·Action의 중복 타입 |
-| `guardrail` | Bedrock Guardrails 대상 준비·실행 Adapter와 AWS 응답 정규화. MVP에서 소유 Core Domain 타입은 없음 | Core 평가 규칙, TestRun 수명주기, provider 공통 계층 |
+| `classifier` | SageMaker Response Behavior Classifier 실행 Adapter와 provider 응답 정규화. MVP에서 소유 Core Domain 타입은 없음 | Core 평가 규칙, TestRun 수명주기, provider 공통 계층 |
 | `common` | MVP에서 소유 Domain 타입 없음. 검증·승인된 횡단 관심사가 생길 때만 사용 | 도메인 모델, Repository, 범용 util/helper/service 모음 |
 
 ## Alternatives

@@ -10,17 +10,17 @@
 - Decision date: 2026-08-30
 - Related Issue: #106
 - Supersedes: ADR 0002·0003·0005·0007·0008의 Baseline/Candidate, Candidate-only DRAFT, 복합 execution/claim key, v1 role 메시지 부분
-- Superseded in part by: [ADR 0011](0011-ai-application-target-and-guardrail-evaluator.md) — AI Application Target, Guardrail Evaluator, Quality Gate와 Regression 역할
+- Superseded in part by: [ADR 0013](0013-response-behavior-classifier.md) — AI Application Target, Response Behavior Classifier, Quality Gate와 Regression 역할
 
 ## Context
 
-기존 TestRun은 하나의 요청에 Baseline과 Candidate를 함께 보유하고 Snapshot당 두 번 실행했다. 이 구조는 Bedrock Guardrail을 상위 도메인으로 드러내고, TestRun의 실행 계약을 비교 용어와 provider revision lifecycle에 결합했다. 다른 Target 구현을 추가하려면 TestRun Domain·DB·API·메시지를 모두 변경해야 하는 문제가 있었다.
+기존 TestRun은 하나의 요청에 Baseline과 Candidate를 함께 보유하고 Snapshot당 두 번 실행했다. 이 구조는 provider-specific evaluator를 상위 도메인으로 드러내고, TestRun의 실행 계약을 비교 용어와 provider revision lifecycle에 결합했다. 다른 Target 구현을 추가하려면 TestRun Domain·DB·API·메시지를 모두 변경해야 하는 문제가 있었다.
 
 ## Decision
 
 1. TestRun은 소스 TestSuite와 단일 `TargetReference`만 보유한다. TargetReference는 TestRun Context가 소유하는 불투명 ID VO이며 provider 값을 노출하지 않는다.
-2. provider type, identifier, requested/resolved revision, DRAFT lifecycle은 Target Context의 `target_reference`와 provider 전용 테이블이 소유한다. Bedrock은 `com.guardbench.target.infrastructure.bedrock`의 하나의 구현이다.
-3. TestRun Application은 provider-independent `TargetPreparationPort`와 `TargetExecutionPort` 계약을 소유한다. Bedrock Adapter만 Target 저장 값을 AWS SDK 요청으로 변환한다.
+2. provider type, identifier, requested/resolved revision, DRAFT lifecycle은 Target Context의 `target_reference`와 provider 전용 테이블이 소유한다.
+3. TestRun Application은 provider-independent `TargetPreparationPort`와 `TargetExecutionPort` 계약을 소유한다. 각 provider Adapter만 Target 저장 값을 AWS SDK 요청으로 변환한다.
 4. Snapshot당 TestExecution은 하나다. `test_execution`과 `test_execution_claim`의 PK는 `snapshot_id`이고, 진행도와 성공 건수는 `testCaseCount`를 기준으로 계산한다.
 5. `TestExecutionRequested`와 `TestExecutionCompleted` v2 payload는 `targetType`을 포함하지 않는다. deduplication key는 `{eventType}:{snapshotId}`다. Publisher가 읽을 수 있도록 이미 저장된 v1은 허용하지만 Worker codec은 v2만 처리한다.
 6. BEDROCK_GUARDRAIL Target은 `DRAFT` 또는 1~8자리 numbered revision을 받는다. DRAFT는 PREPARING에서 결정적 token으로 materialize하고, numbered revision은 이미 준비된 값으로 사용한다.

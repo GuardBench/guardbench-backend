@@ -12,7 +12,7 @@
 - Decision date: 2026-08-25
 - Related Issue: #49
 - Extends: ADR 0002, ADR 0005
-- Superseded in part by: [ADR 0011](0011-ai-application-target-and-guardrail-evaluator.md) — Target 준비·실행 의미. 이 ADR의 claim·Outbox는 current implementation 기록
+- Superseded in part by: [ADR 0013](0013-response-behavior-classifier.md) — Target 준비·실행 의미. 이 ADR의 claim·Outbox는 current implementation 기록
 
 ## Context
 
@@ -108,7 +108,7 @@ INDEX (status, created_at)
 - `eventType`이 Queue를 결정하므로 destination과 `test_run_id`를 별도 정규 컬럼으로 중복 저장하지 않는다.
 - payload는 SQS로 그대로 발행하는 v1 JSON 전체다. `event_id`, `event_type`, `schema_version`은 각각 `eventId`, `eventType`, `schemaVersion` payload 값과 같다. `occurredAt`은 최초 이벤트 생성 시 정하고 재발행에 바꾸지 않는다.
 - `TestRunRequested` key는 `TestRunRequested:{testRunId}`다. 실행 요청·완료 key는 각각 `{eventType}:{snapshotId}:{targetType}`다.
-- payload에는 입력, ExpectedResult, ActualResult, Guardrail 설정 전문, Provider 원문 오류와 Completed의 executionStatus를 넣지 않는다.
+- payload에는 입력, ExpectedResult, ActualResult, classifier 설정 전문, Provider 원문 오류와 Completed의 executionStatus를 넣지 않는다.
 - Publisher는 `SELECT ... FOR UPDATE SKIP LOCKED`로 PENDING batch를 가져오고, SQS 발행 성공 항목만 PUBLISHED로 바꾼다. `PROCESSING`, `DEAD`, attempt, next-attempt는 MVP 범위가 아니다.
 
 ## Alternatives

@@ -7,7 +7,7 @@
 > Origin: [Notion 코드 컨벤션](https://app.notion.com/p/3c0eeed6b62d816a8028cc3261c3edf3)
 
 - 백엔드는 Java·Spring Boot만 사용한다. 예: AWS SDK 호출은 Java Infrastructure Adapter에 둔다.
-- Domain은 Spring MVC, AWS SDK, JPA, HTTP DTO를 import하지 않는다. 예: Bedrock response를 Domain method 인자로 전달하지 않는다.
+- Domain은 Spring MVC, AWS SDK, JPA, HTTP DTO를 import하지 않는다. 예: SageMaker response를 Domain method 인자로 전달하지 않는다.
 - Controller는 Application Service를 호출한다. 예: Controller에서 JPA repository를 직접 호출하지 않는다.
 - Domain 객체를 API DTO로 직접 노출하지 않는다. 예: `TestRun` 대신 `TestRunResultRes`를 반환한다.
 - 응답 Body가 있으면 `ApiResponse<T>`를 사용하고 204는 Body가 없다.
