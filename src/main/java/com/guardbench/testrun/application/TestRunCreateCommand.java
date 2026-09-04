@@ -11,7 +11,6 @@ public record TestRunCreateCommand(
         String targetIdentifier,
         String targetRevision,
         String targetModel,
-        com.guardbench.testrun.domain.EvaluationProfile evaluationProfile,
         String idempotencyKey
 ) {
 
@@ -33,8 +32,7 @@ public record TestRunCreateCommand(
                 targetType,
                 targetIdentifier,
                 targetRevision,
-                targetModel,
-                evaluationProfile
+                targetModel
         );
     }
 }

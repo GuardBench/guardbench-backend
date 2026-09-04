@@ -183,7 +183,7 @@ public class ExecuteTestRunService {
 
         try {
             EvaluatorExecutionResult result = evaluatorExecutionPort.evaluate(new EvaluatorExecutionRequest(
-                    new EvaluatorReference(context.evaluatorReference()), applicationResponse.value()));
+                    new EvaluatorReference(context.evaluatorReference()), context.input(), applicationResponse.value()));
             return EvaluatorResultNormalizer.normalize(result);
         } catch (RuntimeException exception) {
             return EvaluatorResultNormalizer.normalize(

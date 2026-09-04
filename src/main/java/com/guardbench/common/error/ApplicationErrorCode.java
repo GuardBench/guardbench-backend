@@ -16,7 +16,6 @@ public enum ApplicationErrorCode {
     TEST_CASE_NOT_FOUND(404, "TestCase를 찾을 수 없습니다."),
     TEST_RUN_NOT_FOUND(404, "TestRun을 찾을 수 없습니다."),
     TEST_SUITE_EMPTY(409, "실행 가능한 TestCase가 없습니다."),
-    EVALUATION_PROFILE_NOT_SUPPORTED(409, "지원하는 Evaluator 설정을 찾을 수 없습니다."),
     IDEMPOTENCY_KEY_CONFLICT(409, "Idempotency-Key가 다른 요청에 이미 사용되었습니다."),
     TEST_RUN_NOT_FINISHED(409, "TestRun이 아직 종료되지 않았습니다."),
     TEST_RUNS_NOT_COMPARABLE(409, "두 TestRun은 비교할 수 없습니다."),

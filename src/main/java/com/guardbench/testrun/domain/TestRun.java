@@ -8,7 +8,6 @@ public final class TestRun {
     private final TestRunId id;
     private final SourceTestSuiteId sourceTestSuiteId;
     private final TargetReference targetReference;
-    private final EvaluationProfile evaluationProfile;
     private final EvaluatorReference evaluatorReference;
     private final int testCaseCount;
     private int processedTestCaseCount;
@@ -20,7 +19,6 @@ public final class TestRun {
             TestRunId id,
             SourceTestSuiteId sourceTestSuiteId,
             TargetReference targetReference,
-            EvaluationProfile evaluationProfile,
             EvaluatorReference evaluatorReference,
             int testCaseCount,
             Instant createdAt
@@ -28,7 +26,6 @@ public final class TestRun {
         this.id = Objects.requireNonNull(id, "TestRun ID must not be null");
         this.sourceTestSuiteId = Objects.requireNonNull(sourceTestSuiteId, "source TestSuite ID must not be null");
         this.targetReference = Objects.requireNonNull(targetReference, "target reference must not be null");
-        this.evaluationProfile = Objects.requireNonNull(evaluationProfile, "evaluation profile must not be null");
         this.evaluatorReference = Objects.requireNonNull(evaluatorReference, "evaluator reference must not be null");
         if (testCaseCount <= 0) {
             throw new IllegalArgumentException("test case count must be positive");
@@ -42,19 +39,17 @@ public final class TestRun {
             TestRunId id,
             SourceTestSuiteId sourceTestSuiteId,
             TargetReference targetReference,
-            EvaluationProfile evaluationProfile,
             EvaluatorReference evaluatorReference,
             int testCaseCount,
             Instant createdAt
     ) {
-        return new TestRun(id, sourceTestSuiteId, targetReference, evaluationProfile, evaluatorReference, testCaseCount, createdAt);
+        return new TestRun(id, sourceTestSuiteId, targetReference, evaluatorReference, testCaseCount, createdAt);
     }
 
     public static TestRun rehydrate(
             TestRunId id,
             SourceTestSuiteId sourceTestSuiteId,
             TargetReference targetReference,
-            EvaluationProfile evaluationProfile,
             EvaluatorReference evaluatorReference,
             int testCaseCount,
             int processedTestCaseCount,
@@ -66,7 +61,6 @@ public final class TestRun {
                 id,
                 sourceTestSuiteId,
                 targetReference,
-                evaluationProfile,
                 evaluatorReference,
                 testCaseCount,
                 timeline.createdAt()
@@ -129,8 +123,6 @@ public final class TestRun {
     public TargetReference targetReference() {
         return targetReference;
     }
-
-    public EvaluationProfile evaluationProfile() { return evaluationProfile; }
 
     public EvaluatorReference evaluatorReference() { return evaluatorReference; }
 
