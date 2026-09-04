@@ -21,8 +21,9 @@ import com.guardbench.testrun.application.port.out.TestRunDetail;
 import com.guardbench.testrun.application.port.out.TestRunListCriteria;
 import com.guardbench.testrun.application.port.out.TestRunListItem;
 import com.guardbench.testrun.application.port.out.TestRunListSortField;
-import com.guardbench.testrun.application.port.out.TestRunResultItem;
+import com.guardbench.testrun.application.port.out.TestRunResultAttentionType;
 import com.guardbench.testrun.application.port.out.TestRunResultListCriteria;
+import com.guardbench.testrun.application.port.out.TestRunResultListView;
 import com.guardbench.testrun.application.port.out.TestRunResultSortField;
 import com.guardbench.testrun.application.port.out.TestRunComparison;
 import com.guardbench.testrun.application.port.out.TestRunRegressionView;
@@ -172,7 +173,16 @@ public class TestRunQueryController {
                     @Pattern(regexp = "PASS|FAIL", message = "허용되지 않은 값입니다.") String assertionStatus,
             @RequestParam(required = false)
                     @Pattern(regexp = "TRUE_POSITIVE|TRUE_NEGATIVE|FALSE_POSITIVE|FALSE_NEGATIVE",
-                            message = "허용되지 않은 값입니다.") String evaluationOutcome) {
+                            message = "허용되지 않은 값입니다.") String evaluationOutcome,
+            @RequestParam(required = false, defaultValue = "") List<TestRunResultAttentionType> attentionType,
+            @RequestParam(required = false)
+                    @Pattern(regexp = "attention", message = "허용되지 않은 값입니다.") String includeFacets) {
+        for (int i = 0; i < attentionType.size(); i++) {
+            if (attentionType.get(i) == null) {
+                throw new QueryParamValidationException(List.of(
+                        new FieldErrorDetail("attentionType[" + i + "]", "허용되지 않은 값입니다.")));
+            }
+        }
         List<SortOrder<TestRunResultSortField>> sortOrders =
                 SortParamParser.parse(sort, TestRunResultSortField.class);
         TestRunResultListCriteria criteria = new TestRunResultListCriteria(
@@ -184,10 +194,12 @@ public class TestRunQueryController {
                 executionStatus,
                 assertionStatus,
                 evaluationOutcome,
+                Set.copyOf(attentionType),
+                "attention".equals(includeFacets),
                 sortOrders,
                 new PageCriteria(page, size));
 
-        PageResult<TestRunResultItem> result = getTestRunResultListService.getResults(testRunId, criteria);
+        TestRunResultListView result = getTestRunResultListService.getResults(testRunId, criteria);
         TestRunResultListRes response = TestRunQueryResponseMapper.toResultListRes(result);
         return ApiResponse.entity(HttpStatus.OK, SUCCESS_MESSAGE_RESULTS, response);
     }

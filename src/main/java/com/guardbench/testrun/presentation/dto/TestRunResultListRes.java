@@ -2,6 +2,7 @@ package com.guardbench.testrun.presentation.dto;
 
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.guardbench.common.presentation.dto.PageMetaRes;
 
 /**
@@ -10,5 +11,8 @@ import com.guardbench.common.presentation.dto.PageMetaRes;
  *
  * @see <a href="../../../../../../../../docs/api/openapi.yaml">GuardBench API V1 - TestRunResultListRes</a>
  */
-public record TestRunResultListRes(List<TestRunResultListItemRes> items, PageMetaRes page) {
+public record TestRunResultListRes(
+        List<TestRunResultListItemRes> items,
+        PageMetaRes page,
+        @JsonInclude(JsonInclude.Include.NON_NULL) TestRunResultFacetsRes facets) {
 }

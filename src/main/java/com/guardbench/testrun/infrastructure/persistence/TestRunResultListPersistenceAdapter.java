@@ -9,10 +9,12 @@ import java.util.Objects;
 import com.guardbench.testrun.application.port.out.LoadTestRunResultListPort;
 import com.guardbench.testrun.application.port.out.PageResult;
 import com.guardbench.testrun.application.port.out.SortDirection;
-import com.guardbench.testrun.application.port.out.SortOrder;
 import com.guardbench.testrun.application.port.out.TestExecutionView;
+import com.guardbench.testrun.application.port.out.TestRunResultAttentionFacets;
+import com.guardbench.testrun.application.port.out.TestRunResultAttentionType;
 import com.guardbench.testrun.application.port.out.TestRunResultItem;
 import com.guardbench.testrun.application.port.out.TestRunResultListCriteria;
+import com.guardbench.testrun.application.port.out.TestRunResultListView;
 import com.guardbench.testrun.application.port.out.TestRunResultSortField;
 import com.guardbench.testrun.domain.Action;
 import com.guardbench.testrun.domain.Severity;
@@ -46,6 +48,20 @@ class TestRunResultListPersistenceAdapter implements LoadTestRunResultListPort {
                 WHEN 'CRITICAL' THEN 3
             END
             """;
+    private static final String FALSE_NEGATIVE_PREDICATE =
+            "e.result_status = 'SUCCEEDED' AND s.expected_action = 'BLOCK' AND e.evaluator_verdict = 'ALLOW'";
+    private static final String FALSE_POSITIVE_PREDICATE =
+            "e.result_status = 'SUCCEEDED' AND s.expected_action = 'ALLOW' AND e.evaluator_verdict = 'BLOCK'";
+    private static final String ATTENTION_TYPE_ORDER = """
+            CASE
+                WHEN %s THEN 0
+                WHEN e.result_status = 'FAILED' THEN 1
+                WHEN e.result_status = 'TIMED_OUT' THEN 2
+                WHEN %s THEN 3
+                WHEN e.result_status = 'NOT_STARTED' THEN 4
+                ELSE 5
+            END
+            """.formatted(FALSE_NEGATIVE_PREDICATE, FALSE_POSITIVE_PREDICATE);
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -54,10 +70,10 @@ class TestRunResultListPersistenceAdapter implements LoadTestRunResultListPort {
     }
 
     @Override
-    public PageResult<TestRunResultItem> load(long testRunId, TestRunResultListCriteria criteria) {
+    public TestRunResultListView load(long testRunId, TestRunResultListCriteria criteria) {
         Objects.requireNonNull(criteria, "TestRunResultListCriteria must not be null");
 
-        QueryParts query = queryParts(testRunId, criteria);
+        QueryParts query = queryParts(testRunId, criteria, true);
         List<Object> pageArguments = new ArrayList<>(query.arguments());
         pageArguments.add(criteria.page().size());
         pageArguments.add(criteria.page().offset());
@@ -74,7 +90,7 @@ class TestRunResultListPersistenceAdapter implements LoadTestRunResultListPort {
                        e.evaluator_verdict,
                        e.error_stage, e.error_code, e.error_message, ar.assertion_status
                 """ + fromAndWhere
-                + " ORDER BY " + orderBy(criteria.sort())
+                + " ORDER BY " + orderBy(criteria)
                 + " LIMIT ? OFFSET ?";
         String countSql = "SELECT COUNT(*)\n" + fromAndWhere;
 
@@ -83,10 +99,14 @@ class TestRunResultListPersistenceAdapter implements LoadTestRunResultListPort {
         long totalElements = jdbcTemplate.queryForObject(
                 countSql, Long.class, query.arguments().toArray());
 
-        return PageResult.of(items, criteria.page(), totalElements);
+        TestRunResultAttentionFacets facets = criteria.includeAttentionFacets()
+                ? loadAttentionFacets(testRunId, criteria) : null;
+        return new TestRunResultListView(
+                PageResult.of(items, criteria.page(), totalElements), facets);
     }
 
-    private QueryParts queryParts(long testRunId, TestRunResultListCriteria criteria) {
+    private QueryParts queryParts(
+            long testRunId, TestRunResultListCriteria criteria, boolean includeAttentionFilter) {
         List<String> predicates = new ArrayList<>();
         List<Object> arguments = new ArrayList<>();
 
@@ -104,10 +124,36 @@ class TestRunResultListPersistenceAdapter implements LoadTestRunResultListPort {
                 criteria.executionStatus() == null ? null : criteria.executionStatus().name());
         addEquals(predicates, arguments, "ar.assertion_status", criteria.assertionStatusCode());
         addEvaluationOutcome(predicates, arguments, criteria.evaluationOutcomeCode());
+        if (includeAttentionFilter) {
+            addAttentionTypes(predicates, criteria.attentionTypes());
+        }
 
         return new QueryParts(
                 "WHERE " + String.join(" AND ", predicates) + "\n",
                 List.copyOf(arguments));
+    }
+
+    private TestRunResultAttentionFacets loadAttentionFacets(
+            long testRunId, TestRunResultListCriteria criteria) {
+        QueryParts query = queryParts(testRunId, criteria, false);
+        String sql = """
+                SELECT COUNT(*) AS all_results,
+                       COALESCE(SUM(CASE WHEN %s THEN 1 ELSE 0 END), 0) AS false_negative,
+                       COALESCE(SUM(CASE WHEN %s THEN 1 ELSE 0 END), 0) AS false_positive,
+                       COALESCE(SUM(CASE WHEN e.result_status = 'FAILED' THEN 1 ELSE 0 END), 0) AS execution_failed,
+                       COALESCE(SUM(CASE WHEN e.result_status = 'TIMED_OUT' THEN 1 ELSE 0 END), 0) AS timed_out,
+                       COALESCE(SUM(CASE WHEN e.result_status = 'NOT_STARTED' THEN 1 ELSE 0 END), 0) AS not_started
+                FROM test_case_snapshot s
+                JOIN test_execution e ON e.snapshot_id = s.id
+                LEFT JOIN assertion_result ar ON ar.snapshot_id = s.id
+                """.formatted(FALSE_NEGATIVE_PREDICATE, FALSE_POSITIVE_PREDICATE) + query.whereClause();
+        return jdbcTemplate.queryForObject(sql, (resultSet, rowNumber) -> new TestRunResultAttentionFacets(
+                resultSet.getLong("all_results"),
+                resultSet.getLong("false_negative"),
+                resultSet.getLong("false_positive"),
+                resultSet.getLong("execution_failed"),
+                resultSet.getLong("timed_out"),
+                resultSet.getLong("not_started")), query.arguments().toArray());
     }
 
     private static void addEvaluationOutcome(
@@ -124,8 +170,33 @@ class TestRunResultListPersistenceAdapter implements LoadTestRunResultListPort {
         } + ")");
     }
 
-    private String orderBy(List<SortOrder<TestRunResultSortField>> sort) {
-        return sort.stream()
+    private static void addAttentionTypes(
+            List<String> predicates, java.util.Set<TestRunResultAttentionType> attentionTypes) {
+        if (attentionTypes.isEmpty()) {
+            return;
+        }
+        List<String> attentionPredicates = attentionTypes.stream()
+                .map(TestRunResultListPersistenceAdapter::attentionPredicate)
+                .toList();
+        predicates.add("(" + String.join(" OR ", attentionPredicates) + ")");
+    }
+
+    private static String attentionPredicate(TestRunResultAttentionType attentionType) {
+        return switch (attentionType) {
+            case FALSE_NEGATIVE -> "(" + FALSE_NEGATIVE_PREDICATE + ")";
+            case FALSE_POSITIVE -> "(" + FALSE_POSITIVE_PREDICATE + ")";
+            case EXECUTION_FAILED -> "e.result_status = 'FAILED'";
+            case TIMED_OUT -> "e.result_status = 'TIMED_OUT'";
+            case NOT_STARTED -> "e.result_status = 'NOT_STARTED'";
+        };
+    }
+
+    private String orderBy(TestRunResultListCriteria criteria) {
+        if (criteria.usesDefaultAttentionSort()) {
+            return directed(SEVERITY_ORDER, SortDirection.DESC) + ", "
+                    + directed(ATTENTION_TYPE_ORDER, SortDirection.ASC) + ", s.id ASC";
+        }
+        return criteria.sort().stream()
                 .map(order -> switch (order.field()) {
                     case NAME -> directed("s.name", order.direction());
                     case CATEGORY -> directed("s.category", order.direction());
@@ -151,7 +222,9 @@ class TestRunResultListPersistenceAdapter implements LoadTestRunResultListPort {
                 resultSet.getString("category"),
                 execution,
                 resultSet.getString("assertion_status"),
-                evaluationOutcome(expectedAction, execution.evaluatorVerdict()));
+                evaluationOutcome(expectedAction, execution.evaluatorVerdict()),
+                TestRunResultAttentionType.classify(
+                        execution.status(), expectedAction, execution.evaluatorVerdict()));
     }
 
     private TestExecutionView mapExecution(
