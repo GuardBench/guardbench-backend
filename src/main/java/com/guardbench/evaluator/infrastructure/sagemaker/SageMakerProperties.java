@@ -17,7 +17,7 @@ record SageMakerProperties(
         String endpointOverride,
         long apiCallTimeoutMs,
         long apiCallAttemptTimeoutMs,
-        int maxAttempts
+        Integer maxAttempts
 ) {
 
     private static final long CLAIM_LEASE_MS = 45_000L;
@@ -35,8 +35,12 @@ record SageMakerProperties(
         if (apiCallAttemptTimeoutMs <= 0) {
             apiCallAttemptTimeoutMs = DEFAULT_API_CALL_ATTEMPT_TIMEOUT_MS;
         }
-        if (maxAttempts <= 0) {
+        if (maxAttempts == null) {
             maxAttempts = DEFAULT_MAX_ATTEMPTS;
+        }
+        if (maxAttempts != DEFAULT_MAX_ATTEMPTS) {
+            throw new IllegalArgumentException(
+                    "guardbench.sagemaker.max-attempts must be fixed at 1; provider retry belongs to the worker claim retry");
         }
         if (apiCallTimeoutMs >= CLAIM_LEASE_MS) {
             throw new IllegalArgumentException(

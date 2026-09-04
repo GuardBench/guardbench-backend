@@ -44,7 +44,7 @@ class SageMakerEvaluatorConfigurationTest {
         @Test
         @DisplayName("기본 설정은 전체 15초, 개별 시도 5초, 재시도 없음(1회)을 적용한다")
         void appliesApprovedCallLimits() {
-            SageMakerProperties properties = new SageMakerProperties(null, null, 0L, 0L, 0);
+            SageMakerProperties properties = new SageMakerProperties(null, null, 0L, 0L, null);
 
             ClientOverrideConfiguration configuration =
                     SageMakerEvaluatorConfiguration.overrideConfiguration(properties);
@@ -61,7 +61,7 @@ class SageMakerEvaluatorConfigurationTest {
         @Test
         @DisplayName("전체 호출 한도가 claim lease를 넘으면 기동을 거부한다")
         void rejectsTimeoutBeyondClaimLease() {
-            assertThatThrownBy(() -> new SageMakerProperties(null, null, 45_000L, 5_000L, 3))
+            assertThatThrownBy(() -> new SageMakerProperties(null, null, 45_000L, 5_000L, 1))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("45s execution claim lease");
         }
@@ -69,9 +69,25 @@ class SageMakerEvaluatorConfigurationTest {
         @Test
         @DisplayName("개별 시도 한도가 전체 한도보다 크면 기동을 거부한다")
         void rejectsAttemptTimeoutGreaterThanTotal() {
-            assertThatThrownBy(() -> new SageMakerProperties(null, null, 5_000L, 9_000L, 3))
+            assertThatThrownBy(() -> new SageMakerProperties(null, null, 5_000L, 9_000L, 1))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("api-call-timeout-ms");
+        }
+
+        @Test
+        @DisplayName("SDK 최대 시도가 1이 아니면 기동을 거부한다")
+        void rejectsSdkRetryOverride() {
+            assertThatThrownBy(() -> new SageMakerProperties(null, null, 0L, 0L, 2))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("max-attempts must be fixed at 1");
+        }
+
+        @Test
+        @DisplayName("SDK 최대 시도에 0을 명시해도 기동을 거부한다")
+        void rejectsExplicitZeroSdkAttempts() {
+            assertThatThrownBy(() -> new SageMakerProperties(null, null, 0L, 0L, 0))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("max-attempts must be fixed at 1");
         }
     }
 

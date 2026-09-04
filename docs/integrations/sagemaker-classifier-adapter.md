@@ -150,7 +150,8 @@ VPC 설정도 검증되지 않았다. 실험은 VPC 설정이 없는 기본(퍼�
 이미 Provider business retry를 claim 계층(`ExecuteTestRunService.MAX_EXECUTION_ATTEMPTS`, 최대
 3회)에서 수행하므로, SDK `max-attempts`를 그대로 4로 설정하면 실제 호출 횟수가 최대 12회(SDK 4회 x
 claim 3회)로 증폭된다. 이를 방지하기 위해 `guardbench.sagemaker.max-attempts`는 1(SDK 자체 재시도
-없음)로 고정하고, transient 실패(`ThrottlingException`, `ModelError`, `InternalFailure`,
+없음)로 고정한다. 설정 override도 1 이외의 값을 허용하지 않으며, transient
+실패(`ThrottlingException`, `ModelError`, `InternalFailure`,
 `ServiceUnavailable` 등)에 대한 재시도는 claim retry 한 계층에만 위임한다. 오류는
 `EVALUATOR_NOT_FOUND`, `EVALUATOR_ACCESS_DENIED`, `EVALUATOR_CONFIGURATION_INVALID`,
 `PROVIDER_UNAVAILABLE`, `PROVIDER_RESPONSE_INVALID`, `PROVIDER_TIMEOUT`으로 안전하게 수렴한다.

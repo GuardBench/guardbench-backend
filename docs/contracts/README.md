@@ -40,7 +40,7 @@ ADR 0005의 재시도·timeout·lease 초기값이 실제 어떤 configuration k
 | --- | ---: | --- | --- |
 | Provider 호출 전체 timeout | 15초 | `guardbench.sagemaker.api-call-timeout-ms` (`application.yml`) / `SageMakerProperties.DEFAULT_API_CALL_TIMEOUT_MS` | Configuration key |
 | SDK 개별 시도 timeout | 5초 | `guardbench.sagemaker.api-call-attempt-timeout-ms` / `SageMakerProperties.DEFAULT_API_CALL_ATTEMPT_TIMEOUT_MS` | Configuration key |
-| SDK 최대 시도 | 1회(재시도 없음) | `guardbench.sagemaker.max-attempts` / `SageMakerProperties.DEFAULT_MAX_ATTEMPTS` | Configuration key. Provider business retry는 아래 claim retry에만 위임한다(증폭 방지) |
+| SDK 최대 시도 | 1회(재시도 없음) | `guardbench.sagemaker.max-attempts` / `SageMakerProperties.DEFAULT_MAX_ATTEMPTS` | Configuration key는 1만 허용하며 다른 값은 기동 오류다. Provider business retry는 아래 claim retry에만 위임한다(증폭 방지) |
 | 최대 Application 실행 시도 | 3회 | `ExecuteTestRunService.MAX_EXECUTION_ATTEMPTS` | ⚠️ Java 상수 (미결정 사항 참고). PROVIDER_UNAVAILABLE/PROVIDER_TIMEOUT retry의 유일한 소유 계층 |
 | 최대 Application resolution 시도 | 3회 | `ResolveTestRunService.MAX_RESOLUTION_ATTEMPTS` | ⚠️ Java 상수 (미결정 사항 참고) |
 | SQS visibility timeout | 30초 | `guardbench.sqs.polling.visibility-timeout-seconds` (`application.yml`) | Configuration key |
