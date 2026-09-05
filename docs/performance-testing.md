@@ -347,3 +347,50 @@ queue age, completion time의 변화를 원인 후보로 비교할 수 있다. R
 의존 인프라에서 발생한 병목 여부를 확인하는 데 사용한다. `target`, `peak`, `stress` 숫자는
 Capacity Target 논의가 끝난 뒤 추가한다. Profile의 동시 TestRun 수 × Dataset TestCase 수 ×
 retry 가능성을 실행 전에 확인해 SageMaker Runtime 요청량과 AWS 비용을 검토한다.
+
+## Runner 전용 수동 image publish (#213)
+
+`Performance Runner image publish` workflow는 선택한 branch/tag의 source를 테스트하고
+`performance/Dockerfile`로 build한 뒤 Performance Runner 전용 ECR에 publish한다.
+Backend build/deploy, ECS Task Definition 등록, Service update는 포함하지 않는다.
+
+GitHub `performance` environment에 다음 repository variables를 설정한다.
+
+| 변수 | 값/역할 |
+| --- | --- |
+| `AWS_REGION` | Runner ECR region |
+| `AWS_RUNNER_PUBLISH_ROLE_ARN` | GitHub OIDC를 신뢰하는 Runner 전용 ECR publish 역할 |
+| `RUNNER_ECR_REPOSITORY` | Runner ECR repository name (URI 아님), `IMMUTABLE` 필수 |
+
+역할은 `performance` environment의 GitHub OIDC subject를 신뢰해야 한다. 필요한 권한은
+`ecr:GetAuthorizationToken`과 대상 repository의 `DescribeRepositories`, `BatchGetImage`,
+`DescribeImages`, `BatchCheckLayerAvailability`, `InitiateLayerUpload`, `UploadLayerPart`,
+`CompleteLayerUpload`, `PutImage`다. ECS 권한은 필요하지 않다. IAM/repository 생성과
+bootstrap/instance lifecycle은 IaC가 소유한다. 기존 Backend용 `ECR_REPOSITORY`와
+`AWS_DEPLOY_ROLE_ARN`을 fallback으로 사용하지 않는다.
+
+Workflow가 기본 브랜치에 반영된 후 실행한다. `--ref`에는 workflow가 있는 branch/tag를 지정한다.
+
+```bash
+gh workflow run performance-runner-publish.yml --ref dev
+```
+
+Checkout한 commit의 전체 SHA를 image tag, OCI revision, `APP_REVISION`으로 사용한다.
+같은 immutable tag가 있으면 재사용하며 덮어쓰지 않는다. 새 image는 publish 전에
+네트워크를 차단한 `verify-runtime` 검증을 거친다. 결과는 Actions summary와
+`performance-runner-image` artifact의 `runner-image.json`에 다음 값으로 남는다.
+
+- `source_commit_sha`: `APP_REVISION` 입력
+- `image_tag`, `image_digest`, `image_uri`
+- `image_digest_uri`: IaC/Runner bootstrap에서 선택할 digest 고정 URI
+
+로컬에서도 AWS ECR publish 권한이 있는 환경에서 같은 경로를 검증할 수 있다.
+
+```bash
+python3 -m unittest discover -s performance/runner -p 'test_*.py' -v
+AWS_REGION=ap-northeast-2 RUNNER_ECR_REPOSITORY=<runner-repository-name> \
+  performance/publish-runner-image.sh
+```
+
+수동 실행의 기본 브랜치 조건은 [GitHub workflow_dispatch 안내](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow),
+digest 조회는 [AWS ECR describe-images](https://docs.aws.amazon.com/cli/latest/reference/ecr/describe-images.html)를 따른다.

@@ -1,0 +1,52 @@
+name: Performance Runner image publish
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: performance-runner-image-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: performance
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_RUNNER_PUBLISH_ROLE_ARN: ${{ vars.AWS_RUNNER_PUBLISH_ROLE_ARN }}
+      RUNNER_ECR_REPOSITORY: ${{ vars.RUNNER_ECR_REPOSITORY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test Runner before building
+        run: |
+          python -m pip install -r performance/requirements.txt
+          python -m unittest discover -s performance/runner -p 'test_*.py' -v
+      - name: Validate publish configuration
+        run: |
+          test -n "$AWS_REGION"
+          test -n "$AWS_RUNNER_PUBLISH_ROLE_ARN"
+          test -n "$RUNNER_ECR_REPOSITORY"
+      - name: Configure Runner publish credentials through OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_RUNNER_PUBLISH_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Build, verify and publish immutable Runner image
+        id: image
+        run: performance/publish-runner-image.sh
+      - name: Preserve image identity
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-runner-image
+          path: runner-image.json
+          if-no-files-found: error
