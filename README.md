@@ -29,7 +29,9 @@ cp .env.example .env
 
 `./gradlew bootRun` 실행 시 Spring Boot Docker Compose 지원이 `compose.yaml`의 PostgreSQL을 시작하고, Flyway가 승인된 스키마를 적용합니다. `.env`는 로컬 자격 증명 파일이므로 커밋하지 않습니다.
 
-통합 테스트는 로컬 Compose DB를 사용하지 않고 Testcontainers PostgreSQL을 별도로 시작합니다. 테스트 실행 전 Docker daemon이 실행 중이어야 합니다.
+`testFast`는 외부 컨테이너 없이 단위·컨트롤러·계약 테스트만 실행합니다. `integrationTest`는
+PostgreSQL, SQS, E2E 통합 테스트를 실행하므로 Docker daemon이 필요합니다. 기존 `test`와
+`check`는 전체 테스트 suite를 실행하는 호환 경로로 유지합니다.
 
 애플리케이션 실행:
 
@@ -40,8 +42,20 @@ cp .env.example .env
 테스트:
 
 ```bash
+./gradlew testFast
+./gradlew integrationTest
 ./gradlew clean test
 ```
+
+`testFast`와 `integrationTest`를 함께 실행할 때는 다음처럼 사용할 수 있습니다.
+
+```bash
+./gradlew testFast integrationTest
+```
+
+PR CI에서는 두 테스트 task와 `bootJar`를 독립 job으로 실행하고 `verify` aggregate check에서
+세 결과를 모두 요구합니다. Gradle dependency cache, task별 실행 시간과 integration job의
+Testcontainers 이미지 준비 시간을 GitHub Actions Summary에 기록합니다.
 
 실행 가능한 JAR 빌드:
 
