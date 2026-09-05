@@ -439,6 +439,29 @@ class TestRunQueryControllerTest {
         }
 
         @Test
+        @DisplayName("요약 조회는 변화 집계만 반환하고 케이스 payload를 제외한다")
+        void returnsComparisonSummaryWithoutItems() throws Exception {
+            TestRunComparison comparison = new TestRunComparison(
+                    901L, 800L, 3L, 2L, 1L, 1L, 1L, 0L,
+                    List.of(new TestRunComparison.TestRunComparisonItem(
+                            1001L, 10L, "case", "input", Action.BLOCK, Action.ALLOW, Action.BLOCK,
+                            "COMPARABLE", "IMPROVEMENT")));
+            when(compareTestRunsService.compare(901L, 800L)).thenReturn(comparison);
+
+            mockMvc.perform(get(BASE + "/901/comparisons/800/summary"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.currentRunId").value(901))
+                    .andExpect(jsonPath("$.data.comparisonRunId").value(800))
+                    .andExpect(jsonPath("$.data.totalCases").value(3))
+                    .andExpect(jsonPath("$.data.changedCount").value(2))
+                    .andExpect(jsonPath("$.data.unchangedCount").value(1))
+                    .andExpect(jsonPath("$.data.improvedCount").value(1))
+                    .andExpect(jsonPath("$.data.regressedCount").value(1))
+                    .andExpect(jsonPath("$.data.notComparableCount").value(0))
+                    .andExpect(jsonPath("$.data.items").doesNotExist());
+        }
+
+        @Test
         @DisplayName("저장 verdict가 없는 항목은 비교 불가와 null 비교 필드를 반환한다")
         void returnsNullComparisonFieldsWhenStoredVerdictIsMissing() throws Exception {
             TestRunComparison comparison = new TestRunComparison(
