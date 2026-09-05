@@ -9,8 +9,7 @@ from performance.runner.acceptance import evaluate
 from performance.runner.config import ConfigurationError, load_profile, load_yaml
 from performance.runner.dataset import load_seed_payload
 from performance.runner.aws import InfrastructureCapacityCollector
-from performance.runner.cli import K6_THRESHOLD_FAILURE_EXIT_CODE, RunnerError, reset_database, run_k6
-from performance.runner.safety import migration_jdbc_url, validate_reset_safety
+from performance.runner.cli import K6_THRESHOLD_FAILURE_EXIT_CODE, RunnerError, run_k6
 from performance.runner.storage import RESULT_FILENAMES, ResultUploadError, upload_result_directory
 
 
@@ -171,43 +170,6 @@ class PerformanceRunnerTest(unittest.TestCase):
             with self.assertRaises(ConfigurationError):
                 load_profile(ROOT / "profiles/smoke.yaml")
 
-    def test_reset_requires_all_safety_guards(self):
-        with self.assertRaises(ConfigurationError):
-            validate_reset_safety({})
-        environment = {
-            "PERFORMANCE_ENVIRONMENT": "performance",
-            "PERFORMANCE_DB_NAME": "guardbench_perf",
-            "PERFORMANCE_RESET_CONFIRM": "RESET_GUARDBENCH_PERF",
-            "PERFORMANCE_DATABASE_URL": "postgresql://guardbench:secret@localhost:5432/guardbench_perf",
-        }
-        validate_reset_safety(environment)
-
-    def test_reset_rejects_a_different_database_in_the_connection_url(self):
-        environment = {
-            "PERFORMANCE_ENVIRONMENT": "performance",
-            "PERFORMANCE_DB_NAME": "guardbench_perf",
-            "PERFORMANCE_RESET_CONFIRM": "RESET_GUARDBENCH_PERF",
-        }
-
-        with self.assertRaises(ConfigurationError):
-            validate_reset_safety(environment, "postgresql://guardbench:secret@localhost:5432/dev")
-
-    def test_reset_checks_current_database_before_dropping_schema(self):
-        environment = {
-            "PERFORMANCE_ENVIRONMENT": "performance",
-            "PERFORMANCE_DB_NAME": "guardbench_perf",
-            "PERFORMANCE_RESET_CONFIRM": "RESET_GUARDBENCH_PERF",
-            "PERFORMANCE_DATABASE_URL": "postgresql://guardbench:secret@localhost:5432/guardbench_perf",
-        }
-        completed = subprocess.CompletedProcess([], 0, stdout="guardbench_perf\nDO\n", stderr="")
-
-        with patch("performance.runner.cli.subprocess.run", return_value=completed) as run:
-            reset_database(environment)
-
-        sql = run.call_args.args[0][-1]
-        self.assertIn("SELECT current_database()", sql)
-        self.assertIn("DROP SCHEMA public CASCADE", sql)
-
     def test_acceptance_fails_when_completion_has_not_drained(self):
         result = evaluate(acceptance_profile(), passing_summary(), {"passed": False, "duration_seconds": 11}, [],
                           {"status": "COLLECTED", "metrics": [{"id": "ecs_cpu"}]})
@@ -249,22 +211,6 @@ class PerformanceRunnerTest(unittest.TestCase):
         result = evaluate(acceptance_profile(), passing_summary(), {"passed": True, "duration_seconds": 1}, [], aws_metrics)
 
         self.assertEqual("PASS", result["status"])
-
-    def test_migration_jdbc_url_is_derived_from_reset_target(self):
-        jdbc_url = migration_jdbc_url({
-            "PERFORMANCE_DATABASE_URL": "postgresql://user:secret@perf-db:5432/guardbench_perf?sslmode=require",
-        })
-
-        self.assertEqual("jdbc:postgresql://perf-db:5432/guardbench_perf?sslmode=require", jdbc_url)
-
-    def test_migration_jdbc_url_rejects_different_target(self):
-        environment = {
-            "PERFORMANCE_DATABASE_URL": "postgresql://user:secret@perf-db:5432/guardbench_perf",
-            "PERFORMANCE_DATABASE_JDBC_URL": "jdbc:postgresql://dev-db:5432/guardbench",
-        }
-
-        with self.assertRaises(ConfigurationError):
-            migration_jdbc_url(environment)
 
     def test_acceptance_fails_when_k6_thresholds_fail(self):
         aws_metrics = {"status": "COLLECTED", "metrics": [
@@ -334,30 +280,21 @@ class PerformanceRunnerTest(unittest.TestCase):
 
         self.assertIn("python3.11 --version", verify_runtime)
         self.assertIn("k6 version", verify_runtime)
-        self.assertIn("psql --version", verify_runtime)
-        self.assertIn("java -version", verify_runtime)
-        self.assertIn("javac -version", verify_runtime)
         self.assertIn("bin/run-performance", verify_runtime)
-        self.assertIn("src/main/resources/db/migration", verify_runtime)
         self.assertIn("performance/profiles/smoke.yaml", verify_runtime)
         self.assertIn("performance/datasets/baseline-v1.yaml", verify_runtime)
 
     def test_container_launcher_uses_image_runtime(self):
         launcher = (ROOT.parent / "bin" / "run-performance").read_text(encoding="utf-8")
-        gradle = (ROOT.parent / "bin" / "gradle").read_text(encoding="utf-8")
 
         self.assertIn('export PYTHONPATH="$root${PYTHONPATH:+:$PYTHONPATH}"', launcher)
         self.assertIn('exec python3.11 -m performance.runner.cli "$@"', launcher)
-        self.assertIn('export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$root/.gradle}"', gradle)
-        self.assertIn('--offline', gradle)
 
     def test_dockerfile_is_a_directly_runnable_image(self):
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
 
         self.assertIn("ARG APP_REVISION=unknown", dockerfile)
         self.assertIn("COPY performance performance", dockerfile)
-        self.assertIn("COPY src src", dockerfile)
-        self.assertIn("COPY gradle gradle", dockerfile)
         self.assertIn('ENTRYPOINT ["python3.11", "-m", "performance.runner.cli"]', dockerfile)
 
     def test_image_build_derives_tag_and_revision_from_repository_head(self):

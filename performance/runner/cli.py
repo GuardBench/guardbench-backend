@@ -20,7 +20,6 @@ from .api import ApiClient, ApiError
 from .aws import CloudWatchMetricCollector, InfrastructureCapacityCollector, QueueInspector, queue_urls_from_environment
 from .config import ConfigurationError, load_dataset, load_profile
 from .dataset import load_seed_payload
-from .safety import EXPECTED_DATABASE_NAME, migration_jdbc_url, validate_reset_safety
 from .storage import ResultUploadError, upload_result_directory
 
 
@@ -48,65 +47,6 @@ def _required_revision(name: str) -> str:
     if not value or value.lower() == "unknown":
         raise ConfigurationError(f"실제 성능 실행에는 {name}을(를) 명시해야 합니다.")
     return value
-
-
-def reset_database(environment: dict[str, str]) -> None:
-    database_url = environment.get("PERFORMANCE_DATABASE_URL")
-    validate_reset_safety(environment, database_url)
-    command = [
-        os.environ.get("PSQL_BIN", "psql"), "--no-psqlrc", "--dbname", database_url, "--no-align", "--tuples-only",
-        "--set", "ON_ERROR_STOP=1", "--command",
-        "SELECT current_database(); "
-        "DO $$ BEGIN "
-        "IF current_database() <> 'guardbench_perf' THEN "
-        "RAISE EXCEPTION 'performance reset target database mismatch'; "
-        "END IF; END $$; "
-        "DROP SCHEMA public CASCADE; CREATE SCHEMA public;",
-    ]
-    try:
-        result = subprocess.run(command, check=True, capture_output=True, text=True)
-    except (OSError, subprocess.CalledProcessError) as exc:
-        raise RunnerError("DB reset 대상 확인 또는 실행에 실패했습니다.") from exc
-    first_output = next((line.strip() for line in result.stdout.splitlines() if line.strip()), "")
-    if first_output != EXPECTED_DATABASE_NAME:
-        raise RunnerError("DB reset 대상이 guardbench_perf인지 확인하지 못했습니다.")
-
-
-def apply_migrations(environment: dict[str, str], migration_dir: Path) -> None:
-    database_url = environment.get("PERFORMANCE_DATABASE_URL")
-    if not database_url:
-        raise ConfigurationError("migration에는 PERFORMANCE_DATABASE_URL이 필요합니다.")
-    if not migration_dir.is_dir():
-        raise ConfigurationError(f"migration 디렉터리를 찾을 수 없습니다: {migration_dir}")
-    jdbc_url = migration_jdbc_url(environment)
-    command_text = environment.get("PERFORMANCE_MIGRATION_COMMAND_JSON")
-    if command_text:
-        try:
-            command = json.loads(command_text)
-        except json.JSONDecodeError as exc:
-            raise ConfigurationError("PERFORMANCE_MIGRATION_COMMAND_JSON은 JSON 배열이어야 합니다.") from exc
-        if not isinstance(command, list) or not command or not all(isinstance(item, str) for item in command):
-            raise ConfigurationError("PERFORMANCE_MIGRATION_COMMAND_JSON은 문자열 배열이어야 합니다.")
-    else:
-        gradle_command = environment.get("PERFORMANCE_GRADLE_COMMAND", "./gradlew")
-        command = [gradle_command, "bootRun", "--args=--spring.main.web-application-type=none"]
-    migration_environment = dict(environment)
-    migration_environment.update({
-        "SPRING_DATASOURCE_URL": jdbc_url,
-        "SPRING_DOCKER_COMPOSE_ENABLED": "false",
-        "SQS_ENABLED": "false",
-        "WORKER_ENABLED": "false",
-    })
-    username = environment.get("PERFORMANCE_DB_USERNAME")
-    password = environment.get("PERFORMANCE_DB_PASSWORD")
-    if username:
-        migration_environment["SPRING_DATASOURCE_USERNAME"] = username
-    if password:
-        migration_environment["SPRING_DATASOURCE_PASSWORD"] = password
-    try:
-        subprocess.run(command, cwd=_repo_root(), env=migration_environment, check=True)
-    except (OSError, subprocess.CalledProcessError) as exc:
-        raise RunnerError("Flyway migration command 실행에 실패했습니다.") from exc
 
 
 def _queue_state(inspector: QueueInspector, source_urls: list[str], dlq_urls: list[str]) -> dict[str, Any]:
@@ -318,10 +258,6 @@ def execute(args: argparse.Namespace) -> int:
         print(json.dumps(plan, indent=2))
         return 0
 
-    if not args.reset:
-        raise ConfigurationError(
-            "Baseline 비교의 DB 상태를 고정하려면 실제 실행에 --reset을 지정해야 합니다."
-        )
     revisions = {
         "application": _required_revision("APP_REVISION"),
         "infrastructure": _required_revision("INFRA_REVISION"),
@@ -337,9 +273,6 @@ def execute(args: argparse.Namespace) -> int:
     preflight = _assert_preflight(api, inspector, source_urls, dlq_urls)
     infrastructure_capacity = InfrastructureCapacityCollector().collect()
     infrastructure_capacity["revisions"] = revisions
-    environment = dict(os.environ)
-    reset_database(environment)
-    apply_migrations(environment, repo_root / "src/main/resources/db/migration")
 
     api.health_check()
     suite_id = api.create_suite(payload)
@@ -409,7 +342,6 @@ def parser() -> argparse.ArgumentParser:
     command.add_argument("--profile", default=str(root / "performance/profiles/smoke.yaml"))
     command.add_argument("--dataset", default=str(root / "performance/datasets/baseline-v1.yaml"))
     command.add_argument("--result-dir")
-    command.add_argument("--reset", action="store_true", help="Reset and migrate only a guarded performance DB.")
     command.add_argument("--dry-run", action="store_true", help="Validate inputs and print the execution plan.")
     return command
 
