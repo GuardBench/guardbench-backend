@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Related Issue: #140, #187
+> Related Issue: #140, #187, #193, #200
 
 ## 목적과 원칙
 
@@ -31,6 +31,39 @@ Capacity Target → Performance Profile → 동일 Dataset 실행 → Baseline
 
 현재 단일 ECS Service는 최초 Baseline 측정 대상일 뿐 성능 목표의 근거가 아니다. API/Worker
 분리, Worker Auto Scaling, Fargate 자원 조정 이후에도 같은 Dataset과 Profile을 사용한다.
+
+## Infrastructure Capacity 입력과 환경 분리
+
+ECS task CPU/memory는 Profile이나 Workload가 아니라 Terraform/배포 설정이 소유하는
+Infrastructure Capacity 입력이다. IaC의 Performance Backend는 dev와 분리된 CPU/memory 입력
+(예: `performance_api_cpu`, `performance_api_memory`)을 사용하고, dev Backend는 `api_cpu`와
+`api_memory`를 계속 사용한다.
+따라서 Performance task size를 변경해도 dev Task Definition이나 Service가 변경 대상이
+되지 않아야 한다. 실제 변수와 Task Definition 연결은 [guardbench-iac Issue #41](https://github.com/GuardBench/guardbench-iac/issues/41)의
+계약을 따른다.
+
+Performance capacity 변경은 다음 실험 축을 바꾸는 작업이다.
+
+```text
+동일 Dataset + 동일 Profile/Workload + Performance Infrastructure Capacity 변경
+```
+
+`PERF_ECS_CLUSTER`와 `PERF_ECS_SERVICE`는 실행 대상 Performance ECS 환경을 가리켜야 한다.
+Runner는 실행 직전에 해당 Service가 사용하는 active Task Definition과 Service 상태를 AWS에서
+읽어 `result.json.infrastructure_capacity.ecs`에 다음 값을 저장한다.
+
+| IaC 입력 또는 상태 | snapshot artifact |
+| --- | --- |
+| Performance 전용 CPU 입력이 반영된 Task Definition | `ecs.task_cpu` |
+| Performance 전용 memory 입력이 반영된 Task Definition | `ecs.task_memory` |
+| Performance Service의 configured desired count | `ecs.desired_count` |
+| snapshot 시점의 실제 running task 수 | `ecs.running_task_count` |
+
+Snapshot은 Terraform 입력값 자체가 아니라 AWS에 적용된 실제 구성값을 기록한다. 그러므로
+Terraform apply와 Performance Service rollout이 끝난 뒤 실행해야 하며, snapshot의 CPU/memory가
+변경한 입력과 다르면 실행 조건을 재현할 수 없는 것으로 보고 실행을 중단하거나 결과를 비교하지
+않는다. dev capacity는 dev 대상의 별도 실행에서만 기록하며 Performance Profile/Workload
+schema에는 CPU, memory, capacity level 또는 ECS 식별자를 추가하지 않는다.
 
 ## Dataset과 Profile
 
@@ -89,8 +122,8 @@ export PERF_TARGET_REVISION=<application-revision>
 export PERF_SOURCE_QUEUE_URLS=<resolve-url>,<work-items-url>,<finalize-url>
 export PERF_DLQ_URLS=<resolve-dlq-url>,<work-items-dlq-url>,<finalize-dlq-url>
 export AWS_REGION=ap-northeast-2
-export PERF_ECS_CLUSTER=<cluster-name>
-export PERF_ECS_SERVICE=<service-name>
+export PERF_ECS_CLUSTER=<performance-cluster-name>
+export PERF_ECS_SERVICE=<performance-service-name>
 export PERF_RDS_INSTANCE_ID=<db-instance-id>
 export PERF_SAGEMAKER_ENDPOINT_NAME=<classifier-endpoint-name>
 export PERF_SAGEMAKER_VARIANT_NAME=<classifier-variant-name>

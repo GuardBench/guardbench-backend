@@ -5,9 +5,21 @@
 1. **Dataset / Dataset Size**: 한 TestRun이 처리할 TestCase 집합과 개수다. 현재 확정된 Dataset은 `baseline-v1` 78건뿐이며, `SMALL/MEDIUM/LARGE`의 경계값은 아직 정하지 않는다.
 2. **Test Type**: 실험 목적이다. Runner는 `SMOKE`, `LOAD`, `PEAK`, `STRESS`, `SOAK`를 허용한다.
 3. **Workload**: 시스템에 가하는 부하 값이다. Profile의 `concurrent_test_runs`, `ramp_up_seconds`, `duration_seconds`, `max_iterations_per_vu`, timeout/polling 값이 여기에 속한다.
-4. **Infrastructure Capacity**: ECS task 수, RDS 사양, SageMaker endpoint capacity처럼 시스템이 공급하는 자원이다. Performance Profile이 소유하지 않고 Terraform/배포 설정이 소유한다.
+4. **Infrastructure Capacity**: ECS task 수, CPU/memory, RDS 사양, SageMaker endpoint capacity처럼 시스템이 공급하는 자원이다. Performance Profile이 소유하지 않고 Terraform/배포 설정이 소유한다.
 
 따라서 Profile은 **Test Type + Workload + acceptance criteria + Application Target**을 정의한다. Dataset은 `performance/datasets/`에서 별도로 선택하고, Infrastructure Capacity는 배포 입력과 Infrastructure revision으로 별도 추적한다.
+
+ECS capacity 입력도 환경별 배포 설정에 속한다. dev는 `api_cpu`/`api_memory`를 사용하고,
+Performance는 dev와 분리된 CPU/memory 입력(예: `performance_api_cpu`/`performance_api_memory`)을
+사용한다. Performance 입력은 dev Task Definition에 전달되지 않는다. 실제 Terraform 연결은
+[guardbench-iac Issue #41](https://github.com/GuardBench/guardbench-iac/issues/41),
+실행 전 적용값 검증은 [#200](https://github.com/GuardBench/guardbench-backend/issues/200)의
+Backend 계약을 따른다.
+
+Runner는 Profile에서 capacity를 읽지 않는다. 실행 대상 Performance Service의 active Task
+Definition을 조회해 `result.json.infrastructure_capacity.ecs.task_cpu`와
+`ecs.task_memory`에 실제 적용된 CPU/memory를 기록한다. 이 snapshot은 입력 의도나 capacity
+level 이름이 아니라 AWS configured capacity의 실행 시점 증거다.
 
 현재 TestRun은 Application Target 응답을 SageMaker Response Behavior Classifier로 분류한 뒤 Assertion/Quality Gate까지 비동기로 처리한다. Profile은 classifier 설정을 입력으로 받지 않으며 classifier endpoint/prompt 등은 Backend 배포 설정이 소유한다.
 
