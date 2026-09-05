@@ -1639,12 +1639,12 @@ components:
       properties:
         currentRunId: { type: integer, format: int64, minimum: 1 }
         comparisonRunId: { type: integer, format: int64, minimum: 1 }
-        totalCases: { type: integer, minimum: 0 }
-        changedCount: { type: integer, minimum: 0, description: 개선 또는 Regression으로 분류된 케이스 수 }
-        unchangedCount: { type: integer, minimum: 0, description: 두 Run의 verdict가 같은 케이스 수 }
-        improvedCount: { type: integer, minimum: 0, description: ExpectedResult 기준으로 현재 Run이 개선된 케이스 수 }
-        regressedCount: { type: integer, minimum: 0, description: ExpectedResult 기준으로 현재 Run이 악화된 케이스 수 }
-        notComparableCount: { type: integer, minimum: 0, description: 두 Run 중 저장 verdict가 없어 변화 판단을 할 수 없는 케이스 수 }
+        totalCases: { type: integer, format: int64, minimum: 0 }
+        changedCount: { type: integer, format: int64, minimum: 0, description: 개선 또는 Regression으로 분류된 케이스 수 }
+        unchangedCount: { type: integer, format: int64, minimum: 0, description: 두 Run의 verdict가 같은 케이스 수 }
+        improvedCount: { type: integer, format: int64, minimum: 0, description: ExpectedResult 기준으로 현재 Run이 개선된 케이스 수 }
+        regressedCount: { type: integer, format: int64, minimum: 0, description: ExpectedResult 기준으로 현재 Run이 악화된 케이스 수 }
+        notComparableCount: { type: integer, format: int64, minimum: 0, description: 두 Run 중 저장 verdict가 없어 변화 판단을 할 수 없는 케이스 수 }
         items:
           type: array
           items: { $ref: '#/components/schemas/TestRunComparisonItemRes' }
@@ -1664,12 +1664,12 @@ components:
       properties:
         currentRunId: { type: integer, format: int64, minimum: 1 }
         comparisonRunId: { type: integer, format: int64, minimum: 1 }
-        totalCases: { type: integer, minimum: 0 }
-        changedCount: { type: integer, minimum: 0, description: 개선 또는 Regression으로 분류된 케이스 수 }
-        unchangedCount: { type: integer, minimum: 0, description: 두 Run의 verdict가 같은 케이스 수 }
-        improvedCount: { type: integer, minimum: 0, description: ExpectedResult 기준으로 현재 Run이 개선된 케이스 수 }
-        regressedCount: { type: integer, minimum: 0, description: ExpectedResult 기준으로 현재 Run이 악화된 케이스 수 }
-        notComparableCount: { type: integer, minimum: 0, description: 두 Run 중 저장 verdict가 없어 변화 판단을 할 수 없는 케이스 수 }
+        totalCases: { type: integer, format: int64, minimum: 0 }
+        changedCount: { type: integer, format: int64, minimum: 0, description: 개선 또는 Regression으로 분류된 케이스 수 }
+        unchangedCount: { type: integer, format: int64, minimum: 0, description: 두 Run의 verdict가 같은 케이스 수 }
+        improvedCount: { type: integer, format: int64, minimum: 0, description: ExpectedResult 기준으로 현재 Run이 개선된 케이스 수 }
+        regressedCount: { type: integer, format: int64, minimum: 0, description: ExpectedResult 기준으로 현재 Run이 악화된 케이스 수 }
+        notComparableCount: { type: integer, format: int64, minimum: 0, description: 두 Run 중 저장 verdict가 없어 변화 판단을 할 수 없는 케이스 수 }
     TestRunComparisonItemRes:
       type: object
       description: |

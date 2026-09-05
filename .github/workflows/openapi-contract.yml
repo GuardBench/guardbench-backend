@@ -26,5 +26,5 @@ jobs:
         run: node scripts/verify-openapi-nullable-enums.mjs docs/api/openapi.yaml
       - name: Verify MVP operation count
         run: |
-          count=$(grep -Ec '^    (get|post|patch|delete):' docs/api/openapi.yaml)
+          count=$(grep -Ec '^    (get|post|put|patch|delete):' docs/api/openapi.yaml)
           test "$count" -eq 18
