@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.localstack.LocalStackContainer;
 import org.testcontainers.utility.DockerImageName;
 
+import com.guardbench.common.support.fixture.LogCapture;
 import com.guardbench.testrun.application.ExecuteTestRunService;
 import com.guardbench.testrun.application.ResolveTestRunService;
 import com.guardbench.testrun.application.messaging.TestRunMessageCodec;
@@ -46,7 +47,7 @@ import tools.jackson.databind.json.JsonMapper;
 class SqsWorkerEndToEndTest {
 
     private static final LocalStackContainer LOCAL_STACK = new LocalStackContainer(
-            DockerImageName.parse("localstack/localstack:3.0"))
+            DockerImageName.parse("localstack/localstack:4.0"))
             .withServices(LocalStackContainer.Service.SQS);
 
     private static SqsClient sqs;
@@ -150,7 +151,7 @@ class SqsWorkerEndToEndTest {
     }
 
     @Test
-    @DisplayName("ExecuteTestRunService의 shouldAcknowledge()가 true인 outcome은 ack된다")
+    @DisplayName("WorkItem의 실제 SQS enqueue timing을 기록하고 ack outcome이면 삭제한다")
     void executionOutcomeAckDeletesMessage() {
         String queueUrl = createIsolatedQueue("workitems-ack-test");
         ObjectMapper objectMapper = JsonMapper.builder().build();
@@ -179,8 +180,16 @@ class SqsWorkerEndToEndTest {
                 .messageBody(payload)
                 .build());
 
-        int polled = adapter.poll();
-        assertEquals(1, polled);
+        LogCapture capture = LogCapture.attach(SqsInboundPollingAdapter.class);
+        try {
+            int polled = adapter.poll();
+            assertEquals(1, polled);
+            String timing = capture.firstMessageContaining("WorkItem 수신 timing");
+            assertTrue(timing.contains("testRunId=42 snapshotId=100"));
+            assertTrue(timing.matches(".*sentTimestamp=\\d+ queueWaitMs=\\d+"), timing);
+        } finally {
+            capture.detach();
+        }
 
         var remaining = sqs.receiveMessage(ReceiveMessageRequest.builder()
                 .queueUrl(queueUrl)

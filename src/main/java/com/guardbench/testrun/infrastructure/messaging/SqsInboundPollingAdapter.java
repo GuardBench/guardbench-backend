@@ -1,5 +1,6 @@
 package com.guardbench.testrun.infrastructure.messaging;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 
@@ -20,6 +21,7 @@ import com.guardbench.testrun.application.port.in.HandleTestExecutionCompletedPo
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.DeleteMessageRequest;
 import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.MessageSystemAttributeName;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 
 /**
@@ -77,17 +79,20 @@ public class SqsInboundPollingAdapter {
                 .maxNumberOfMessages(pollingConfig.maxMessages())
                 .waitTimeSeconds(pollingConfig.waitTimeSeconds())
                 .visibilityTimeout(pollingConfig.visibilityTimeoutSeconds())
+                .messageSystemAttributeNames(MessageSystemAttributeName.SENT_TIMESTAMP)
                 .build()).messages();
 
+        // Capture receipt once: processing earlier messages must not inflate queue wait.
+        Instant receivedAt = Instant.now();
         int processedCount = 0;
         for (Message message : messages) {
-            processMessage(message);
+            processMessage(message, receivedAt);
             processedCount++;
         }
         return processedCount;
     }
 
-    private void processMessage(Message message) {
+    private void processMessage(Message message, Instant receivedAt) {
         TestRunMessage decoded;
         try {
             decoded = codec.decode(message.body());
@@ -102,6 +107,16 @@ public class SqsInboundPollingAdapter {
         log.info("SQS 메시지를 수신했습니다. queue={} messageId={} eventId={} eventType={} testRunId={} snapshotId={}",
                 queueType.queueName(), message.messageId(), decoded.eventId(), decoded.eventType(),
                 decoded.testRunId(), snapshotId);
+
+        if (decoded instanceof TestExecutionRequestedMessage) {
+            Long sentTimestamp = sentTimestamp(message);
+            Long queueWaitMs = sentTimestamp != null && sentTimestamp <= receivedAt.toEpochMilli()
+                    ? receivedAt.toEpochMilli() - sentTimestamp : null;
+            log.info("WorkItem 수신 timing을 기록합니다. testRunId={} snapshotId={} eventId={} messageId={} "
+                            + "receivedAt={} sentTimestamp={} queueWaitMs={}",
+                    decoded.testRunId(), snapshotId, decoded.eventId(), message.messageId(),
+                    receivedAt, sentTimestamp, queueWaitMs);
+        }
 
         boolean shouldAck;
         try {
@@ -179,6 +194,18 @@ public class SqsInboundPollingAdapter {
             log.warn("SQS message delete failed. queue={} messageId={} failureType={}",
                     queueType.queueName(), message.messageId(), exception.getClass().getSimpleName());
             return false;
+        }
+    }
+
+    private static Long sentTimestamp(Message message) {
+        String value = message.attributes().get(MessageSystemAttributeName.SENT_TIMESTAMP);
+        if (value == null) return null;
+        try {
+            long timestamp = Long.parseLong(value);
+            return timestamp >= 0 ? timestamp : null;
+        } catch (NumberFormatException exception) {
+            // Optional diagnostic metadata must never change delivery/ack behavior.
+            return null;
         }
     }
 

@@ -110,7 +110,7 @@ public class ExecuteTestRunService {
         }
 
         Instant startedAt = clock.instant();
-        TargetExecutionNormalization targetNormalization = callTarget(context);
+        TargetExecutionNormalization targetNormalization = callTarget(context, snapshotId, attemptCount);
         if (!targetNormalization.isSuccess()) {
             TestExecutionError error = targetNormalization.error();
             boolean retryable = isRetryable(error.code());
@@ -190,16 +190,31 @@ public class ExecuteTestRunService {
         return ExecutionOutcome.EXECUTED;
     }
 
-    private TargetExecutionNormalization callTarget(ExecutionContext context) {
+    private TargetExecutionNormalization callTarget(ExecutionContext context, long snapshotId, int attemptCount) {
+        log.info("Application Target 호출을 시작합니다. testRunId={} snapshotId={} attemptCount={}",
+                context.testRunId(), snapshotId, attemptCount);
+        long startedNanos = System.nanoTime();
+        TargetExecutionResult result;
         try {
-            TargetExecutionResult result = targetExecutionPort.execute(new TargetExecutionRequest(
+            result = targetExecutionPort.execute(new TargetExecutionRequest(
                     new TargetReference(context.targetReference()), context.input()));
-            return TargetResultNormalizer.normalize(result);
         } catch (TargetProviderException exception) {
-            return TargetResultNormalizer.normalize(TargetExecutionResult.failed(exception.failureCode()));
+            result = TargetExecutionResult.failed(exception.failureCode());
         } catch (RuntimeException exception) {
-            return TargetResultNormalizer.normalize(TargetExecutionResult.failed(TargetFailureCode.PROVIDER_UNAVAILABLE));
+            result = TargetExecutionResult.failed(TargetFailureCode.PROVIDER_UNAVAILABLE);
         }
+        long durationMs = elapsedMs(startedNanos);
+        TargetExecutionNormalization normalized = TargetResultNormalizer.normalize(result);
+        if (normalized.isSuccess()) {
+            log.info("Application Target 호출을 완료했습니다. testRunId={} snapshotId={} attemptCount={} durationMs={}",
+                    context.testRunId(), snapshotId, attemptCount, durationMs);
+        } else {
+            TestExecutionError error = normalized.error();
+            log.warn("Application Target 호출에 실패했습니다. testRunId={} snapshotId={} attemptCount={} "
+                            + "durationMs={} errorStage={} errorCode={}",
+                    context.testRunId(), snapshotId, attemptCount, durationMs, error.stage(), error.code());
+        }
+        return normalized;
     }
 
     private EvaluatorExecutionNormalization callEvaluator(
