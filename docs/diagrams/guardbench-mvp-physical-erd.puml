@@ -1,11 +1,12 @@
 @startuml
 !pragma layout smetana
-title GuardBench MVP PostgreSQL Physical ERD
+title GuardBench MVP PostgreSQL 물리 ERD
 
 hide methods
 hide stereotypes
 skinparam linetype ortho
 skinparam shadowing false
+skinparam defaultFontName "Droid Sans Fallback"
 skinparam entity {
   BackgroundColor White
   BorderColor #374151
@@ -164,53 +165,53 @@ entity "outbox_event" as outbox {
     published_at : TIMESTAMPTZ(6)
 }
 
-test_suite ||--o{ test_case : contains
-test_suite ||..o{ test_run : historical identity
-target_reference ||--o| test_run : referenced by
-target_reference ||--|| http_endpoint_target : HTTP target detail
-evaluator_reference ||--o{ test_run : classifier reference
-test_run ||--|{ snapshot : fixes
-test_case ||..o{ snapshot : historical identity
-snapshot ||--o| execution : single target
-snapshot ||--o| execution_claim : technical lease
-test_run ||--o| idempotency : request replay
-test_run ||--o| resolution_claim : technical lease
-snapshot ||--o| assertion : expected vs evaluated behavior
-snapshot ||--o| change_result : persisted evaluation shape
-test_run ||--o| quality_gate : final evaluation
-outbox ..> test_run : payload reference only
+test_suite ||--o{ test_case : 포함
+test_suite ||..o{ test_run : 이력 식별자
+target_reference ||--o| test_run : 참조
+target_reference ||--|| http_endpoint_target : HTTP Target 상세
+evaluator_reference ||--o{ test_run : 분류기 참조
+test_run ||--|{ snapshot : 고정
+test_case ||..o{ snapshot : 이력 식별자
+snapshot ||--o| execution : 단일 Target
+snapshot ||--o| execution_claim : 기술적 lease
+test_run ||--o| idempotency : 요청 재처리
+test_run ||--o| resolution_claim : 기술적 lease
+snapshot ||--o| assertion : 기대 동작 vs 평가 결과
+snapshot ||--o| change_result : 평가 결과 저장
+test_run ||--o| quality_gate : 최종 평가
+outbox ..> test_run : payload 참조만
 
 note right of target_reference
-  Current target contract is HTTP_ENDPOINT only.
-  test_run.target_reference_id is NOT NULL and UNIQUE.
+  현재 Target 계약은 HTTP_ENDPOINT 하나뿐이다.
+  test_run.target_reference_id는 NOT NULL이며 UNIQUE이다.
 end note
 
 note right of evaluator_reference
-  Stores the provider/model identity of the global
-  Response Behavior Classifier used by a TestRun.
-  test_run.evaluator_reference_id is required.
+  TestRun에서 사용하는 전역 Response Behavior Classifier의
+  provider/model 식별자를 저장한다.
+  test_run.evaluator_reference_id는 필수이다.
 end note
 
 note right of http_endpoint_target
-  endpoint_url and OpenAI-compatible model are required.
-  requested_revision is optional metadata.
+  endpoint_url과 OpenAI-compatible model은 필수이다.
+  requested_revision은 선택 메타데이터이다.
 end note
 
 note bottom of execution
-  A successful execution stores both the AI Application response
-  and the normalized classifier verdict ALLOW/BLOCK.
+  성공한 실행은 AI Application 응답과 정규화된
+  classifier verdict ALLOW/BLOCK을 함께 저장한다.
 end note
 
 note bottom of quality_gate
-  No row = not evaluated yet.
-  NOT_EVALUATED = every metric is NULL.
+  행이 없으면 아직 평가하지 않은 상태이다.
+  NOT_EVALUATED이면 모든 metric이 NULL이다.
 end note
 
 legend left
-  This diagram is the current physical schema created by Flyway V1.
-  TestCase → TestSuite uses ON DELETE RESTRICT.
-  Snapshot source and TestRun suite IDs are historical scalars without FKs.
-  Claim relations are technical leases, not Domain IDs or Aggregate Repositories.
+  이 다이어그램은 Flyway V1이 생성한 현재 물리 스키마이다.
+  TestCase → TestSuite는 ON DELETE RESTRICT를 사용한다.
+  Snapshot source ID와 TestRun suite ID는 FK가 없는 이력용 scalar이다.
+  Claim 관계는 기술적 lease이며 Domain ID나 Aggregate Repository가 아니다.
 endlegend
 
 @enduml
