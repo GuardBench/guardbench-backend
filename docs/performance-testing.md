@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Related Issue: #140, #187, #193, #200
+> Related Issue: #140, #187, #193, #200, #212
 
 ## 목적과 원칙
 
@@ -125,7 +125,7 @@ Profile type은 다음 의미를 갖는다.
 ## 책임 경계
 
 ```text
-Python Runner: profile/dataset 검증 · preflight · reset/seed · k6 orchestration
+Python Runner: profile/dataset 검증 · preflight · seed · k6 orchestration
                                       · async drain · AWS metric · report/판정
 k6: POST latency/error · TestRun 상태 polling · completion duration/failure metric
 AWS collector: ECS/SQS/RDS/SageMaker CloudWatch 시계열
@@ -146,6 +146,8 @@ python3 -m venv .venv
 . .venv/bin/activate
 pip install -r performance/requirements.txt
 
+export APP_REVISION=<runner-source-commit-sha>
+export INFRA_REVISION=<infrastructure-commit-sha>
 export PERF_BASE_URL=https://<guardbench-api>
 export PERF_TARGET_URL=https://<openai-compatible-target>/v1/chat/completions
 export PERF_TARGET_MODEL=<model>
@@ -169,8 +171,8 @@ export PERF_DLQ_FINALIZE_NAME=<finalize-dlq-name>
 # 입력과 실행 계획만 검증한다. API, AWS, DB를 호출하지 않는다.
 python3 -m performance.runner.cli --dry-run
 
-# 실제 비교 실행: preflight → reset/migration → Dataset seed → k6 → drain → metrics → report
-python3 -m performance.runner.cli --reset
+# 실제 비교 실행: preflight → Dataset seed → k6 → drain → metrics → report
+python3 -m performance.runner.cli
 ```
 
 Performance API가 internal ALB 뒤에 있으면 Worker 설정의
@@ -196,8 +198,7 @@ revision과 snapshot의 revision은 `APP_REVISION`, `INFRA_REVISION` 환경변�
 ## Spot Runner image와 결과 보존
 
 Performance Runner는 private Spot host의 container runtime에서 직접 실행하는 Docker image다.
-Image에는 Python dependency, k6, PostgreSQL client, Java 21, Gradle dependency cache, backend
-migration과 canonical HTTP fixture를 함께 포함하므로 host의 실행 도구나 실행 중 Git clone/package
+Image에는 Python dependency, k6와 canonical HTTP fixture를 함께 포함하므로 host의 실행 도구나 실행 중 Git clone/package
 download에 의존하지 않는다.
 
 Image repository와 URI는 배포 환경이 결정해 외부 입력으로 전달한다. Backend Git SHA는 image의
@@ -216,9 +217,9 @@ Build script는 호출자가 전달한 repository URI에 현재 Backend Git SHA�
 따라서 image tag, `APP_REVISION`, OCI revision label은 항상 같은 revision을 가리키며, 호출자가
 서로 다른 tag/revision 조합을 지정할 수 없다.
 
-Container 시작점은 `python3.11 -m performance.runner.cli`이며 기존 `--dry-run`, `--reset`,
+Container 시작점은 `python3.11 -m performance.runner.cli`이며 기존 `--dry-run`,
 `--profile`, `--dataset` 옵션을 그대로 사용한다. `/workspace/bin/verify-runtime`은 container
-내부의 Python, k6, psql, Java, Gradle/Flyway 입력, profile, dataset, canonical fixture와
+내부의 Python, k6, profile, dataset, canonical fixture와
 `performance.runner` import를 확인하고 하나라도 없으면 non-zero로 종료한다.
 
 실제 Runner는 `PERFORMANCE_RESULTS_BUCKET`이 설정된 경우, 결과 파일을 모두 만든 뒤 다음
@@ -236,7 +237,7 @@ SQS와 Worker가 동작하는 로컬 또는 dev 배포가 필요하다. LocalSta
 `PERF_SQS_ENDPOINT_URL`을 추가한다. AWS metric이 없는 로컬 실행은 성능 판정용 Baseline으로
 취급하지 않는다.
 
-## 테스트 전 상태와 reset/seed
+## 테스트 전 상태와 seed
 
 Runner는 실행 전 다음을 확인하고 하나라도 실패하면 k6를 시작하지 않는다.
 
@@ -245,7 +246,7 @@ Runner는 실행 전 다음을 확인하고 하나라도 실패하면 k6를 시�
 3. Source Queue의 visible/in-flight/delayed 메시지가 없는지 확인
 4. DLQ에 메시지가 없는지 확인
 
-Preflight가 통과하면 Runner는 k6/reset 전에 ECS service와 task definition, RDS instance,
+Preflight가 통과하면 Runner는 seed/k6 전에 ECS service와 task definition, RDS instance,
 SageMaker endpoint의 실제 configured capacity를 조회한다. 이 조회에 필요한 resource
 identifier가 없거나 AWS 응답이 불완전하거나 조회가 실패하면 `unknown`으로 성공 처리하지
 않고 Runner를 중단한다. 따라서 저장된 snapshot은 다음 값을 포함한다.
@@ -258,37 +259,15 @@ identifier가 없거나 AWS 응답이 불완전하거나 조회가 실패하면 
 혼동하지 않는다. RDS instance identifier/class는 RDS를 조절하기 위한 입력이 아니라
 Performance 전용 격리 DB의 실행 조건을 재현하기 위한 metadata로 계속 기록한다.
 
-모든 비교 가능한 실제 실행은 `--reset`을 필수로 요구한다. `--reset`은 Dataset seed 전에 DB를
-초기화하고 애플리케이션이 소유한 Flyway를 non-web Boot run으로 실행한다. 별도 performance
-DB에서만 허용되며 아래 세 가지 guard와 연결 URL의 database name이 모두 정확히 일치하지
-않으면 reset 명령 자체가 실행되지 않는다.
+Runner는 DB reset이나 migration을 실행하지 않으며 DB 접속 정보도 요구하지 않는다.
+DB lifecycle과 migration은 배포 환경과 Backend application이 소유한다. `--reset` 옵션과
+기존 reset/migration 환경변수는 제거되었으므로 bootstrap 호출에서도 제거해야 한다
+([IaC #50](https://github.com/GuardBench/guardbench-iac/issues/50)).
 
-```bash
-export PERFORMANCE_ENVIRONMENT=performance
-export PERFORMANCE_DB_NAME=guardbench_perf
-export PERFORMANCE_RESET_CONFIRM=RESET_GUARDBENCH_PERF
-export PERFORMANCE_DATABASE_URL=postgresql://<performance-rds>:5432/guardbench_perf
-# Optional: JDBC 옵션이 필요할 때만 지정한다. host/port/database는 위 URL과 동일해야 한다.
-export PERFORMANCE_DATABASE_JDBC_URL=jdbc:postgresql://<performance-rds>:5432/guardbench_perf?sslmode=require
-export PERFORMANCE_DB_USERNAME=guardbench
-export PERFORMANCE_DB_PASSWORD=<secret>
-python3 -m performance.runner.cli --reset
-```
-
-Runner는 `PERFORMANCE_DATABASE_URL`의 scheme/host/database name을 먼저 확인하고, destructive
-command와 같은 PostgreSQL connection에서 `SELECT current_database()` 결과가
-`guardbench_perf`인지 확인한 뒤에만 schema를 삭제한다. `PERFORMANCE_DB_NAME`은 이 실제 URL
-database name과 함께 검증된다. RDS instance identifier를 별도 문자열로 신뢰하지 않는다.
-AWS RDS를 사용할 때는 운영자가 URL host와 RDS endpoint를 별도로 대조해야 한다.
-
-Flyway는 기본적으로 `PERFORMANCE_DATABASE_URL`에서 JDBC URL을 파생해 같은 DB에만 실행한다.
-`PERFORMANCE_DATABASE_JDBC_URL`을 명시할 때도 `jdbc:postgresql` 형식이며 URL의 host, port,
-database가 reset URL과 정확히 같아야 한다. 하나라도 다르면 migration 시작 전에 중단한다.
-
-`PERFORMANCE_MIGRATION_COMMAND_JSON`을 설정하면 기본 non-web Boot migration 명령을 명시적인
-문자열 배열로 대체할 수 있다. reset은 운영/개발 공용 DB, database name이 다른 DB, 확인 token이
-없는 환경에서 금지한다. reset 후에는 동일 migration과 `baseline-v1` seed 결과의 실제
-`testSuiteId`를 k6에 전달하므로 Profile이나 TestCase가 PK를 고정하지 않는다.
+매 실행마다 `baseline-v1`으로 신규 TestSuite를 만들고 seed 결과의 실제 `testSuiteId`를 k6에
+전달한다. 결과 진단은 현재 Suite와 실행 시간 범위로 제한한다. RDS는 capacity와 metric
+관측 대상으로 유지한다. 실제 실행에는 `APP_REVISION`, `INFRA_REVISION`, `PERF_BASE_URL`과
+SQS CloudWatch QueueName 설정이 필요하다.
 
 ## Metric과 판정
 
@@ -345,16 +324,16 @@ Runner 오류로 중단한다.
 
 ## Baseline 비교와 비용
 
-Baseline 비교 시 매 실행마다 `--reset`으로 다음 상태를 재현하고 아래 항목을 고정한다.
+Baseline 비교 시 실행 전 preflight를 통과하고 아래 항목을 고정한다.
 
 - 동일 Dataset version과 TestCase 수
 - 동일 Profile과 acceptance criteria
 - 동일한 Demo AI image/revision, model/config, ECS CPU/memory, desired count와 endpoint
 - 가능한 한 동일 Application/Infrastructure revision 기록 방식
-- 테스트 시작 전 queue/DLQ와 DB 상태
+- 테스트 시작 전 active TestRun 없음과 queue/DLQ empty 상태
 
-reset 없는 seed 반복 실행은 허용하지 않는다. 따라서 이전 Suite/TestRun/Execution/Outbox가
-다음 실행에 누적되어 DB 크기와 index 상태를 바꾸는 경로가 없다.
+이전 Suite/TestRun/Execution/Outbox는 DB에 남는다. 실행별 Suite/time window로 결과를
+분리하며, 누적 DB 크기와 index 상태는 완전히 동일한 조건으로 간주하지 않는다.
 
 `concurrent_test_runs`는 단순 POST 동시 요청 수가 아니라 각 VU가 하나의 TestRun을 접수한 뒤
 `FINISHED`까지 polling하는 동안 살아 있는 비동기 TestRun 수에 가깝다. 현재 `smoke`는
