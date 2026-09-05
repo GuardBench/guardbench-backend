@@ -42,10 +42,25 @@ Infrastructure Capacity 입력이다. IaC의 Performance Backend는 dev와 분�
 되지 않아야 한다. 실제 변수와 Task Definition 연결은 [guardbench-iac Issue #41](https://github.com/GuardBench/guardbench-iac/issues/41)의
 계약을 따른다.
 
-Performance capacity 변경은 다음 실험 축을 바꾸는 작업이다.
+MVP에서 Capacity 실험으로 변경하는 대상은 Performance Backend ECS와 SageMaker classifier다.
+RDS와 SQS는 Performance 전용 실행을 지지하는 고정·관찰 대상이며, capacity tuning 축으로
+취급하지 않는다.
+
+| 구분 | 대상 | MVP 성능 테스트에서의 역할 |
+| --- | --- | --- |
+| 주요 Capacity 실험 대상 | Performance Backend ECS | task CPU/memory 등 configured capacity를 변경·비교 |
+| 주요 Capacity 실험 대상 | SageMaker classifier | classifier의 configured capacity를 변경·비교 |
+| 고정·관찰 대상 | Performance 전용 RDS | 실행 기간 동안 고정하고 병목 여부를 관찰 |
+| 고정·관찰 대상 | SQS | queue 구성을 고정하고 backlog/drain을 관찰 |
+
+RDS instance class 단계 변경, RDS sizing 비교, storage/IOPS/connection pool 튜닝은 MVP 범위에
+포함하지 않는다. RDS는 configured capacity snapshot과 observed metrics를 통해 실행 조건의
+재현성과 병목 분석을 지원한다.
+
+주요 Capacity 실험은 다음 축을 바꾸는 작업이다.
 
 ```text
-동일 Dataset + 동일 Profile/Workload + Performance Infrastructure Capacity 변경
+동일 Dataset + 동일 Profile/Workload + ECS/SageMaker Capacity 변경
 ```
 
 `PERF_ECS_CLUSTER`와 `PERF_ECS_SERVICE`는 실행 대상 Performance ECS 환경을 가리켜야 한다.
@@ -224,7 +239,8 @@ identifier가 없거나 AWS 응답이 불완전하거나 조회가 실패하면 
 - SageMaker: endpoint/production variant, instance type, desired/current instance count
 
 `running task count`는 snapshot 시점의 ECS service 응답값이며, 실행 구간의 관측 시계열과
-혼동하지 않는다.
+혼동하지 않는다. RDS instance identifier/class는 RDS를 조절하기 위한 입력이 아니라
+Performance 전용 격리 DB의 실행 조건을 재현하기 위한 metadata로 계속 기록한다.
 
 모든 비교 가능한 실제 실행은 `--reset`을 필수로 요구한다. `--reset`은 Dataset seed 전에 DB를
 초기화하고 애플리케이션이 소유한 Flyway를 non-web Boot run으로 실행한다. 별도 performance
@@ -274,15 +290,22 @@ Runner assertion은 k6 종료 후에도 평가한다.
 
 CloudWatch는 실행 시작~완료 구간으로 다음 시계열을 수집한다.
 
+주요 Capacity 실험 대상의 관측 지표:
+
 - ECS: `CPUUtilization`, `MemoryUtilization`, `RunningTaskCount`
-- SQS: source/DLQ visible messages, source oldest message age
-- RDS: `CPUUtilization`, `DatabaseConnections`
 - SageMaker classifier: `Invocations`, `ModelLatency`, `OverheadLatency`,
   `Invocation4XXErrors`, `Invocation5XXErrors`
 
+고정·관찰 대상의 관측 지표:
+
+- SQS: source/DLQ visible messages, source oldest message age
+- RDS: `CPUUtilization`, `DatabaseConnections`
+
 Configured capacity snapshot과 CloudWatch observed metrics는 서로 다른 artifact 영역이다.
-Capacity 변경 전후 비교에서는 `result.json.infrastructure_capacity`를 실행 조건으로 보고,
-`aws-metrics.json`을 해당 조건에서 관측된 utilization/latency/backlog 결과로 해석한다.
+MVP에서 `result.json.infrastructure_capacity`의 ECS/SageMaker 값은 주요 Capacity 비교의
+실행 조건으로 보고, RDS instance identifier/class는 고정된 Performance 전용 DB를 재현하기
+위한 metadata로 본다. `aws-metrics.json`의 ECS/SageMaker utilization·latency와 RDS/SQS
+CPU·connection·backlog 지표는 해당 조건에서의 관찰 결과로 해석한다.
 
 SageMaker metric은 `EndpointName + VariantName` dimension으로 조회한다. 성능 Baseline에서는
 classifier가 실제 E2E 경로의 일부이므로 ECS·SQS·RDS와 함께 SageMaker datapoint도 있어야
@@ -323,7 +346,8 @@ reset 없는 seed 반복 실행은 허용하지 않는다. 따라서 이전 Suit
 필드를 0(제한 없음) 또는 적절한 반복 수로 명시해 생성률과 완료 polling traffic을 함께
 검토한다.
 
-인프라 구조만 바꾸고 Dataset/Profile은 유지해야 CPU, memory, queue age, completion time의
-변화를 원인 후보로 비교할 수 있다. `target`, `peak`, `stress` 숫자는 Capacity Target 논의가
-끝난 뒤 추가한다. Profile의 동시 TestRun 수 × Dataset TestCase 수 × retry 가능성을 실행 전에
-확인해 SageMaker Runtime 요청량과 AWS 비용을 검토한다.
+ECS/SageMaker Capacity만 바꾸고 Dataset/Profile과 RDS/SQS 구성을 유지해야 CPU, memory,
+queue age, completion time의 변화를 원인 후보로 비교할 수 있다. RDS/SQS 지표는 고정된
+의존 인프라에서 발생한 병목 여부를 확인하는 데 사용한다. `target`, `peak`, `stress` 숫자는
+Capacity Target 논의가 끝난 뒤 추가한다. Profile의 동시 TestRun 수 × Dataset TestCase 수 ×
+retry 가능성을 실행 전에 확인해 SageMaker Runtime 요청량과 AWS 비용을 검토한다.
