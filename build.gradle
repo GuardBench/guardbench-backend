@@ -43,6 +43,33 @@ tasks.named('test') {
 	useJUnitPlatform()
 }
 
+def integrationTestPatterns = [
+	'**/*IntegrationTest.class',
+	'**/*E2eTest.class',
+	'**/*EndToEndTest.class',
+	'**/GuardbenchBackendApplicationTests.class',
+]
+
+tasks.register('testFast', Test) {
+	group = 'verification'
+	description = 'Runs unit, controller, and contract tests without external containers.'
+	dependsOn tasks.named('testClasses')
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+	useJUnitPlatform()
+	exclude integrationTestPatterns
+}
+
+tasks.register('integrationTest', Test) {
+	group = 'verification'
+	description = 'Runs PostgreSQL, SQS, and end-to-end integration tests.'
+	dependsOn tasks.named('testClasses')
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+	useJUnitPlatform()
+	include integrationTestPatterns
+}
+
 tasks.register('resolvePerformanceRuntime') {
 	description = 'Resolves the runtime classpath required by offline performance Flyway bootRun.'
 	doLast {

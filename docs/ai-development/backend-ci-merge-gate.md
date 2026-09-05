@@ -12,9 +12,9 @@
 
 | Event | 대상 | 실행 명령 |
 | --- | --- | --- |
-| `pull_request` | base branch가 `dev`인 PR | Java source/build 입력 변경 시 `./gradlew clean check bootJar --no-daemon`; 그 외에는 `verify` skip |
-| `push` | `dev` | Java source/build 입력 변경 시 `./gradlew clean check bootJar --no-daemon`; 그 외에는 `verify` skip |
-| `workflow_dispatch` | `source` | `./gradlew clean check bootJar --no-daemon` |
+| `pull_request` | base branch가 `dev`인 PR | Java source/build 입력 변경 시 `testFast`, `integrationTest`, `bootJar`를 독립 job으로 병렬 실행하고 `verify` aggregate가 모두 요구; 그 외에는 `verify` skip |
+| `push` | `dev` | Java source/build 입력 변경 시 `testFast`, `integrationTest`, `bootJar`를 독립 job으로 병렬 실행하고 `verify` aggregate가 모두 요구; 그 외에는 `verify` skip |
+| `workflow_dispatch` | `source` | `testFast`, `integrationTest`, `bootJar`를 독립 job으로 실행하고 `verify` aggregate가 모두 요구 |
 | `workflow_dispatch` | `infrastructure` | source 검증 없이 infrastructure deploy만 수행 |
 
 `workflow_dispatch`의 `deployment_target`은 `dev` 또는 `performance`다. `push`는 항상 `dev`
@@ -68,7 +68,9 @@ Performance 배포는 최신 ACTIVE infrastructure task definition을 base로 �
 service가 같은 task-definition family를 사용하지 않으면 등록 전에 실패한다. source 배포에서는
 ECR repository가 `IMMUTABLE`인지와 image tag가 전체 Git SHA인지 확인한다.
 
-workflow는 `ubuntu-latest`, Temurin JDK 21, Gradle dependency cache를 사용한다. 변경 범위 감지 대상은 `src/`와 Gradle build/configuration 입력이다. `check`는 테스트를 포함하며, `bootJar`는 실행 가능한 Spring Boot JAR 패키징을 검증한다. Testcontainers 테스트는 GitHub-hosted Ubuntu runner의 Docker 환경을 사용한다. Java source/build 입력이 없는 변경에서는 Gradle `verify` job을 실행하지 않는다.
+workflow는 `ubuntu-latest`, Temurin JDK 21, Gradle dependency cache를 사용한다. 변경 범위 감지 대상은 `src/`와 Gradle build/configuration 입력이다. `testFast`는 외부 컨테이너 없는 단위·컨트롤러·계약 테스트를, `integrationTest`는 PostgreSQL·SQS·E2E 테스트를 실행한다. `bootJar`는 실행 가능한 Spring Boot JAR 패키징을 검증한다. Testcontainers 테스트는 GitHub-hosted Ubuntu runner의 Docker 환경을 사용한다. 각 job은 Gradle cache hit와 실행 시간을 Summary에 기록하고, integration job은 Testcontainers image 준비를 포함한 실행 시간을 기록한다. Java source/build 입력이 없는 변경에서는 Gradle 검증 job을 실행하지 않는다.
+
+Gradle의 기존 `test`와 `check` task는 전체 테스트 suite를 실행하는 로컬·호환 경로로 유지한다. CI의 `verify`는 `testFast`, `integrationTest`, `bootJar` 결과를 aggregate하며 세 결과가 모두 성공해야 통과한다. OpenAPI 명세 변경은 별도 `OpenAPI contract` workflow에서 독립적으로 검증된다.
 
 이 workflow가 PR에 표시하는 required check 후보는 다음이다.
 

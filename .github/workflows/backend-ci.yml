@@ -60,8 +60,8 @@ jobs:
             echo 'verification_required=false' >> "$GITHUB_OUTPUT"
           fi
 
-  verify:
-    name: verify
+  test_fast:
+    name: testFast
     needs: changes
     if: >-
       always() &&
@@ -76,12 +76,128 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
+        id: java
         with:
           distribution: temurin
           java-version: '21'
           cache: gradle
-      - name: Build, test, and package
-        run: ./gradlew clean check bootJar --no-daemon
+      - name: Run testFast
+        shell: bash
+        run: |
+          set -euo pipefail
+          started_at=$(date +%s)
+          ./gradlew clean testFast --no-daemon
+          elapsed=$(( $(date +%s) - started_at ))
+          {
+            echo "### testFast"
+            echo "- Gradle dependency cache hit: ${{ steps.java.outputs.cache-hit }}"
+            echo "- Elapsed seconds: ${elapsed}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  integration_test:
+    name: integrationTest
+    needs: changes
+    if: >-
+      always() &&
+      (
+        (github.event_name == 'workflow_dispatch' && inputs.deployment_mode == 'source') ||
+        (github.event_name != 'workflow_dispatch' &&
+        needs.changes.result == 'success' &&
+        needs.changes.outputs.verification_required == 'true')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        id: java
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Record Docker/Testcontainers environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker info --format 'Docker server: {{.ServerVersion}}' | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Docker images available before tests: $(docker images -q | wc -l)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Run integrationTest
+        shell: bash
+        run: |
+          set -euo pipefail
+          started_at=$(date +%s)
+          ./gradlew clean integrationTest --no-daemon
+          elapsed=$(( $(date +%s) - started_at ))
+          {
+            echo "### integrationTest"
+            echo "- Gradle dependency cache hit: ${{ steps.java.outputs.cache-hit }}"
+            echo "- Elapsed seconds, including Testcontainers image preparation: ${elapsed}"
+            echo "- Docker images available after tests: $(docker images -q | wc -l)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  package:
+    name: bootJar
+    needs: changes
+    if: >-
+      always() &&
+      (
+        (github.event_name == 'workflow_dispatch' && inputs.deployment_mode == 'source') ||
+        (github.event_name != 'workflow_dispatch' &&
+        needs.changes.result == 'success' &&
+        needs.changes.outputs.verification_required == 'true')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        id: java
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Build executable JAR
+        shell: bash
+        run: |
+          set -euo pipefail
+          started_at=$(date +%s)
+          ./gradlew clean bootJar --no-daemon
+          elapsed=$(( $(date +%s) - started_at ))
+          {
+            echo "### bootJar"
+            echo "- Gradle dependency cache hit: ${{ steps.java.outputs.cache-hit }}"
+            echo "- Elapsed seconds: ${elapsed}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  verify:
+    name: verify
+    needs: [changes, test_fast, integration_test, package]
+    if: >-
+      always() &&
+      (
+        (github.event_name == 'workflow_dispatch' && inputs.deployment_mode == 'source') ||
+        (github.event_name != 'workflow_dispatch' &&
+        needs.changes.result == 'success' &&
+        needs.changes.outputs.verification_required == 'true')
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all verification jobs to pass
+        env:
+          TEST_FAST_RESULT: ${{ needs.test_fast.result }}
+          INTEGRATION_TEST_RESULT: ${{ needs.integration_test.result }}
+          PACKAGE_RESULT: ${{ needs.package.result }}
+        run: |
+          set -euo pipefail
+          test "$TEST_FAST_RESULT" = success
+          test "$INTEGRATION_TEST_RESULT" = success
+          test "$PACKAGE_RESULT" = success
+          {
+            echo "### verification aggregate"
+            echo "- testFast: ${TEST_FAST_RESULT}"
+            echo "- integrationTest: ${INTEGRATION_TEST_RESULT}"
+            echo "- bootJar: ${PACKAGE_RESULT}"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
     name: deploy ${{ github.event_name == 'workflow_dispatch' && inputs.deployment_target || 'dev' }}
