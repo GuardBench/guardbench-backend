@@ -45,7 +45,6 @@ class QueueInspector:
                         "ApproximateNumberOfMessages",
                         "ApproximateNumberOfMessagesNotVisible",
                         "ApproximateNumberOfMessagesDelayed",
-                        "ApproximateAgeOfOldestMessage",
                     ],
                 )
             except Exception as exc:
@@ -127,6 +126,21 @@ class InfrastructureCapacityCollector:
             if selected_variant is None:
                 raise ConfigurationError(f"SageMaker endpoint에 production variant가 없습니다: {variant}")
 
+            endpoint_config_name = _required_response_field(
+                endpoint_response, "EndpointConfigName", "SageMaker endpoint"
+            )
+            endpoint_config_response = self.sagemaker_client.describe_endpoint_config(
+                EndpointConfigName=endpoint_config_name,
+            )
+            config_variants = endpoint_config_response.get("ProductionVariants", [])
+            selected_config_variant = next(
+                (item for item in config_variants
+                 if isinstance(item, dict) and item.get("VariantName") == variant),
+                None,
+            )
+            if selected_config_variant is None:
+                raise ConfigurationError(f"SageMaker endpoint config에 production variant가 없습니다: {variant}")
+
             desired_count = selected_variant.get("DesiredInstanceCount")
             current_count = selected_variant.get("CurrentInstanceCount")
             initial_count = selected_variant.get("InitialInstanceCount")
@@ -155,7 +169,7 @@ class InfrastructureCapacityCollector:
                         selected_variant, "VariantName", "SageMaker production variant"
                     ),
                     "instance_type": _required_response_field(
-                        selected_variant, "InstanceType", "SageMaker production variant"
+                        selected_config_variant, "InstanceType", "SageMaker endpoint config production variant"
                     ),
                     "desired_instance_count": desired_count,
                     "current_instance_count": current_count,

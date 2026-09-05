@@ -71,11 +71,17 @@ class PerformanceRunnerTest(unittest.TestCase):
         class FakeSageMaker:
             def describe_endpoint(self, **kwargs):
                 self.request = kwargs
+                return {"EndpointConfigName": "classifier-config", "ProductionVariants": [{
+                    "VariantName": "AllTraffic",
+                    "DesiredInstanceCount": 1,
+                    "CurrentInstanceCount": 1,
+                }]}
+
+            def describe_endpoint_config(self, **kwargs):
+                self.config_request = kwargs
                 return {"ProductionVariants": [{
                     "VariantName": "AllTraffic",
                     "InstanceType": "ml.g4dn.xlarge",
-                    "DesiredInstanceCount": 1,
-                    "CurrentInstanceCount": 1,
                 }]}
 
         with patch.dict(os.environ, {
