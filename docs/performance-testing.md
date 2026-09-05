@@ -14,9 +14,24 @@ TestRun은 `POST /api/v1/test-runs`의 `202 Accepted`에서 끝나지 않고 SQS
 현재 E2E 실행 경로는 다음과 같다.
 
 ```text
-TestRun → Application Target → SageMaker Response Behavior Classifier
+TestRun → controlled Application Target (Demo AI)
+        → SageMaker Response Behavior Classifier
         → ALLOW/BLOCK 정규화 → Assertion → Metrics / Quality Gate
 ```
+
+여기서 Demo AI는 GuardBench 자체의 성능 테스트 대상(SUT)이 아니다. 실제 고객의
+OpenAI-compatible Application Target을 대신하는 고정된 synthetic target이며, 외부 고객
+서비스의 latency/throughput 변동이 GuardBench 성능 측정에 섞이지 않도록 통제하는 fixture다.
+따라서 Demo AI 자체의 최대 throughput, CPU saturation, scaling 특성을 측정하지 않으며,
+`demo_ai_cpu`, `demo_ai_memory`, `demo_ai_desired_count`를 MVP capacity sweep 축으로 사용하지
+않는다. Demo AI의 application code에 artificial delay/throttling을 추가하거나 latency를
+임의로 하드코딩하지 않는다.
+
+비교 가능한 실험에서는 Demo AI image/revision, model/config, ECS CPU/memory, desired count,
+Application Target endpoint와 가능한 한 동일한 latency 특성을 고정한다. 이 조건이 변경된
+실행은 GuardBench capacity 변경 전후의 동일 조건 실험으로 간주하지 않는다. Profile의
+Application Target은 workload가 호출할 target을 지정할 뿐이며, target의 capacity를
+GuardBench 성능 실험 축으로 소유하지 않는다.
 
 성능 Profile은 Application Target과 workload/acceptance criteria만 입력으로 소유한다.
 `evaluationProfile`, `checks`, `strictness` 같은 evaluator 설정은 TestRun 생성 계약이 아니며,
@@ -52,6 +67,7 @@ RDS와 SQS는 Performance 전용 실행을 지지하는 고정·관찰 대상이
 | 주요 Capacity 실험 대상 | SageMaker classifier | classifier의 configured capacity를 변경·비교 |
 | 고정·관찰 대상 | Performance 전용 RDS | 실행 기간 동안 고정하고 병목 여부를 관찰 |
 | 고정·관찰 대상 | SQS | queue 구성을 고정하고 backlog/drain을 관찰 |
+| 외부 통제 변수 | Demo AI | 고정된 synthetic Application Target으로 사용; 자체 capacity는 측정·tuning하지 않음 |
 
 RDS instance class 단계 변경, RDS sizing 비교, storage/IOPS/connection pool 튜닝은 MVP 범위에
 포함하지 않는다. RDS는 configured capacity snapshot과 observed metrics를 통해 실행 조건의
@@ -333,6 +349,7 @@ Baseline 비교 시 매 실행마다 `--reset`으로 다음 상태를 재현하�
 
 - 동일 Dataset version과 TestCase 수
 - 동일 Profile과 acceptance criteria
+- 동일한 Demo AI image/revision, model/config, ECS CPU/memory, desired count와 endpoint
 - 가능한 한 동일 Application/Infrastructure revision 기록 방식
 - 테스트 시작 전 queue/DLQ와 DB 상태
 
@@ -346,7 +363,7 @@ reset 없는 seed 반복 실행은 허용하지 않는다. 따라서 이전 Suit
 필드를 0(제한 없음) 또는 적절한 반복 수로 명시해 생성률과 완료 polling traffic을 함께
 검토한다.
 
-ECS/SageMaker Capacity만 바꾸고 Dataset/Profile과 RDS/SQS 구성을 유지해야 CPU, memory,
+ECS/SageMaker Capacity만 바꾸고 Dataset/Profile, Demo AI 조건, RDS/SQS 구성을 유지해야 CPU, memory,
 queue age, completion time의 변화를 원인 후보로 비교할 수 있다. RDS/SQS 지표는 고정된
 의존 인프라에서 발생한 병목 여부를 확인하는 데 사용한다. `target`, `peak`, `stress` 숫자는
 Capacity Target 논의가 끝난 뒤 추가한다. Profile의 동시 TestRun 수 × Dataset TestCase 수 ×
