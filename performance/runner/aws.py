@@ -199,6 +199,17 @@ class CloudWatchMetricCollector:
             endpoint_url=os.environ.get("PERF_CLOUDWATCH_ENDPOINT_URL") or None,
         )
 
+    def validate_configuration(self) -> None:
+        missing = []
+        for definition in self.config.get("metrics", []):
+            dimensions = definition.get("dimensions", {})
+            if any(not str(value).strip() or "${" in str(value) for value in dimensions.values()):
+                missing.append(str(definition.get("id", "unknown")))
+        if missing:
+            raise ConfigurationError(
+                "CloudWatch metric 필수 resource dimension이 설정되지 않았습니다: " + ", ".join(missing)
+            )
+
     def collect(self, started_at: datetime, finished_at: datetime) -> dict[str, Any]:
         definitions = self.config.get("metrics", [])
         queries = []
