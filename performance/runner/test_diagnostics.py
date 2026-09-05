@@ -86,6 +86,43 @@ class PerformanceDiagnosticsTest(unittest.TestCase):
         self.assertEqual(212.967, by_name["completion.duration.p95"]["actual"])
         self.assertTrue(by_name["completion.duration.p95"]["passed"])
 
+    def test_acceptance_reads_rate_value_from_real_smoke_shape(self):
+        summary = {
+            "metrics": {
+                "test_run_create_latency": {
+                    "p(50)": 365.577834,
+                    "p(95)": 365.577834,
+                    "p(99)": 365.577834,
+                },
+                "test_run_create_errors": {
+                    "passes": 0,
+                    "fails": 1,
+                    "thresholds": {"rate<=0": False},
+                    "value": 0,
+                },
+                "test_run_completion_failures": {
+                    "passes": 0,
+                    "fails": 1,
+                    "thresholds": {"rate<=0": False},
+                    "value": 0,
+                },
+                "test_run_completion_duration": {"p(95)": 201.131},
+            }
+        }
+
+        result = evaluate(
+            profile(), summary,
+            {"passed": True, "duration_seconds": 0.07},
+            [], aws_metrics(),
+        )
+        by_name = {check["name"]: check for check in result["checks"]}
+
+        self.assertEqual(0.0, by_name["api.create_error_rate"]["actual"])
+        self.assertTrue(by_name["api.create_error_rate"]["passed"])
+        self.assertEqual(0.0, by_name["completion.failure_rate"]["actual"])
+        self.assertTrue(by_name["completion.failure_rate"]["passed"])
+        self.assertEqual("PASS", result["status"])
+
     def test_acceptance_keeps_nested_values_fixture_compatibility(self):
         summary = {
             "metrics": {
