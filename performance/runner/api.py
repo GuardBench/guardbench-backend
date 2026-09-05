@@ -63,7 +63,32 @@ class ApiClient:
                 return items
             page_items = data.get("items", [])
             if isinstance(page_items, list):
-                items.extend(page_items)
+                items.extend(item for item in page_items if isinstance(item, dict))
+            page_meta = data.get("page", {})
+            if not isinstance(page_meta, dict) or page_meta.get("hasNext") is not True:
+                return items
+            page += 1
+
+    def get_run(self, test_run_id: int) -> dict[str, Any]:
+        status, body = self.request("GET", f"/api/v1/test-runs/{test_run_id}")
+        if status != 200 or not isinstance(body.get("data"), dict):
+            raise ApiError(f"TestRun 상세 조회 응답이 올바르지 않습니다: {test_run_id}")
+        return body["data"]
+
+    def list_run_results(self, test_run_id: int) -> list[dict[str, Any]]:
+        items: list[dict[str, Any]] = []
+        page = 1
+        while True:
+            params = urllib.parse.urlencode({"page": page, "size": 100})
+            status, body = self.request("GET", f"/api/v1/test-runs/{test_run_id}/results?{params}")
+            if status != 200:
+                raise ApiError(f"TestRun 결과 조회가 HTTP {status}를 반환했습니다: {test_run_id}")
+            data = body.get("data", {})
+            if not isinstance(data, dict):
+                return items
+            page_items = data.get("items", [])
+            if isinstance(page_items, list):
+                items.extend(item for item in page_items if isinstance(item, dict))
             page_meta = data.get("page", {})
             if not isinstance(page_meta, dict) or page_meta.get("hasNext") is not True:
                 return items

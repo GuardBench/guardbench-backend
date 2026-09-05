@@ -67,6 +67,7 @@ export const options = {
       gracefulStop: `${Number(__ENV.PERF_COMPLETION_TIMEOUT_SECONDS || 300)}s`,
     },
   },
+  summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(50)', 'p(90)', 'p(95)', 'p(99)'],
   thresholds: {
     test_run_create_latency: [
       `p(50)<${Number(__ENV.PERF_API_P50_MS || 1000)}`,
