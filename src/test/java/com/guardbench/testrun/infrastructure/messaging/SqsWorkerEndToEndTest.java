@@ -47,7 +47,7 @@ import tools.jackson.databind.json.JsonMapper;
 class SqsWorkerEndToEndTest {
 
     private static final LocalStackContainer LOCAL_STACK = new LocalStackContainer(
-            DockerImageName.parse("localstack/localstack:3.0"))
+            DockerImageName.parse("localstack/localstack:4.0"))
             .withServices(LocalStackContainer.Service.SQS);
 
     private static SqsClient sqs;
@@ -186,13 +186,7 @@ class SqsWorkerEndToEndTest {
             assertEquals(1, polled);
             String timing = capture.firstMessageContaining("WorkItem 수신 timing");
             assertTrue(timing.contains("testRunId=42 snapshotId=100"));
-            assertTrue(timing.contains("sentTimestamp="));
-            assertTrue(timing.contains("queueWaitMs="));
-            if (timing.contains("sentTimestamp=null")) {
-                assertTrue(timing.contains("queueWaitMs=null"));
-            } else {
-                assertTrue(timing.matches(".*sentTimestamp=\\d+ queueWaitMs=\\d+"));
-            }
+            assertTrue(timing.matches(".*sentTimestamp=\\d+ queueWaitMs=\\d+"), timing);
         } finally {
             capture.detach();
         }
