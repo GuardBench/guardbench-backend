@@ -207,10 +207,14 @@ public class SqsInboundPollingAdapter {
         }
 
         if (shouldAck) {
-            if (workItemConcurrencyController != null && !workItemConcurrencyController.canAcknowledge()) {
-                log.warn("WorkItem이 종료 timeout 이후 완료되어 ACK하지 않습니다. queue={} eventId={} "
-                                + "testRunId={} snapshotId={}",
-                        queueType.queueName(), decoded.eventId(), decoded.testRunId(), snapshotId);
+            if (workItemConcurrencyController != null) {
+                boolean acknowledged = workItemConcurrencyController.acknowledge(
+                        () -> acknowledgeMessage(message, decoded, snapshotId));
+                if (!acknowledged) {
+                    log.warn("WorkItem이 종료 timeout 이후 완료되어 ACK하지 않습니다. queue={} eventId={} "
+                                    + "testRunId={} snapshotId={}",
+                            queueType.queueName(), decoded.eventId(), decoded.testRunId(), snapshotId);
+                }
                 return;
             }
             log.info("SQS 메시지 처리를 완료했습니다. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
@@ -224,6 +228,15 @@ public class SqsInboundPollingAdapter {
         log.warn("SQS 메시지 처리를 재시도로 보류했습니다. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
                 queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId);
         // nack: 삭제하지 않아 visibility timeout 후 재전달됨
+    }
+
+    private void acknowledgeMessage(Message message, TestRunMessage decoded, Long snapshotId) {
+        log.info("SQS 메시지 처리를 완료했습니다. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
+                queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId);
+        if (deleteMessage(message)) {
+            log.info("SQS 메시지를 삭제했습니다. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
+                    queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId);
+        }
     }
 
     private boolean dispatch(TestRunMessage decoded) {

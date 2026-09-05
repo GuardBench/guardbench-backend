@@ -30,8 +30,9 @@ final class WorkItemConcurrencyController implements AutoCloseable {
     private final AtomicInteger inFlight = new AtomicInteger();
     private final AtomicLong threadSequence = new AtomicLong();
     private final ThreadPoolExecutor executor;
+    private final Object acknowledgementMonitor = new Object();
     private volatile boolean accepting = true;
-    private volatile boolean shutdownTimedOut;
+    private boolean shutdownTimedOut;
 
     WorkItemConcurrencyController(int concurrency, Duration shutdownTimeout) {
         if (concurrency <= 0) {
@@ -111,8 +112,14 @@ final class WorkItemConcurrencyController implements AutoCloseable {
         return slots.availablePermits();
     }
 
-    boolean canAcknowledge() {
-        return !shutdownTimedOut;
+    boolean acknowledge(Runnable deleteAction) {
+        synchronized (acknowledgementMonitor) {
+            if (shutdownTimedOut) {
+                return false;
+            }
+            deleteAction.run();
+            return true;
+        }
     }
 
     @Override
@@ -124,18 +131,24 @@ final class WorkItemConcurrencyController implements AutoCloseable {
             if (executor.awaitTermination(shutdownTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
                 return;
             }
-            shutdownTimedOut = true;
+            markShutdownTimedOut();
             List<Runnable> droppedTasks = executor.shutdownNow();
             droppedTasks.forEach(ignored -> releaseSlot());
             log.warn("WorkItems worker 종료 대기 시간이 초과되어 미완료 작업을 중단했습니다. "
                             + "shutdownTimeoutSeconds={} currentInFlight={}",
                     shutdownTimeout.toSeconds(), currentInFlight());
         } catch (InterruptedException exception) {
-            shutdownTimedOut = true;
+            markShutdownTimedOut();
             List<Runnable> droppedTasks = executor.shutdownNow();
             droppedTasks.forEach(ignored -> releaseSlot());
             Thread.currentThread().interrupt();
             log.warn("WorkItems worker 종료 대기 중 인터럽트가 발생했습니다. currentInFlight={}", currentInFlight());
+        }
+    }
+
+    private void markShutdownTimedOut() {
+        synchronized (acknowledgementMonitor) {
+            shutdownTimedOut = true;
         }
     }
 

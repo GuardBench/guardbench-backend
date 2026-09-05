@@ -1,6 +1,7 @@
 package com.guardbench.testrun.infrastructure.messaging;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -29,6 +30,7 @@ import com.guardbench.testrun.application.messaging.TestRunQueue;
 
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.DeleteMessageRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse;
 import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
@@ -207,6 +209,50 @@ class WorkItemBoundedConcurrencyTest {
             verify(sqs, never()).deleteMessage(any(DeleteMessageRequest.class));
         } finally {
             release.countDown();
+            controller.close();
+        }
+    }
+
+    @Test
+    @DisplayName("ACK 중 shutdown timeout이 발생해도 DeleteMessage와 timeout 상태 전환이 교차하지 않는다")
+    void serializesAcknowledgementWithShutdownTimeout() throws Exception {
+        SqsClient sqs = org.mockito.Mockito.mock(SqsClient.class);
+        ExecuteTestRunService executeService = org.mockito.Mockito.mock(ExecuteTestRunService.class);
+        WorkItemConcurrencyController controller = new WorkItemConcurrencyController(1, Duration.ofMillis(50));
+        CountDownLatch deleteStarted = new CountDownLatch(1);
+        CountDownLatch releaseDelete = new CountDownLatch(1);
+        CountDownLatch shutdownReturned = new CountDownLatch(1);
+        Thread shutdownThread = null;
+        try {
+            when(executeService.execute(anyLong()))
+                    .thenReturn(ExecuteTestRunService.ExecutionOutcome.EXECUTED);
+            when(sqs.receiveMessage(any(ReceiveMessageRequest.class))).thenReturn(response(message(100)));
+            when(sqs.deleteMessage(any(DeleteMessageRequest.class))).thenAnswer(invocation -> {
+                deleteStarted.countDown();
+                releaseDelete.await();
+                return DeleteMessageResponse.builder().build();
+            });
+
+            SqsInboundPollingAdapter adapter = adapter(sqs, executeService, controller);
+            adapter.poll();
+            assertTrue(deleteStarted.await(2, TimeUnit.SECONDS));
+
+            shutdownThread = new Thread(() -> {
+                controller.close();
+                shutdownReturned.countDown();
+            });
+            shutdownThread.start();
+
+            assertFalse(shutdownReturned.await(150, TimeUnit.MILLISECONDS));
+            releaseDelete.countDown();
+            assertTrue(shutdownReturned.await(2, TimeUnit.SECONDS));
+            shutdownThread.join(2_000);
+            verify(sqs, times(1)).deleteMessage(any(DeleteMessageRequest.class));
+        } finally {
+            releaseDelete.countDown();
+            if (shutdownThread != null) {
+                shutdownThread.join(2_000);
+            }
             controller.close();
         }
     }
