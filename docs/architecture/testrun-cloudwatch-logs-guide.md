@@ -2,9 +2,9 @@
 
 > Status: DRAFT
 > Owner: Backend
-> Last reviewed: 2026-09-04
+> Last reviewed: 2026-09-05
 > Canonical source: GitHub
-> Related: [Issue #169](https://github.com/GuardBench/guardbench-backend/issues/169), [Issue #172](https://github.com/GuardBench/guardbench-backend/issues/172), [비동기 신뢰성 및 테스트 원칙](async-reliability-and-testing.md)
+> Related: [Issue #214](https://github.com/GuardBench/guardbench-backend/issues/214), [Issue #169](https://github.com/GuardBench/guardbench-backend/issues/169), [Issue #172](https://github.com/GuardBench/guardbench-backend/issues/172), [비동기 신뢰성 및 테스트 원칙](async-reliability-and-testing.md)
 
 이 문서는 하나의 `testRunId`에 대해 API/DB를 조회하지 않고 CloudWatch application log(`/ecs/guardbench-dev/app`)만으로 TestRun 시작부터 Quality Gate 최종화까지 전체 흐름을 재구성하는 CloudWatch Logs Insights 쿼리를 정리한다.
 
@@ -45,7 +45,7 @@ fields @timestamp, @message
 
 ```
 fields @timestamp, @message
-| filter @message like /testRunId=<TEST_RUN_ID>\b/ and (@message like /Application response 진단 정보를 기록합니다/ or @message like /Classifier 호출을 시작합니다/ or @message like /Classifier 판정을 완료했습니다/ or @message like /Classifier 판정에 실패했습니다/ or @message like /실패로 재시도합니다/ or @message like /terminal 결과를 저장했습니다/)
+| filter @message like /testRunId=<TEST_RUN_ID>\b/ and (@message like /WorkItem 수신 timing을 기록합니다/ or @message like /Application Target 호출/ or @message like /Application response 진단 정보를 기록합니다/ or @message like /Classifier 호출을 시작합니다/ or @message like /Classifier 판정을 완료했습니다/ or @message like /Classifier 판정에 실패했습니다/ or @message like /실패로 재시도합니다/ or @message like /terminal 결과를 저장했습니다/)
 | sort @timestamp asc
 ```
 
@@ -123,6 +123,76 @@ fields @message
 | stats count(*) as count by errorCode
 | sort count desc
 ```
+
+## 7. Snapshot 병목 분석 — Queue wait와 Application Target latency
+
+#214는 기존 수신/response/classifier/terminal 로그를 유지하고 다음 timing 필드만 추가한다.
+
+| 로그 | 필드와 측정 경계 |
+| --- | --- |
+| `WorkItem 수신 timing을 기록합니다` | `testRunId`, `snapshotId`, `eventId`, `messageId`, `receivedAt`, `sentTimestamp`, `queueWaitMs` |
+| `Application Target 호출을 시작합니다` | `testRunId`, `snapshotId`, `attemptCount` |
+| `Application Target 호출을 완료했습니다` | 동일 correlation 필드 + `durationMs` |
+| `Application Target 호출에 실패했습니다` | 동일 correlation 필드 + `durationMs`, sanitized `errorStage`, `errorCode` |
+
+`receivedAt`은 SQS ReceiveMessage 응답 직후의 UTC 시각이다. 같은 batch의 모든 메시지에
+동일한 값을 사용하므로 앞 메시지의 순차 처리 시간이 뒤 메시지 queue wait에 합산되지 않는다.
+로그의 `@timestamp`는 각 메시지를 처리하기 시작할 때의 로그 발행 시각이므로, queue wait를
+다시 계산할 때는 `receivedAt`을 사용한다. `receivedAt`과 Target 시작 로그 사이에는 batch 내
+대기, decode, claim, context 조회가 포함될 수 있다.
+
+`sentTimestamp`는 [SQS SentTimestamp](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_ReceiveMessage.html)의
+epoch milliseconds다. `queueWaitMs = receivedAt(epoch ms) - sentTimestamp`이며, Outbox의
+`occurredAt`부터 SQS publish까지의 대기는 포함하지 않는다. 재전달에서는 최초 enqueue 이후의
+누적 경과 시간이므로 visibility 대기와 이전 처리 시도도 포함될 수 있다. 같은 `eventId`와
+`messageId`의 여러 수신을 독립 신규 workload로 합산하지 않는다. SQS delivery와 Target의
+business `attemptCount`는 서로 다른 횟수다.
+
+Timestamp 누락/파싱 오류/음수이면 `sentTimestamp=null`, `queueWaitMs=null`로 기록한다.
+미래 timestamp이면 원래 숫자는 보존하고 `queueWaitMs=null`로 기록한다. 누락을 0ms로
+해석하지 않으며 진단 metadata 오류는 dispatch/ack를 바꾸지 않는다. AWS와 Worker의 wall clock
+차이는 queue wait 오차에 영향을 준다.
+
+`durationMs`는 monotonic clock으로 측정한 TargetExecutionPort 호출 시간이다. Adapter의 Target
+설정 조회/요청 준비, HTTP 호출, 응답 읽기·파싱을 포함하며 순수 네트워크 왕복 시간과는 다르다.
+Classifier 호출과 terminal persistence는 포함하지 않는다. 성공/실패 모두 같은
+`testRunId + snapshotId + attemptCount`로 연결한다. prompt, endpoint, credential과 예외 원문은
+추가 로그에 포함하지 않으며 기존 response preview 정책을 그대로 적용한다.
+
+### 개별 수신의 Queue wait
+
+```
+fields @timestamp
+| filter @message like /WorkItem 수신 timing을 기록합니다/ and @message like /testRunId=<TEST_RUN_ID>\b/
+| parse @message /snapshotId=(?<snapshotId>\d+)/
+| parse @message /eventId=(?<eventId>\S+)/
+| parse @message /messageId=(?<messageId>\S+)/
+| parse @message /receivedAt=(?<receivedAt>\S+)/
+| parse @message /sentTimestamp=(?<sentTimestamp>\S+)/
+| parse @message /queueWaitMs=(?<queueWaitMs>\S+)/
+| display @timestamp, snapshotId, eventId, messageId, receivedAt, sentTimestamp, queueWaitMs
+| sort @timestamp asc
+```
+
+### Target 호출별 latency와 실패 코드
+
+```
+fields @timestamp
+| filter @message like /testRunId=<TEST_RUN_ID>\b/ and (@message like /Application Target 호출을 완료했습니다/ or @message like /Application Target 호출에 실패했습니다/)
+| parse @message /snapshotId=(?<snapshotId>\d+)/
+| parse @message /attemptCount=(?<attemptCount>\d+)/
+| parse @message /durationMs=(?<durationMs>\d+)/
+| parse @message /errorStage=(?<errorStage>\S+)/
+| parse @message /errorCode=(?<errorCode>\S+)/
+| display @timestamp, snapshotId, attemptCount, durationMs, errorStage, errorCode
+| sort @timestamp asc
+```
+
+동일 Snapshot의 전체 순서는 3절의 query에 `snapshotId=<SNAPSHOT_ID>\b` filter를 추가해
+`WorkItem 수신 timing → Target start → complete/fail → response → classifier → terminal`로 확인한다.
+Target 실패로 retry하면 해당 시도에는 response/classifier/terminal 로그가 없을 수 있다.
+처리량 원인을 비교할 때는 첫 수신 queue wait, Target duration, 기존 classifier 시작/완료 시각을
+분리해 읽는다. terminal persistence 자체의 정밀 duration은 현재 instrumentation 범위가 아니다.
 
 ## 알려진 한계
 
