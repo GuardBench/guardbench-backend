@@ -200,7 +200,8 @@ public class FinalizeTestRunService {
                 verdictCounts.falsePositive(), verdictCounts.falseNegative(),
                 qualityGateResult.metrics() != null ? qualityGateResult.metrics().assertionPassRate() : null,
                 qualityGateResult.metrics() != null ? qualityGateResult.metrics().executionSuccessRate() : null,
-                qualityGateEvaluator.minimumAssertionPassRate(), qualityGateEvaluator.minimumExecutionSuccessRate(),
+                qualityGateResult.metrics() != null ? qualityGateResult.metrics().assertion().threshold() : null,
+                qualityGateResult.metrics() != null ? qualityGateResult.metrics().execution().threshold() : null,
                 failureDimension, elapsedMs(finalizationStartedNanos));
 
         return FinalizationOutcome.finalized(qualityGateResult);
@@ -258,10 +259,10 @@ public class FinalizeTestRunService {
         }
         QualityGateMetrics metrics = qualityGateResult.metrics();
         List<String> dimensions = new ArrayList<>();
-        if (metrics.assertionPassRate() < qualityGateEvaluator.minimumAssertionPassRate()) {
+        if (!metrics.assertion().passed()) {
             dimensions.add("assertion");
         }
-        if (metrics.executionSuccessRate() < qualityGateEvaluator.minimumExecutionSuccessRate()) {
+        if (!metrics.execution().passed()) {
             dimensions.add("execution");
         }
         return String.join(",", dimensions);

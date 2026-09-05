@@ -1,15 +1,21 @@
 package com.guardbench.testrun.application.port.out;
 
+import java.util.Objects;
+
 public record QualityGateMetricsView(
-        double assertionPassRate,
-        double executionSuccessRate) {
+        QualityGateMetricView assertion,
+        QualityGateMetricView execution) {
+
     public QualityGateMetricsView {
-        if (!isRate(assertionPassRate) || !isRate(executionSuccessRate)) {
-            throw new IllegalArgumentException("invalid Quality Gate metrics");
-        }
+        Objects.requireNonNull(assertion, "assertion Quality Gate metric must not be null");
+        Objects.requireNonNull(execution, "execution Quality Gate metric must not be null");
     }
 
-    private static boolean isRate(double value) {
-        return value >= 0.0 && value <= 1.0;
+    public double assertionPassRate() {
+        return assertion.value();
+    }
+
+    public double executionSuccessRate() {
+        return execution.value();
     }
 }

@@ -24,6 +24,9 @@ import com.guardbench.testrun.application.GetTestRunResultListService;
 import com.guardbench.testrun.application.port.out.PageCriteria;
 import com.guardbench.testrun.application.port.out.PageResult;
 import com.guardbench.testrun.application.port.out.EvaluatorMetricsView;
+import com.guardbench.testrun.application.port.out.QualityGateMetricsView;
+import com.guardbench.testrun.application.port.out.QualityGateMetricView;
+import com.guardbench.testrun.application.port.out.QualityGateView;
 import com.guardbench.testrun.application.port.out.SortOrder;
 import com.guardbench.testrun.application.port.out.TestExecutionView;
 import com.guardbench.testrun.application.port.out.TestRunDetail;
@@ -166,6 +169,51 @@ class TestRunQueryControllerTest {
                     .andExpect(jsonPath("$.data.target.referenceId").value("target-ref"))
                     .andExpect(jsonPath("$.data.executionOutcome").doesNotExist())
                     .andExpect(jsonPath("$.data.qualityGate").doesNotExist());
+        }
+
+        @Test
+        @DisplayName("평가된 Quality Gate는 기존 비율과 지표별 판정 근거를 함께 반환한다")
+        void returnsQualityGateMetricEvidence() throws Exception {
+            QualityGateView qualityGate = new QualityGateView(
+                    "FAIL",
+                    new QualityGateMetricsView(
+                            new QualityGateMetricView(0.92, 0.95, false),
+                            new QualityGateMetricView(1.0, 0.95, true)));
+            TestRunDetail detail = new TestRunDetail(
+                    902L, 1L, TestRunStatus.FINISHED, 100,
+                    new TestRunProgress(100, 100.0), TARGET, TestRunExecutionOutcome.COMPLETED, qualityGate,
+                    Instant.parse("2026-08-24T14:30:00Z"), Instant.parse("2026-08-24T14:30:03Z"),
+                    Instant.parse("2026-08-24T14:31:00Z"), Instant.parse("2026-08-24T14:31:00Z"));
+            when(getTestRunDetailService.getTestRun(902L)).thenReturn(detail);
+
+            mockMvc.perform(get(BASE + "/902"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.qualityGate.status").value("FAIL"))
+                    .andExpect(jsonPath("$.data.qualityGate.metrics.assertionPassRate").value(0.92))
+                    .andExpect(jsonPath("$.data.qualityGate.metrics.executionSuccessRate").value(1.0))
+                    .andExpect(jsonPath("$.data.qualityGate.metrics.assertion.value").value(0.92))
+                    .andExpect(jsonPath("$.data.qualityGate.metrics.assertion.threshold").value(0.95))
+                    .andExpect(jsonPath("$.data.qualityGate.metrics.assertion.passed").value(false))
+                    .andExpect(jsonPath("$.data.qualityGate.metrics.execution.value").value(1.0))
+                    .andExpect(jsonPath("$.data.qualityGate.metrics.execution.threshold").value(0.95))
+                    .andExpect(jsonPath("$.data.qualityGate.metrics.execution.passed").value(true));
+        }
+
+        @Test
+        @DisplayName("NOT_EVALUATED Quality Gate는 존재하지 않는 판정 근거를 0으로 반환하지 않는다")
+        void returnsNullMetricsForNotEvaluatedQualityGate() throws Exception {
+            TestRunDetail detail = new TestRunDetail(
+                    903L, 1L, TestRunStatus.FINISHED, 1,
+                    new TestRunProgress(1, 100.0), TARGET, TestRunExecutionOutcome.ERROR,
+                    new QualityGateView("NOT_EVALUATED", null),
+                    Instant.parse("2026-08-24T14:30:00Z"), Instant.parse("2026-08-24T14:30:03Z"),
+                    Instant.parse("2026-08-24T14:31:00Z"), Instant.parse("2026-08-24T14:31:00Z"));
+            when(getTestRunDetailService.getTestRun(903L)).thenReturn(detail);
+
+            mockMvc.perform(get(BASE + "/903"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.qualityGate.status").value("NOT_EVALUATED"))
+                    .andExpect(jsonPath("$.data.qualityGate.metrics").doesNotExist());
         }
 
         @Test

@@ -1,17 +1,21 @@
 package com.guardbench.evaluation.domain;
 
+import java.util.Objects;
+
 public record QualityGateMetrics(
-        double assertionPassRate,
-        double executionSuccessRate) {
+        QualityGateMetric assertion,
+        QualityGateMetric execution) {
 
     public QualityGateMetrics {
-        requireRate(assertionPassRate, "Assertion pass rate");
-        requireRate(executionSuccessRate, "Execution success rate");
+        Objects.requireNonNull(assertion, "Assertion Quality Gate metric must not be null");
+        Objects.requireNonNull(execution, "Execution Quality Gate metric must not be null");
     }
 
-    private static void requireRate(double rate, String label) {
-        if (!Double.isFinite(rate) || rate < 0.0 || rate > 1.0) {
-            throw new IllegalArgumentException(label + " must be between 0 and 1");
-        }
+    public double assertionPassRate() {
+        return assertion.value();
+    }
+
+    public double executionSuccessRate() {
+        return execution.value();
     }
 }

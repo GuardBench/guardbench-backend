@@ -9,16 +9,6 @@ public final class QualityGateEvaluator {
     private static final double MINIMUM_PASS_RATE = 0.95;
     private static final double MINIMUM_EXECUTION_SUCCESS_RATE = 0.95;
 
-    /** Quality Gate PASS에 필요한 assertion pass rate 최소 기준이다. */
-    public double minimumAssertionPassRate() {
-        return MINIMUM_PASS_RATE;
-    }
-
-    /** Quality Gate PASS에 필요한 execution success rate 최소 기준이다. */
-    public double minimumExecutionSuccessRate() {
-        return MINIMUM_EXECUTION_SUCCESS_RATE;
-    }
-
     /**
      * 현재 TestRun의 생성된 Assertion과 전체 실행 결과를 집계한다.
      *
@@ -64,8 +54,12 @@ public final class QualityGateEvaluator {
                 .filter(assertion -> assertion.status() == AssertionStatus.PASS)
                 .count();
         QualityGateMetrics metrics = new QualityGateMetrics(
-                divide(assertionPassCount, evaluations.size()),
-                divide(successfulExecutionCount, totalTestCaseCount));
+                QualityGateMetric.evaluate(
+                        divide(assertionPassCount, evaluations.size()),
+                        MINIMUM_PASS_RATE),
+                QualityGateMetric.evaluate(
+                        divide(successfulExecutionCount, totalTestCaseCount),
+                        MINIMUM_EXECUTION_SUCCESS_RATE));
 
         return new QualityGateResult(reference, evaluateStatus(metrics), metrics, createdAt);
     }
@@ -73,8 +67,7 @@ public final class QualityGateEvaluator {
     public QualityGateStatus evaluateStatus(QualityGateMetrics metrics) {
         Objects.requireNonNull(metrics, "Quality Gate metrics must not be null");
 
-        boolean passes = metrics.assertionPassRate() >= MINIMUM_PASS_RATE
-                && metrics.executionSuccessRate() >= MINIMUM_EXECUTION_SUCCESS_RATE;
+        boolean passes = metrics.assertion().passed() && metrics.execution().passed();
 
         return passes ? QualityGateStatus.PASS : QualityGateStatus.FAIL;
     }

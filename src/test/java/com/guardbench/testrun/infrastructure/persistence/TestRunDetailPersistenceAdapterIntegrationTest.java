@@ -73,6 +73,11 @@ class TestRunDetailPersistenceAdapterIntegrationTest {
 
         assertEquals("PASS", detail.qualityGate().statusCode());
         assertEquals(0.95, detail.qualityGate().metrics().assertionPassRate());
+        assertEquals(0.95, detail.qualityGate().metrics().assertion().threshold());
+        assertTrue(detail.qualityGate().metrics().assertion().passed());
+        assertEquals(0.98, detail.qualityGate().metrics().execution().value());
+        assertEquals(0.95, detail.qualityGate().metrics().execution().threshold());
+        assertTrue(detail.qualityGate().metrics().execution().passed());
     }
 
     @Test
@@ -128,10 +133,15 @@ class TestRunDetailPersistenceAdapterIntegrationTest {
         boolean evaluated = !"NOT_EVALUATED".equals(status);
         jdbcTemplate.update("""
                 INSERT INTO quality_gate_result (
-                    test_run_id, gate_status, assertion_pass_rate, execution_success_rate, created_at)
-                VALUES (?, ?, ?, ?, ?)
+                    test_run_id, gate_status,
+                    assertion_pass_rate, assertion_pass_rate_threshold, assertion_passed,
+                    execution_success_rate, execution_success_rate_threshold, execution_passed,
+                    created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 testRunId, status,
-                evaluated ? 0.95 : null, evaluated ? 0.98 : null, Timestamp.from(T0));
+                evaluated ? 0.95 : null, evaluated ? 0.95 : null, evaluated ? true : null,
+                evaluated ? 0.98 : null, evaluated ? 0.95 : null, evaluated ? true : null,
+                Timestamp.from(T0));
     }
 }

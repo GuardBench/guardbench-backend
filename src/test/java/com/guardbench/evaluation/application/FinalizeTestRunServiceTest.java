@@ -257,7 +257,9 @@ class FinalizeTestRunServiceTest {
             QualityGateResult existing = new QualityGateResult(
                     new TestRunEvaluationReference(TEST_RUN_ID),
                     QualityGateStatus.PASS,
-                    new com.guardbench.evaluation.domain.QualityGateMetrics(1.0, 1.0),
+                    new com.guardbench.evaluation.domain.QualityGateMetrics(
+                            com.guardbench.evaluation.domain.QualityGateMetric.evaluate(1.0, 0.95),
+                            com.guardbench.evaluation.domain.QualityGateMetric.evaluate(1.0, 0.95)),
                     FIXED_NOW.minusSeconds(60)
             );
             qualityGateResultRepo.preStore(existing);

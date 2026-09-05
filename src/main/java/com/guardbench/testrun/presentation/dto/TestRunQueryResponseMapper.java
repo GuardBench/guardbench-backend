@@ -159,7 +159,15 @@ public final class TestRunQueryResponseMapper {
         QualityGateMetricsRes metricsRes = metrics != null
                 ? new QualityGateMetricsRes(
                         metrics.assertionPassRate(),
-                        metrics.executionSuccessRate())
+                        metrics.executionSuccessRate(),
+                        new QualityGateMetricRes(
+                                metrics.assertion().value(),
+                                metrics.assertion().threshold(),
+                                metrics.assertion().passed()),
+                        new QualityGateMetricRes(
+                                metrics.execution().value(),
+                                metrics.execution().threshold(),
+                                metrics.execution().passed()))
                 : null;
         return new QualityGateRes(qualityGate.statusCode(), metricsRes);
     }

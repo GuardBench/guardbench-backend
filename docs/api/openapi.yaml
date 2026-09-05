@@ -1365,8 +1365,9 @@ components:
         하나의 현재 TestRun에 저장된 Assertion 결과만 집계한 평가 결과다.
         다른 Run의 결과나 Regression 결과를 입력으로 사용하지 않는다.
         status가 NOT_EVALUATED이면 metrics는 null이다.
-        metrics는 평가 가능한 Assertion 통과율과 전체 Snapshot 실행 성공률이다.
-        두 비율이 각각 0.95 이상이면 PASS, 하나라도 미만이면 FAIL이다.
+        metrics는 평가 가능한 Assertion 통과율과 전체 Snapshot 실행 성공률 및
+        판정 당시의 metric별 기준과 통과 여부다.
+        현재 정책에서는 두 비율이 각각 0.95 이상이면 PASS, 하나라도 미만이면 FAIL이다.
         평가 가능한 Assertion이 없으면 NOT_EVALUATED이며 metrics는 null이다.
       required: [status, metrics]
       additionalProperties: false
@@ -1375,7 +1376,7 @@ components:
         metrics:
           type: object
           nullable: true
-          required: [assertionPassRate, executionSuccessRate]
+          required: [assertionPassRate, executionSuccessRate, assertion, execution]
           additionalProperties: false
           description: 현재 TestRun의 Assertion 및 실행 집계 지표
           properties:
@@ -1384,13 +1385,40 @@ components:
               format: double
               minimum: 0
               maximum: 1
-              description: 평가 가능한 Assertion 중 PASS 비율
+              deprecated: true
+              description: 기존 소비처 호환용 Assertion PASS 비율. assertion.value와 같은 값이다.
             executionSuccessRate:
               type: number
               format: double
               minimum: 0
               maximum: 1
-              description: 전체 Snapshot 중 성공한 실행 비율
+              deprecated: true
+              description: 기존 소비처 호환용 실행 성공 비율. execution.value와 같은 값이다.
+            assertion:
+              $ref: '#/components/schemas/QualityGateMetricRes'
+            execution:
+              $ref: '#/components/schemas/QualityGateMetricRes'
+    QualityGateMetricRes:
+      type: object
+      required: [value, threshold, passed]
+      additionalProperties: false
+      description: Quality Gate 판정 당시 사용한 단일 지표의 값과 기준, 통과 여부
+      properties:
+        value:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+          description: 판정에 사용한 현재 비율
+        threshold:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+          description: 판정 당시 적용한 최소 통과 기준
+        passed:
+          type: boolean
+          description: backend가 판정한 이 지표의 통과 여부
     TestRunDetailRes:
       type: object
       description: |

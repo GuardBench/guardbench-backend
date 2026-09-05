@@ -119,7 +119,11 @@ entity "quality_gate_result" as quality_gate {
   --
   * gate_status : VARCHAR(32)
     assertion_pass_rate : DOUBLE PRECISION
+    assertion_pass_rate_threshold : DOUBLE PRECISION
+    assertion_passed : BOOLEAN
     execution_success_rate : DOUBLE PRECISION
+    execution_success_rate_threshold : DOUBLE PRECISION
+    execution_passed : BOOLEAN
   * created_at : TIMESTAMPTZ(6)
 }
 
@@ -203,7 +207,8 @@ end note
 
 note bottom of quality_gate
   No row = not evaluated yet.
-  NOT_EVALUATED = every metric is NULL.
+  NOT_EVALUATED = every metric evidence field is NULL.
+  Evaluated rows preserve value, threshold, and passed.
 end note
 
 legend left

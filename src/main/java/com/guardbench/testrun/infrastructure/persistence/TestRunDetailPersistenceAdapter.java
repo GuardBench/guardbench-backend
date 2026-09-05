@@ -9,6 +9,7 @@ import java.util.Optional;
 
 import com.guardbench.testrun.application.port.out.LoadTestRunDetailPort;
 import com.guardbench.testrun.application.port.out.QualityGateMetricsView;
+import com.guardbench.testrun.application.port.out.QualityGateMetricView;
 import com.guardbench.testrun.application.port.out.QualityGateView;
 import com.guardbench.testrun.application.port.out.TestRunDetail;
 import com.guardbench.testrun.application.port.out.TestRunProgress;
@@ -43,7 +44,9 @@ class TestRunDetailPersistenceAdapter implements LoadTestRunDetailPort {
                    he.model AS target_model,
                    r.execution_outcome,
                    r.created_at, r.started_at, r.completed_at, r.updated_at,
-                   qgr.gate_status, qgr.assertion_pass_rate, qgr.execution_success_rate
+                   qgr.gate_status,
+                   qgr.assertion_pass_rate, qgr.assertion_pass_rate_threshold, qgr.assertion_passed,
+                   qgr.execution_success_rate, qgr.execution_success_rate_threshold, qgr.execution_passed
             FROM test_run r
             JOIN target_reference tr ON tr.reference_id = r.target_reference_id
             JOIN http_endpoint_target he ON he.reference_id = tr.reference_id
@@ -96,8 +99,14 @@ class TestRunDetailPersistenceAdapter implements LoadTestRunDetailPort {
             return new QualityGateView(gateStatus, null);
         }
         QualityGateMetricsView metrics = new QualityGateMetricsView(
-                resultSet.getDouble("assertion_pass_rate"),
-                resultSet.getDouble("execution_success_rate"));
+                new QualityGateMetricView(
+                        resultSet.getDouble("assertion_pass_rate"),
+                        resultSet.getDouble("assertion_pass_rate_threshold"),
+                        resultSet.getBoolean("assertion_passed")),
+                new QualityGateMetricView(
+                        resultSet.getDouble("execution_success_rate"),
+                        resultSet.getDouble("execution_success_rate_threshold"),
+                        resultSet.getBoolean("execution_passed")));
         return new QualityGateView(gateStatus, metrics);
     }
 

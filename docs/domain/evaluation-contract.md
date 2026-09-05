@@ -39,7 +39,8 @@ Quality Gate는 하나의 현재 TestRun의 Assertion 결과를 집계한다. �
 - `assertionPassRate`는 평가 가능한 Assertion 중 `PASS` 비율이며, `executionSuccessRate`는 전체 Snapshot 중 성공한 실행 비율이다. 실행 또는 평가 실패로 Assertion이 생성되지 않은 Snapshot은 첫 번째 분모에서 제외하지만 두 번째 분모에는 포함한다.
 - 두 metric이 모두 0.95 이상이면 `PASS`, 하나라도 0.95 미만이면 `FAIL`이다. 반올림하지 않고 실제 비율로 경계를 비교한다.
 - 평가 가능한 Assertion이 하나도 없으면 `NOT_EVALUATED`이고 `metrics`는 `null`이다. 이 경우 실행 성공률만으로 `FAIL`을 만들지 않는다.
-- `metrics`는 `assertionPassRate`와 `executionSuccessRate`만 제공한다. Regression 지표와 과거 Run 비교 지표는 포함하지 않는다.
+- 평가가 완료된 `metrics`는 각 지표의 비율뿐 아니라 판정 당시 적용한 threshold와 metric별 `passed`를 함께 보존한다. 공개 API는 이 구조화된 근거를 backend source of truth로 제공하며 소비자가 threshold를 하드코딩하거나 판정을 재계산하지 않게 한다.
+- Regression 지표와 과거 Run 비교 지표는 Quality Gate `metrics`에 포함하지 않는다.
 - Quality Gate와 TestRun `FINISHED`의 원자 저장 및 이미 완료된 결과를 덮어쓰지 않는 원칙은 ADR 0004의 대체되지 않은 부분을 유지한다.
 
 ## Regression
