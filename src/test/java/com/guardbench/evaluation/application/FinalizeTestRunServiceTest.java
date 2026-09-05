@@ -92,6 +92,24 @@ class FinalizeTestRunServiceTest {
         }
 
         @Test
+        @DisplayName("TestRun에 저장된 사용자 기준으로 Quality Gate를 최종 판정한다")
+        void evaluatesWithThresholdsFromTestRunFacts() {
+            loadFactsPort.setFacts(TEST_RUN_ID, new TestRunExecutionFacts(
+                    TEST_RUN_ID, "RUNNING", 2, "evaluator-ref", 0.5, 1.0, List.of(
+                            succeededExecution(10L, "BLOCK", "BLOCK"),
+                            succeededExecution(20L, "BLOCK", "ALLOW"))));
+
+            FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
+
+            QualityGateResult result = ((FinalizationOutcome.Finalized) outcome).result();
+            assertEquals(QualityGateStatus.PASS, result.status());
+            assertEquals(0.5, result.metrics().assertion().threshold());
+            assertEquals(true, result.metrics().assertion().passed());
+            assertEquals(1.0, result.metrics().execution().threshold());
+            assertEquals(true, result.metrics().execution().passed());
+        }
+
+        @Test
         @DisplayName("Run 301 재현: 실행은 100% 성공했지만 assertion 미달로 FAIL이면 "
                 + "최종화 로그에 failureDimension=assertion과 TP/TN/FP/FN이 남는다")
         void run301StyleAssertionFailureIsObservableInApplicationLog() {
@@ -264,7 +282,7 @@ class FinalizeTestRunServiceTest {
             );
             qualityGateResultRepo.preStore(existing);
             loadFactsPort.setFacts(TEST_RUN_ID, new TestRunExecutionFacts(
-                    TEST_RUN_ID, "FINISHED", 2, "evaluator-ref", List.of(
+                    TEST_RUN_ID, "FINISHED", 2, "evaluator-ref", 0.95, 0.95, List.of(
                     succeededExecution(10L, "BLOCK", "BLOCK"),
                     succeededExecution(20L, "BLOCK", "BLOCK"))));
 
@@ -323,7 +341,7 @@ class FinalizeTestRunServiceTest {
         @DisplayName("RUNNING이 아닌 상태에서는 NotReady")
         void notReadyWhenNotRunning() {
             loadFactsPort.setFacts(TEST_RUN_ID, new TestRunExecutionFacts(
-                    TEST_RUN_ID, "PREPARING", 2, "evaluator-ref", List.of()));
+                    TEST_RUN_ID, "PREPARING", 2, "evaluator-ref", 0.95, 0.95, List.of()));
 
             FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
             assertInstanceOf(FinalizationOutcome.NotReady.class, outcome);
@@ -333,7 +351,7 @@ class FinalizeTestRunServiceTest {
         @DisplayName("FINISHED인데 QualityGateResult가 없으면 InvariantViolation")
         void invariantViolationWhenFinishedWithoutResult() {
             loadFactsPort.setFacts(TEST_RUN_ID, new TestRunExecutionFacts(
-                    TEST_RUN_ID, "FINISHED", 2, "evaluator-ref", List.of()));
+                    TEST_RUN_ID, "FINISHED", 2, "evaluator-ref", 0.95, 0.95, List.of()));
 
             FinalizationOutcome outcome = service.finalize(TEST_RUN_ID);
             assertInstanceOf(FinalizationOutcome.InvariantViolation.class, outcome);
@@ -343,7 +361,8 @@ class FinalizeTestRunServiceTest {
     // ─── Fixture Helper ───────────────────────────────────────────────────────
 
     private static TestRunExecutionFacts runningFacts(int testCaseCount, List<SnapshotExecutionFact> facts) {
-        return new TestRunExecutionFacts(TEST_RUN_ID, "RUNNING", testCaseCount, "evaluator-ref", facts);
+        return new TestRunExecutionFacts(
+                TEST_RUN_ID, "RUNNING", testCaseCount, "evaluator-ref", 0.95, 0.95, facts);
     }
 
     private static SnapshotExecutionFact succeededExecution(

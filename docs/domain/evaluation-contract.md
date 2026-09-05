@@ -37,7 +37,8 @@ Application 실행 실패, timeout 또는 Evaluator 실패로 EvaluationResult�
 Quality Gate는 하나의 현재 TestRun의 Assertion 결과를 집계한다. 다른 TestRun, 복수 Target 실행 결과와 Regression 결과를 입력으로 사용하지 않는다.
 
 - `assertionPassRate`는 평가 가능한 Assertion 중 `PASS` 비율이며, `executionSuccessRate`는 전체 Snapshot 중 성공한 실행 비율이다. 실행 또는 평가 실패로 Assertion이 생성되지 않은 Snapshot은 첫 번째 분모에서 제외하지만 두 번째 분모에는 포함한다.
-- 두 metric이 모두 0.95 이상이면 `PASS`, 하나라도 0.95 미만이면 `FAIL`이다. 반올림하지 않고 실제 비율로 경계를 비교한다.
+- TestRun 생성 시 `assertionPassRateThreshold`와 `executionSuccessRateThreshold`를 각각 고정한다. 요청에서 정책을 생략하면 두 기본값은 0.95다.
+- 두 metric이 해당 Run에 고정된 threshold 이상이면 `PASS`, 하나라도 threshold 미만이면 `FAIL`이다. 반올림하지 않고 실제 비율로 경계를 비교한다.
 - 평가 가능한 Assertion이 하나도 없으면 `NOT_EVALUATED`이고 `metrics`는 `null`이다. 이 경우 실행 성공률만으로 `FAIL`을 만들지 않는다.
 - 평가가 완료된 `metrics`는 각 지표의 비율뿐 아니라 판정 당시 적용한 threshold와 metric별 `passed`를 함께 보존한다. 공개 API는 이 구조화된 근거를 backend source of truth로 제공하며 소비자가 threshold를 하드코딩하거나 판정을 재계산하지 않게 한다.
 - Regression 지표와 과거 Run 비교 지표는 Quality Gate `metrics`에 포함하지 않는다.
@@ -78,4 +79,4 @@ HTTP 오류 ≠ Application 실행 오류 ≠ Evaluator 오류 ≠ Assertion FAI
 
 현재 코드는 Application response를 내부 execution에 저장하고 SageMaker Response Behavior Classifier가 만든 `EvaluationResult`를 ExpectedResult와 Assertion에 사용한다. #118을 통해 현재 Run Quality Gate가 구현되었고 #119를 통해 저장된 완료 Run 기반 Regression API가 구현되었다.
 
-Quality Gate는 현재 Run의 평가 가능한 Assertion 통과율과 전체 Snapshot 실행 성공률을 집계하고, 두 비율이 각각 95% 이상이면 `PASS`, 하나라도 미달하면 `FAIL`이다. 평가 가능한 Assertion이 없으면 `NOT_EVALUATED`와 null metrics를 저장한다. Regression은 comparable historical Run의 저장된 EvaluationResult만 비교하며 외부 Application Target이나 Evaluator를 재호출하지 않는다.
+Quality Gate는 현재 Run의 평가 가능한 Assertion 통과율과 전체 Snapshot 실행 성공률을 집계하고, 생성 시 해당 Run에 고정된 두 threshold와 비교한다. 정책을 생략한 Run은 두 기준 모두 95%다. 평가 가능한 Assertion이 없으면 `NOT_EVALUATED`와 null metrics를 저장한다. Regression은 comparable historical Run의 저장된 EvaluationResult만 비교하며 외부 Application Target이나 Evaluator를 재호출하지 않는다.

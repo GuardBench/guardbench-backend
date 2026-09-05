@@ -9,6 +9,7 @@ public final class TestRun {
     private final SourceTestSuiteId sourceTestSuiteId;
     private final TargetReference targetReference;
     private final EvaluatorReference evaluatorReference;
+    private final QualityGatePolicy qualityGatePolicy;
     private final int testCaseCount;
     private int processedTestCaseCount;
     private TestRunStatus status;
@@ -20,6 +21,7 @@ public final class TestRun {
             SourceTestSuiteId sourceTestSuiteId,
             TargetReference targetReference,
             EvaluatorReference evaluatorReference,
+            QualityGatePolicy qualityGatePolicy,
             int testCaseCount,
             Instant createdAt
     ) {
@@ -27,6 +29,7 @@ public final class TestRun {
         this.sourceTestSuiteId = Objects.requireNonNull(sourceTestSuiteId, "source TestSuite ID must not be null");
         this.targetReference = Objects.requireNonNull(targetReference, "target reference must not be null");
         this.evaluatorReference = Objects.requireNonNull(evaluatorReference, "evaluator reference must not be null");
+        this.qualityGatePolicy = Objects.requireNonNull(qualityGatePolicy, "Quality Gate policy must not be null");
         if (testCaseCount <= 0) {
             throw new IllegalArgumentException("test case count must be positive");
         }
@@ -43,7 +46,27 @@ public final class TestRun {
             int testCaseCount,
             Instant createdAt
     ) {
-        return new TestRun(id, sourceTestSuiteId, targetReference, evaluatorReference, testCaseCount, createdAt);
+        return queue(
+                id,
+                sourceTestSuiteId,
+                targetReference,
+                evaluatorReference,
+                QualityGatePolicy.defaultPolicy(),
+                testCaseCount,
+                createdAt);
+    }
+
+    public static TestRun queue(
+            TestRunId id,
+            SourceTestSuiteId sourceTestSuiteId,
+            TargetReference targetReference,
+            EvaluatorReference evaluatorReference,
+            QualityGatePolicy qualityGatePolicy,
+            int testCaseCount,
+            Instant createdAt
+    ) {
+        return new TestRun(
+                id, sourceTestSuiteId, targetReference, evaluatorReference, qualityGatePolicy, testCaseCount, createdAt);
     }
 
     public static TestRun rehydrate(
@@ -51,6 +74,7 @@ public final class TestRun {
             SourceTestSuiteId sourceTestSuiteId,
             TargetReference targetReference,
             EvaluatorReference evaluatorReference,
+            QualityGatePolicy qualityGatePolicy,
             int testCaseCount,
             int processedTestCaseCount,
             TestRunStatus status,
@@ -62,6 +86,7 @@ public final class TestRun {
                 sourceTestSuiteId,
                 targetReference,
                 evaluatorReference,
+                qualityGatePolicy,
                 testCaseCount,
                 timeline.createdAt()
         );
@@ -125,6 +150,8 @@ public final class TestRun {
     }
 
     public EvaluatorReference evaluatorReference() { return evaluatorReference; }
+
+    public QualityGatePolicy qualityGatePolicy() { return qualityGatePolicy; }
 
     public int testCaseCount() {
         return testCaseCount;

@@ -6,6 +6,7 @@ import com.guardbench.testrun.domain.EvaluationResult;
 import com.guardbench.testrun.domain.EvaluatorReference;
 import com.guardbench.testrun.domain.ExpectedResult;
 import com.guardbench.testrun.domain.Severity;
+import com.guardbench.testrun.domain.QualityGatePolicy;
 import com.guardbench.testrun.domain.SourceTestCaseId;
 import com.guardbench.testrun.domain.SourceTestSuiteId;
 import com.guardbench.testrun.domain.TargetReference;
@@ -36,6 +37,8 @@ final class TestRunPersistenceMapper {
                 source.processedTestCaseCount(),
                 source.targetReference().value(),
                 source.evaluatorReference().value(),
+                source.qualityGatePolicy().assertionPassRateThreshold(),
+                source.qualityGatePolicy().executionSuccessRateThreshold(),
                 source.executionOutcome() == null ? null : source.executionOutcome().name(),
                 source.timeline().createdAt(),
                 source.timeline().startedAt(),
@@ -50,6 +53,9 @@ final class TestRunPersistenceMapper {
                 new SourceTestSuiteId(source.testSuiteId),
                 new TargetReference(source.targetReferenceId),
                 evaluatorReferenceOf(source),
+                new QualityGatePolicy(
+                        source.assertionPassRateThreshold,
+                        source.executionSuccessRateThreshold),
                 source.testCaseCount,
                 source.processedTestCaseCount,
                 TestRunStatus.valueOf(source.status),

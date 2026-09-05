@@ -40,6 +40,7 @@ final class GuardBenchArchitectureRules {
             Map.entry("ApplicationResponse", "com.guardbench.testrun.domain"),
             Map.entry("EvaluationResult", "com.guardbench.testrun.domain"),
             Map.entry("TestRunExecutionOutcome", "com.guardbench.testrun.domain"),
+            Map.entry("QualityGatePolicy", "com.guardbench.testrun.domain"),
             Map.entry("TestRunRepository", "com.guardbench.testrun.domain.repository"),
             Map.entry("TestCaseSnapshotRepository", "com.guardbench.testrun.domain.repository"),
             Map.entry("AssertionResult", "com.guardbench.evaluation.domain"),

@@ -88,6 +88,8 @@ CREATE TABLE test_run (
     processed_test_case_count INTEGER NOT NULL DEFAULT 0,
     target_reference_id       TEXT NOT NULL UNIQUE,
     evaluator_reference_id    TEXT NOT NULL,
+    assertion_pass_rate_threshold DOUBLE PRECISION NOT NULL DEFAULT 0.95,
+    execution_success_rate_threshold DOUBLE PRECISION NOT NULL DEFAULT 0.95,
     execution_outcome         VARCHAR(16),
     created_at                TIMESTAMPTZ(6) NOT NULL,
     started_at                TIMESTAMPTZ(6),
@@ -104,6 +106,11 @@ CREATE TABLE test_run (
         CHECK (
             test_case_count > 0
             AND processed_test_case_count BETWEEN 0 AND test_case_count
+        ),
+    CONSTRAINT ck_test_run_quality_gate_thresholds
+        CHECK (
+            assertion_pass_rate_threshold BETWEEN 0.0 AND 1.0
+            AND execution_success_rate_threshold BETWEEN 0.0 AND 1.0
         ),
     CONSTRAINT ck_test_run_execution_outcome
         CHECK (

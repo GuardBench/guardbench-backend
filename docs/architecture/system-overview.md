@@ -56,7 +56,7 @@ Regression은 위 실행 흐름에 포함되지 않는다. 완료된 두 TestRun
 
 Response Behavior Classifier는 prompt와 Application response를 SageMaker Runtime에 전달하고 `COMPLY | REFUSE`를 `EvaluationResult(ALLOW | BLOCK)`으로 정규화한다. Worker는 classifier 결과와 Assertion을 저장하며, Application response는 내부 실행 결과로만 보존하고 public 결과에는 노출하지 않는다.
 
-#118을 통해 Quality Gate가 현재 TestRun의 평가 가능한 Assertion 통과율과 전체 Snapshot 실행 성공률을 집계하도록 전환되었다. 두 비율이 각각 95% 이상이면 `PASS`, 평가 가능한 Assertion이 없으면 `NOT_EVALUATED`다.
+#118을 통해 Quality Gate가 현재 TestRun의 평가 가능한 Assertion 통과율과 전체 Snapshot 실행 성공률을 집계하도록 전환되었다. 각 비율은 TestRun 생성 시 고정된 threshold와 비교하며 정책 생략 시 두 기본값은 95%다. 평가 가능한 Assertion이 없으면 `NOT_EVALUATED`다.
 
 #119를 통해 완료된 TestRun 사이의 stored-result Regression API가 구현되었다. backend가 Snapshot 정의와 Evaluator 설정을 기준으로 comparable historical Run을 판단하고 저장된 EvaluationResult를 비교하며, 이 과정에서 Application Target이나 Evaluator를 다시 호출하지 않는다.
 

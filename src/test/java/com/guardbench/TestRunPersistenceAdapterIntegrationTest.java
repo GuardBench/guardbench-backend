@@ -21,6 +21,7 @@ import com.guardbench.testrun.domain.ApplicationResponse;
 import com.guardbench.testrun.domain.EvaluationResult;
 import com.guardbench.testrun.domain.EvaluatorReference;
 import com.guardbench.testrun.domain.ExpectedResult;
+import com.guardbench.testrun.domain.QualityGatePolicy;
 import com.guardbench.testrun.domain.Severity;
 import com.guardbench.testrun.domain.SourceTestCaseId;
 import com.guardbench.testrun.domain.SourceTestSuiteId;
@@ -71,6 +72,7 @@ class TestRunPersistenceAdapterIntegrationTest {
                 new SourceTestSuiteId(500),
                 new TargetReference("target-ref-1"),
                 new EvaluatorReference("evaluator-ref-1"),
+                new QualityGatePolicy(0.9, 0.98),
                 1,
                 CREATED_AT
         );
@@ -82,7 +84,9 @@ class TestRunPersistenceAdapterIntegrationTest {
         );
         snapshotRepository.save(snapshot);
 
-        assertEquals(testRun.status(), testRunRepository.findById(runId).orElseThrow().status());
+        TestRun restoredRun = testRunRepository.findById(runId).orElseThrow();
+        assertEquals(testRun.status(), restoredRun.status());
+        assertEquals(testRun.qualityGatePolicy(), restoredRun.qualityGatePolicy());
         TestCaseSnapshot restored = snapshotRepository.findById(snapshot.id()).orElseThrow();
         assertEquals(snapshot.createdAt(), restored.createdAt());
         assertEquals(snapshot.expectedResult(), restored.expectedResult());
