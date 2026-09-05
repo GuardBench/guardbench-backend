@@ -8,6 +8,7 @@ import com.guardbench.evaluation.domain.ChangeResult;
 import com.guardbench.evaluation.domain.ChangeType;
 import com.guardbench.evaluation.domain.ComparabilityStatus;
 import com.guardbench.evaluation.domain.QualityGateMetrics;
+import com.guardbench.evaluation.domain.QualityGateMetric;
 import com.guardbench.evaluation.domain.QualityGateResult;
 import com.guardbench.evaluation.domain.QualityGateStatus;
 import com.guardbench.evaluation.domain.SnapshotEvaluation;
@@ -67,7 +68,11 @@ final class EvaluationPersistenceMapper {
                 source.reference().value(),
                 source.status().name(),
                 metrics == null ? null : metrics.assertionPassRate(),
+                metrics == null ? null : metrics.assertion().threshold(),
+                metrics == null ? null : metrics.assertion().passed(),
                 metrics == null ? null : metrics.executionSuccessRate(),
+                metrics == null ? null : metrics.execution().threshold(),
+                metrics == null ? null : metrics.execution().passed(),
                 source.createdAt());
     }
 
@@ -76,8 +81,14 @@ final class EvaluationPersistenceMapper {
         QualityGateMetrics metrics = status == QualityGateStatus.NOT_EVALUATED
                 ? null
                 : new QualityGateMetrics(
-                        source.assertionPassRate,
-                        source.executionSuccessRate);
+                        new QualityGateMetric(
+                                source.assertionPassRate,
+                                source.assertionPassRateThreshold,
+                                source.assertionPassed),
+                        new QualityGateMetric(
+                                source.executionSuccessRate,
+                                source.executionSuccessRateThreshold,
+                                source.executionPassed));
         return new QualityGateResult(
                 new TestRunEvaluationReference(source.testRunId),
                 status,

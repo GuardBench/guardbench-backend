@@ -135,7 +135,9 @@ HTTP Application Target 실행, OpenAI-compatible response 정규화, SageMaker 
 
 현재 구현은 Application response를 내부에만 보존하고 Evaluator verdict와 Assertion을 public 결과에서 분리하며, 같은 TestRun의 Assertion과 실행 성공률로 Quality Gate를 계산한다.
 
-`QualityGateRes`는 `status`와 nullable `metrics`를 제공한다. `metrics`는 평가 가능한 Assertion의 `assertionPassRate`와 전체 Snapshot 실행의 `executionSuccessRate`를 포함한다. 두 비율이 각각 95% 이상이면 `PASS`, 하나라도 기준 미만이면 `FAIL`이다. 평가 가능한 Assertion이 하나도 없으면 `NOT_EVALUATED`와 `metrics: null`이다. Assertion 실패와 실행 실패는 서로 다른 분모로 집계하며, Regression 또는 과거 Run 결과를 Quality Gate에 넣지 않는다.
+`QualityGateRes`는 `status`와 nullable `metrics`를 제공한다. `metrics.assertion`과 `metrics.execution`은 각각 판정 당시의 `value`, `threshold`, backend 판정 결과인 `passed`를 포함한다. 현재 정책에서는 두 지표가 각각 95% 이상이면 `PASS`, 하나라도 기준 미만이면 `FAIL`이다. 평가 가능한 Assertion이 하나도 없으면 존재하지 않는 근거를 0으로 만들지 않고 `NOT_EVALUATED`와 `metrics: null`을 반환한다. Assertion 실패와 실행 실패는 서로 다른 분모로 집계하며, Regression 또는 과거 Run 결과를 Quality Gate에 넣지 않는다.
+
+기존 공개 소비처의 순차 배포를 위해 `metrics.assertionPassRate`와 `metrics.executionSuccessRate`도 각각 구조화된 metric의 `value`와 같은 값으로 임시 유지한다. 두 필드는 deprecated이며 소비처가 구조화된 근거로 전환된 뒤 별도 계약 변경에서 제거한다.
 
 ### Regression — agreed contract
 

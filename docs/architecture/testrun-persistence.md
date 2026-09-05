@@ -15,6 +15,7 @@
 - Snapshot당 `TestExecution`은 하나다.
 - 성공한 execution은 AI Application response와 classifier가 정규화한 `ALLOW | BLOCK` verdict를 저장한다.
 - Regression은 완료된 Run들의 Snapshot 정의와 저장 verdict를 조회해 계산하며 Application Target이나 classifier를 재호출하지 않는다.
+- `quality_gate_result`는 판정 당시의 각 metric value, threshold, passed를 함께 저장해 과거 Run 조회가 이후 정책 상수 변경의 영향을 받지 않게 한다.
 
 ## 물리 스키마
 

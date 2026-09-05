@@ -5,5 +5,7 @@ package com.guardbench.testrun.presentation.dto;
  */
 public record QualityGateMetricsRes(
         double assertionPassRate,
-        double executionSuccessRate) {
+        double executionSuccessRate,
+        QualityGateMetricRes assertion,
+        QualityGateMetricRes execution) {
 }

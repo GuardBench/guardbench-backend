@@ -9,6 +9,7 @@ import java.util.Optional;
 
 import com.guardbench.testrun.application.port.out.LoadTestRunDetailPort;
 import com.guardbench.testrun.application.port.out.QualityGateMetricsView;
+import com.guardbench.testrun.application.port.out.QualityGateMetricView;
 import com.guardbench.testrun.application.port.out.QualityGateView;
 import com.guardbench.testrun.application.port.out.TestRunDetail;
 import com.guardbench.testrun.application.port.out.TestRunProgress;
@@ -43,7 +44,9 @@ class TestRunDetailPersistenceAdapter implements LoadTestRunDetailPort {
                    he.model AS target_model,
                    r.execution_outcome,
                    r.created_at, r.started_at, r.completed_at, r.updated_at,
-                   qgr.gate_status, qgr.assertion_pass_rate, qgr.execution_success_rate
+                   qgr.gate_status,
+                   qgr.assertion_pass_rate, qgr.assertion_pass_rate_threshold, qgr.assertion_passed,
+                   qgr.execution_success_rate, qgr.execution_success_rate_threshold, qgr.execution_passed
             FROM test_run r
             JOIN target_reference tr ON tr.reference_id = r.target_reference_id
             JOIN http_endpoint_target he ON he.reference_id = tr.reference_id
@@ -96,9 +99,31 @@ class TestRunDetailPersistenceAdapter implements LoadTestRunDetailPort {
             return new QualityGateView(gateStatus, null);
         }
         QualityGateMetricsView metrics = new QualityGateMetricsView(
-                resultSet.getDouble("assertion_pass_rate"),
-                resultSet.getDouble("execution_success_rate"));
+                new QualityGateMetricView(
+                        requiredDouble(resultSet, "assertion_pass_rate"),
+                        requiredDouble(resultSet, "assertion_pass_rate_threshold"),
+                        requiredBoolean(resultSet, "assertion_passed")),
+                new QualityGateMetricView(
+                        requiredDouble(resultSet, "execution_success_rate"),
+                        requiredDouble(resultSet, "execution_success_rate_threshold"),
+                        requiredBoolean(resultSet, "execution_passed")));
         return new QualityGateView(gateStatus, metrics);
+    }
+
+    private static double requiredDouble(ResultSet resultSet, String column) throws SQLException {
+        Double value = resultSet.getObject(column, Double.class);
+        if (value == null) {
+            throw new SQLException("evaluated Quality Gate column is null: " + column);
+        }
+        return value;
+    }
+
+    private static boolean requiredBoolean(ResultSet resultSet, String column) throws SQLException {
+        Boolean value = resultSet.getObject(column, Boolean.class);
+        if (value == null) {
+            throw new SQLException("evaluated Quality Gate column is null: " + column);
+        }
+        return value;
     }
 
     private static double percent(int processed, int total) {

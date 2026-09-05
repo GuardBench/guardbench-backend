@@ -19,5 +19,12 @@ public record QualityGateResult(
         if (status != QualityGateStatus.NOT_EVALUATED && metrics == null) {
             throw new IllegalArgumentException("Evaluated Quality Gate requires metrics");
         }
+        if (metrics != null) {
+            QualityGateStatus metricStatus = metrics.assertion().passed() && metrics.execution().passed()
+                    ? QualityGateStatus.PASS : QualityGateStatus.FAIL;
+            if (status != metricStatus) {
+                throw new IllegalArgumentException("Quality Gate status must match metric decisions");
+            }
+        }
     }
 }

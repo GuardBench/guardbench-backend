@@ -301,7 +301,11 @@ CREATE TABLE quality_gate_result (
     test_run_id            BIGINT PRIMARY KEY,
     gate_status            VARCHAR(32) NOT NULL,
     assertion_pass_rate    DOUBLE PRECISION,
+    assertion_pass_rate_threshold DOUBLE PRECISION,
+    assertion_passed       BOOLEAN,
     execution_success_rate DOUBLE PRECISION,
+    execution_success_rate_threshold DOUBLE PRECISION,
+    execution_passed       BOOLEAN,
     created_at             TIMESTAMPTZ(6) NOT NULL,
 
     CONSTRAINT fk_quality_gate_test_run
@@ -311,19 +315,32 @@ CREATE TABLE quality_gate_result (
     CONSTRAINT ck_quality_gate_metric_ranges
         CHECK (
             (assertion_pass_rate IS NULL OR assertion_pass_rate BETWEEN 0.0 AND 1.0)
+            AND (assertion_pass_rate_threshold IS NULL OR assertion_pass_rate_threshold BETWEEN 0.0 AND 1.0)
             AND (execution_success_rate IS NULL OR execution_success_rate BETWEEN 0.0 AND 1.0)
+            AND (execution_success_rate_threshold IS NULL OR execution_success_rate_threshold BETWEEN 0.0 AND 1.0)
         ),
     CONSTRAINT ck_quality_gate_result_shape
         CHECK (
             (
                 gate_status = 'NOT_EVALUATED'
                 AND assertion_pass_rate IS NULL
+                AND assertion_pass_rate_threshold IS NULL
+                AND assertion_passed IS NULL
                 AND execution_success_rate IS NULL
+                AND execution_success_rate_threshold IS NULL
+                AND execution_passed IS NULL
             )
             OR (
                 gate_status IN ('PASS', 'FAIL')
                 AND assertion_pass_rate IS NOT NULL
+                AND assertion_pass_rate_threshold IS NOT NULL
+                AND assertion_passed IS NOT NULL
                 AND execution_success_rate IS NOT NULL
+                AND execution_success_rate_threshold IS NOT NULL
+                AND execution_passed IS NOT NULL
+                AND assertion_passed = (assertion_pass_rate >= assertion_pass_rate_threshold)
+                AND execution_passed = (execution_success_rate >= execution_success_rate_threshold)
+                AND (gate_status = 'PASS') = (assertion_passed AND execution_passed)
             )
         )
 );

@@ -142,7 +142,7 @@ ALB Target Group은 port `8080`, protocol `HTTP`, target type `ip`를 사용한�
 - DB subnet group은 두 private subnet으로 구성하고 TCP 5432는 기존 API SG에서만 허용한다.
 - 다른 VPC의 `kclee-app`과 VPC Peering을 만들지 않는다. 기존 `guardbench-dev-rds-sg`를 연결한 GuardBench 전용 RDS를 현재 VPC에 새로 만든다.
 - `manage_master_user_password=true`로 RDS가 password를 생성·회전 가능한 Secrets Manager secret으로 관리하게 한다. password를 tfvars, Terraform output, GitHub secret이나 Task Definition 평문에 넣지 않는다.
-- 현재 Flyway가 애플리케이션 시작 시 V1·V2 migration을 실행하므로 최초 Task가 schema를 생성한다. 별도 migration container는 만들지 않는다.
+- 현재 Flyway가 애플리케이션 시작 시 current V1 migration을 실행하므로 최초 Task가 schema를 생성한다. 별도 migration container는 만들지 않는다.
 - JDBC URL은 `jdbc:postgresql://{rds-endpoint}:5432/guardbench?sslmode=require`를 사용한다.
 - 하나의 Task만 실행하므로 기본 Hikari pool을 그대로 사용한다. Task 수를 늘리기 전 pool 상한과 RDS connection 한도를 함께 결정한다.
 
@@ -313,7 +313,7 @@ backend 배포·검증 순서는 다음과 같다.
 2. `terraform fmt`, `validate`, `plan` 결과에서 기존 VPC, subnet, Endpoint, SG, S3, CloudFront, ALB와 Target Group의 삭제·교체가 없음을 확인한다.
 3. 기존 네트워크 rule과 ALB·CloudFront behavior를 수정하고 RDS, Queue, Secret Endpoint, IAM, ECR을 신규 생성한다.
 4. backend `dev`의 `clean check bootBuildImage`가 성공한 commit SHA image를 ECR에 push한다.
-5. 해당 image를 가리키는 단일 Task Definition과 ECS Service를 배포한다. Flyway V1·V2 성공과 ALB healthy target 1개를 확인한다.
+5. 해당 image를 가리키는 단일 Task Definition과 ECS Service를 배포한다. Flyway current V1 성공과 ALB healthy target 1개를 확인한다.
 6. CloudFront URL에서 `GET /api/v1/test-suites`가 200이고, create/update API의 JSON body와 `Idempotency-Key`가 전달되는지 확인한다.
 7. TestRun 한 건을 접수해 `resolve → workitems → finalize`, SageMaker classifier 호출, terminal DB 결과, Source Queue 감소와 DLQ 0을 확인한다.
 8. Publisher/Worker log metric filter와 SNS test alarm이 실제 수신되는지 확인한다.

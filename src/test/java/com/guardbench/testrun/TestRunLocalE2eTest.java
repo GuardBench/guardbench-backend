@@ -176,6 +176,14 @@ class TestRunLocalE2eTest {
         assertThat(detail.path("data").path("qualityGate").path("status").asText()).isEqualTo("PASS");
         assertThat(detail.path("data").path("qualityGate").path("metrics").path("assertionPassRate").asDouble())
                 .isEqualTo(1.0);
+        assertThat(detail.path("data").path("qualityGate").path("metrics").path("assertion").path("value").asDouble())
+                .isEqualTo(1.0);
+        assertThat(detail.path("data").path("qualityGate").path("metrics").path("assertion").path("threshold").asDouble())
+                .isEqualTo(0.95);
+        assertThat(detail.path("data").path("qualityGate").path("metrics").path("assertion").path("passed").asBoolean())
+                .isTrue();
+        assertThat(detail.path("data").path("qualityGate").path("metrics").path("execution").path("passed").asBoolean())
+                .isTrue();
         assertThat(result.path("data").path("page").path("totalElements").asInt()).isEqualTo(1);
         assertThat(metrics.path("httpStatus").asInt()).isEqualTo(200);
         assertThat(metrics.path("data").path("truePositive").asInt()).isEqualTo(0);

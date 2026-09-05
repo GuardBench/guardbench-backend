@@ -47,14 +47,18 @@ class TestRunQueryPortContractTest {
     void qualityGateViewKeepsEvaluationValuesAsLocalScalarCodes() {
         QualityGateView evaluated = new QualityGateView(
                 "PASS",
-                new QualityGateMetricsView(0.95, 0.95));
+                new QualityGateMetricsView(
+                        new QualityGateMetricView(0.95, 0.95, true),
+                        new QualityGateMetricView(0.95, 0.95, true)));
         QualityGateView notEvaluated = new QualityGateView("NOT_EVALUATED", null);
 
         assertEquals("PASS", evaluated.statusCode());
         assertEquals("NOT_EVALUATED", notEvaluated.statusCode());
         assertThrows(IllegalArgumentException.class, () -> new QualityGateView("FAIL", null));
         assertThrows(IllegalArgumentException.class, () -> new QualityGateView(
-                "NOT_EVALUATED", new QualityGateMetricsView(0.0, 0.0)));
+                "NOT_EVALUATED", new QualityGateMetricsView(
+                        new QualityGateMetricView(0.0, 0.95, false),
+                        new QualityGateMetricView(0.0, 0.95, false))));
     }
 
     @Test

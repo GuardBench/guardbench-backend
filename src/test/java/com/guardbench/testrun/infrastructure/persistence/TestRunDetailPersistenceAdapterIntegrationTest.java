@@ -2,6 +2,7 @@ package com.guardbench.testrun.infrastructure.persistence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.sql.Timestamp;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -73,6 +75,11 @@ class TestRunDetailPersistenceAdapterIntegrationTest {
 
         assertEquals("PASS", detail.qualityGate().statusCode());
         assertEquals(0.95, detail.qualityGate().metrics().assertionPassRate());
+        assertEquals(0.95, detail.qualityGate().metrics().assertion().threshold());
+        assertTrue(detail.qualityGate().metrics().assertion().passed());
+        assertEquals(0.98, detail.qualityGate().metrics().execution().value());
+        assertEquals(0.95, detail.qualityGate().metrics().execution().threshold());
+        assertTrue(detail.qualityGate().metrics().execution().passed());
     }
 
     @Test
@@ -86,6 +93,36 @@ class TestRunDetailPersistenceAdapterIntegrationTest {
 
         assertEquals("NOT_EVALUATED", detail.qualityGate().statusCode());
         assertNull(detail.qualityGate().metrics());
+    }
+
+    @Test
+    @DisplayName("Assertion 판정과 value/threshold가 모순되면 DB가 거부한다")
+    void rejectsContradictoryAssertionDecision() {
+        insertSuite(50_031L);
+        insertTestRun(60_031L, 50_031L, "FINISHED", "5", "COMPLETED", true, true);
+
+        assertThrows(DataIntegrityViolationException.class,
+                () -> insertQualityGateResult(60_031L, "FAIL", 0.95, 0.95, false, 0.98, 0.95, true));
+    }
+
+    @Test
+    @DisplayName("Execution 판정과 value/threshold가 모순되면 DB가 거부한다")
+    void rejectsContradictoryExecutionDecision() {
+        insertSuite(50_041L);
+        insertTestRun(60_041L, 50_041L, "FINISHED", "6", "COMPLETED", true, true);
+
+        assertThrows(DataIntegrityViolationException.class,
+                () -> insertQualityGateResult(60_041L, "FAIL", 0.95, 0.95, true, 0.98, 0.95, false));
+    }
+
+    @Test
+    @DisplayName("최종 상태와 metric별 판정이 모순되면 DB가 거부한다")
+    void rejectsStatusContradictingMetricDecisions() {
+        insertSuite(50_051L);
+        insertTestRun(60_051L, 50_051L, "FINISHED", "7", "COMPLETED", true, true);
+
+        assertThrows(DataIntegrityViolationException.class,
+                () -> insertQualityGateResult(60_051L, "PASS", 0.90, 0.95, false, 0.98, 0.95, true));
     }
 
     private void insertSuite(long id) {
@@ -128,10 +165,38 @@ class TestRunDetailPersistenceAdapterIntegrationTest {
         boolean evaluated = !"NOT_EVALUATED".equals(status);
         jdbcTemplate.update("""
                 INSERT INTO quality_gate_result (
-                    test_run_id, gate_status, assertion_pass_rate, execution_success_rate, created_at)
-                VALUES (?, ?, ?, ?, ?)
+                    test_run_id, gate_status,
+                    assertion_pass_rate, assertion_pass_rate_threshold, assertion_passed,
+                    execution_success_rate, execution_success_rate_threshold, execution_passed,
+                    created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 testRunId, status,
-                evaluated ? 0.95 : null, evaluated ? 0.98 : null, Timestamp.from(T0));
+                evaluated ? 0.95 : null, evaluated ? 0.95 : null, evaluated ? true : null,
+                evaluated ? 0.98 : null, evaluated ? 0.95 : null, evaluated ? true : null,
+                Timestamp.from(T0));
+    }
+
+    private void insertQualityGateResult(
+            long testRunId,
+            String status,
+            double assertionValue,
+            double assertionThreshold,
+            boolean assertionPassed,
+            double executionValue,
+            double executionThreshold,
+            boolean executionPassed) {
+        jdbcTemplate.update("""
+                INSERT INTO quality_gate_result (
+                    test_run_id, gate_status,
+                    assertion_pass_rate, assertion_pass_rate_threshold, assertion_passed,
+                    execution_success_rate, execution_success_rate_threshold, execution_passed,
+                    created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                testRunId, status,
+                assertionValue, assertionThreshold, assertionPassed,
+                executionValue, executionThreshold, executionPassed,
+                Timestamp.from(T0));
     }
 }

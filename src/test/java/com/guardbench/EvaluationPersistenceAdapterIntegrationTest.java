@@ -21,6 +21,7 @@ import com.guardbench.evaluation.domain.ChangeResult;
 import com.guardbench.evaluation.domain.ChangeType;
 import com.guardbench.evaluation.domain.ComparabilityStatus;
 import com.guardbench.evaluation.domain.QualityGateMetrics;
+import com.guardbench.evaluation.domain.QualityGateMetric;
 import com.guardbench.evaluation.domain.QualityGateResult;
 import com.guardbench.evaluation.domain.QualityGateStatus;
 import com.guardbench.evaluation.domain.SnapshotEvaluation;
@@ -124,7 +125,7 @@ class EvaluationPersistenceAdapterIntegrationTest {
         QualityGateResult result = new QualityGateResult(
                 new TestRunEvaluationReference(FIRST_TEST_RUN_ID),
                 QualityGateStatus.PASS,
-                new QualityGateMetrics(0.95, 0.95),
+                metrics(0.95, 0.95),
                 CREATED_AT.plusSeconds(2));
 
         repository.save(result);
@@ -144,7 +145,7 @@ class EvaluationPersistenceAdapterIntegrationTest {
         QualityGateResult replacement = new QualityGateResult(
                 result.reference(),
                 QualityGateStatus.FAIL,
-                new QualityGateMetrics(0.0, 0.0),
+                metrics(0.0, 0.0),
                 CREATED_AT.plusSeconds(4));
 
         repository.save(result);
@@ -154,5 +155,11 @@ class EvaluationPersistenceAdapterIntegrationTest {
         assertNull(restored.metrics());
         assertThrows(org.springframework.dao.InvalidDataAccessApiUsageException.class, () -> repository.save(replacement));
         assertEquals(result, repository.findById(result.reference()).orElseThrow());
+    }
+
+    private static QualityGateMetrics metrics(double assertionRate, double executionRate) {
+        return new QualityGateMetrics(
+                QualityGateMetric.evaluate(assertionRate, 0.95),
+                QualityGateMetric.evaluate(executionRate, 0.95));
     }
 }
