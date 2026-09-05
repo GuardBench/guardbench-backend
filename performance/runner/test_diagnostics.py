@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from performance.runner.acceptance import evaluate
-from performance.runner.aws import QueueInspector
+from performance.runner.aws import CloudWatchMetricCollector, QueueInspector
 from performance.runner.cli import _collect_run_diagnostics, _required_revision, _threshold_inputs
 from performance.runner.config import ConfigurationError
 
@@ -140,15 +140,33 @@ class PerformanceDiagnosticsTest(unittest.TestCase):
         self.assertIsNone(snapshot[0]["oldestAgeSeconds"])
         self.assertNotIn("ApproximateAgeOfOldestMessage", inspector.client.request["AttributeNames"])
 
+    def test_metric_configuration_rejects_unresolved_dimensions(self):
+        collector = CloudWatchMetricCollector.__new__(CloudWatchMetricCollector)
+        collector.config = {
+            "metrics": [{
+                "id": "sqs_workitems_visible",
+                "dimensions": {"QueueName": "${PERF_SOURCE_QUEUE_WORK_ITEMS_NAME}"},
+            }]
+        }
+
+        with self.assertRaisesRegex(ConfigurationError, "sqs_workitems_visible"):
+            collector.validate_configuration()
+
     def test_failed_run_diagnostics_preserve_ids_and_error_summary(self):
         class FakeApi:
             def list_runs(self, **kwargs):
-                return [{"id": 41}, {"id": 42}]
+                return [
+                    {"id": 41, "testSuiteId": 7},
+                    {"id": 42, "testSuiteId": 7},
+                    {"id": 99, "testSuiteId": 8},
+                ]
 
             def get_run(self, run_id):
                 if run_id == 41:
                     return {"id": 41, "status": "FINISHED", "executionOutcome": "COMPLETED"}
-                return {"id": 42, "status": "FINISHED", "executionOutcome": "FAILED"}
+                if run_id == 42:
+                    return {"id": 42, "status": "FINISHED", "executionOutcome": "ERROR"}
+                raise AssertionError("other suite must not be queried")
 
             def list_run_results(self, run_id):
                 if run_id == 42:
@@ -159,11 +177,12 @@ class PerformanceDiagnosticsTest(unittest.TestCase):
                 return []
 
         now = datetime.now(timezone.utc)
-        diagnostics = _collect_run_diagnostics(FakeApi(), now, now)
+        diagnostics = _collect_run_diagnostics(FakeApi(), 7, now, now)
 
+        self.assertEqual(2, diagnostics["test_run_count"])
         self.assertEqual([42], diagnostics["failed_test_run_ids"])
         self.assertEqual({"EVALUATOR:PROVIDER_TIMEOUT": 2}, diagnostics["error_summary"])
-        self.assertEqual("FAILED", diagnostics["failed_runs"][0]["executionOutcome"])
+        self.assertEqual("ERROR", diagnostics["failed_runs"][0]["executionOutcome"])
 
 
 if __name__ == "__main__":
