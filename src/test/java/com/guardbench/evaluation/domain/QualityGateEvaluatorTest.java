@@ -1,6 +1,7 @@
 package com.guardbench.evaluation.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.time.Instant;
@@ -72,6 +73,12 @@ class QualityGateEvaluatorTest {
             assertEquals(0.95, result.metrics().execution().threshold());
             assertEquals(true, result.metrics().execution().passed());
             assertEquals(CREATED_AT, result.createdAt());
+        }
+
+        @Test
+        @DisplayName("0.95 기준 바로 아래 값은 통과하지 못한다")
+        void failsImmediatelyBelowInclusiveRateBoundary() {
+            assertFalse(QualityGateMetric.evaluate(0.94999, 0.95).passed());
         }
 
         @Test

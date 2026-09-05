@@ -64,7 +64,7 @@ public final class QualityGateEvaluator {
         return new QualityGateResult(reference, evaluateStatus(metrics), metrics, createdAt);
     }
 
-    public QualityGateStatus evaluateStatus(QualityGateMetrics metrics) {
+    private QualityGateStatus evaluateStatus(QualityGateMetrics metrics) {
         Objects.requireNonNull(metrics, "Quality Gate metrics must not be null");
 
         boolean passes = metrics.assertion().passed() && metrics.execution().passed();

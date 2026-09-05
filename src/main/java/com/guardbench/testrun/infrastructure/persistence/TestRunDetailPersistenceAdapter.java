@@ -100,14 +100,30 @@ class TestRunDetailPersistenceAdapter implements LoadTestRunDetailPort {
         }
         QualityGateMetricsView metrics = new QualityGateMetricsView(
                 new QualityGateMetricView(
-                        resultSet.getDouble("assertion_pass_rate"),
-                        resultSet.getDouble("assertion_pass_rate_threshold"),
-                        resultSet.getBoolean("assertion_passed")),
+                        requiredDouble(resultSet, "assertion_pass_rate"),
+                        requiredDouble(resultSet, "assertion_pass_rate_threshold"),
+                        requiredBoolean(resultSet, "assertion_passed")),
                 new QualityGateMetricView(
-                        resultSet.getDouble("execution_success_rate"),
-                        resultSet.getDouble("execution_success_rate_threshold"),
-                        resultSet.getBoolean("execution_passed")));
+                        requiredDouble(resultSet, "execution_success_rate"),
+                        requiredDouble(resultSet, "execution_success_rate_threshold"),
+                        requiredBoolean(resultSet, "execution_passed")));
         return new QualityGateView(gateStatus, metrics);
+    }
+
+    private static double requiredDouble(ResultSet resultSet, String column) throws SQLException {
+        Double value = resultSet.getObject(column, Double.class);
+        if (value == null) {
+            throw new SQLException("evaluated Quality Gate column is null: " + column);
+        }
+        return value;
+    }
+
+    private static boolean requiredBoolean(ResultSet resultSet, String column) throws SQLException {
+        Boolean value = resultSet.getObject(column, Boolean.class);
+        if (value == null) {
+            throw new SQLException("evaluated Quality Gate column is null: " + column);
+        }
+        return value;
     }
 
     private static double percent(int processed, int total) {

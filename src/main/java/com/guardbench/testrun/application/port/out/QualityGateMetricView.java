@@ -9,9 +9,6 @@ public record QualityGateMetricView(
         if (!isRate(value) || !isRate(threshold)) {
             throw new IllegalArgumentException("invalid Quality Gate metric evidence");
         }
-        if (passed != (value >= threshold)) {
-            throw new IllegalArgumentException("Quality Gate metric decision does not match its evidence");
-        }
     }
 
     private static boolean isRate(double value) {
