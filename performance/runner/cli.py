@@ -204,8 +204,12 @@ def _read_json(path: Path) -> dict[str, Any]:
     return value
 
 
-def _collect_run_diagnostics(api: ApiClient, started_at: datetime, finished_at: datetime) -> dict[str, Any]:
-    runs = api.list_runs(created_from=started_at, created_to=finished_at)
+def _collect_run_diagnostics(api: ApiClient, suite_id: int,
+                             started_at: datetime, finished_at: datetime) -> dict[str, Any]:
+    runs = [
+        run for run in api.list_runs(created_from=started_at, created_to=finished_at)
+        if run.get("testSuiteId") == suite_id
+    ]
     failed_runs: list[dict[str, Any]] = []
     error_counts: Counter[str] = Counter()
     for run in runs:
@@ -328,6 +332,8 @@ def execute(args: argparse.Namespace) -> int:
     api = ApiClient(base_url)
     source_urls, dlq_urls = queue_urls_from_environment()
     inspector = QueueInspector()
+    metric_collector = CloudWatchMetricCollector(repo_root / "performance/metrics/aws.yaml")
+    metric_collector.validate_configuration()
     preflight = _assert_preflight(api, inspector, source_urls, dlq_urls)
     infrastructure_capacity = InfrastructureCapacityCollector().collect()
     infrastructure_capacity["revisions"] = revisions
@@ -350,13 +356,13 @@ def execute(args: argparse.Namespace) -> int:
                             workload["completion_timeout_seconds"], workload["polling_interval_seconds"])
     finished_at = _now()
     final_queues = inspector.snapshot(dlq_urls)
-    metrics = CloudWatchMetricCollector(repo_root / "performance/metrics/aws.yaml").collect(started_at, finished_at)
+    metrics = metric_collector.collect(started_at, finished_at)
     (result_dir / "aws-metrics.json").write_text(json.dumps(metrics, indent=2, default=str) + "\n", encoding="utf-8")
     acceptance = evaluate(
         profile, summary, drain, final_queues, metrics,
         k6_exit_code == K6_THRESHOLD_FAILURE_EXIT_CODE,
     )
-    diagnostics = _collect_run_diagnostics(api, started_at, finished_at)
+    diagnostics = _collect_run_diagnostics(api, suite_id, started_at, finished_at)
     threshold_failed = k6_exit_code == K6_THRESHOLD_FAILURE_EXIT_CODE
     result = {
         "run_id": run_id,
