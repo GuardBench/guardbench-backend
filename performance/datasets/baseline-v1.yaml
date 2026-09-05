@@ -6,7 +6,7 @@ source:
   type: http-testset
   path: ../../http/testsets/notion-testset-import.http
   expected_test_case_count: 78
-  sha256: 9784dfc97e2056223df5d0b3bde83d9275493baafaeb413836bf2e4b037d39db
+  sha256: a143f6e05628144e9be44dce090abc0dc8e4ddc57b4716923381169a8ca59f4c
 generation:
   method: existing Notion testset import fixture
   source: "http/testsets/notion-testset-import.http"

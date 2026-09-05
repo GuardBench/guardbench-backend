@@ -1,5 +1,6 @@
 /gradlew text eol=lf
 *.sh text eol=lf
+*.http text eol=lf
 bin/* text eol=lf
 *.bat text eol=crlf
 *.jar binary
