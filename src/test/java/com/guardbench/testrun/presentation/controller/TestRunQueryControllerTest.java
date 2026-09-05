@@ -439,6 +439,59 @@ class TestRunQueryControllerTest {
         }
 
         @Test
+        @DisplayName("요약 조회는 변화 집계만 반환하고 케이스 payload를 제외한다")
+        void returnsComparisonSummaryWithoutItems() throws Exception {
+            TestRunComparison comparison = new TestRunComparison(
+                    901L, 800L, 3L, 2L, 1L, 1L, 1L, 0L,
+                    List.of(new TestRunComparison.TestRunComparisonItem(
+                            1001L, 10L, "case", "input", Action.BLOCK, Action.ALLOW, Action.BLOCK,
+                            "COMPARABLE", "IMPROVEMENT")));
+            when(compareTestRunsService.compare(901L, 800L)).thenReturn(comparison);
+
+            mockMvc.perform(get(BASE + "/901/comparisons/800/summary"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.currentRunId").value(901))
+                    .andExpect(jsonPath("$.data.comparisonRunId").value(800))
+                    .andExpect(jsonPath("$.data.totalCases").value(3))
+                    .andExpect(jsonPath("$.data.changedCount").value(2))
+                    .andExpect(jsonPath("$.data.unchangedCount").value(1))
+                    .andExpect(jsonPath("$.data.improvedCount").value(1))
+                    .andExpect(jsonPath("$.data.regressedCount").value(1))
+                    .andExpect(jsonPath("$.data.notComparableCount").value(0))
+                    .andExpect(jsonPath("$.data.items").doesNotExist());
+        }
+
+        @Test
+        @DisplayName("요약 조회의 Run ID가 0 이하면 400을 반환한다")
+        void returnsValidationErrorForNonPositiveSummaryRunId() throws Exception {
+            mockMvc.perform(get(BASE + "/0/comparisons/800/summary"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.data.code").value("VALIDATION_ERROR"));
+        }
+
+        @Test
+        @DisplayName("요약 조회의 Run이 존재하지 않으면 404를 반환한다")
+        void returnsNotFoundForComparisonSummary() throws Exception {
+            when(compareTestRunsService.compare(999L, 800L))
+                    .thenThrow(new ApplicationException(ApplicationErrorCode.TEST_RUN_NOT_FOUND));
+
+            mockMvc.perform(get(BASE + "/999/comparisons/800/summary"))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.data.code").value("TEST_RUN_NOT_FOUND"));
+        }
+
+        @Test
+        @DisplayName("요약 조회의 두 Run이 비교 불가능하면 409를 반환한다")
+        void returnsConflictForComparisonSummary() throws Exception {
+            when(compareTestRunsService.compare(901L, 800L))
+                    .thenThrow(new ApplicationException(ApplicationErrorCode.TEST_RUNS_NOT_COMPARABLE));
+
+            mockMvc.perform(get(BASE + "/901/comparisons/800/summary"))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.data.code").value("TEST_RUNS_NOT_COMPARABLE"));
+        }
+
+        @Test
         @DisplayName("저장 verdict가 없는 항목은 비교 불가와 null 비교 필드를 반환한다")
         void returnsNullComparisonFieldsWhenStoredVerdictIsMissing() throws Exception {
             TestRunComparison comparison = new TestRunComparison(

@@ -39,6 +39,7 @@ import com.guardbench.testrun.presentation.dto.TestRunResultListRes;
 import com.guardbench.testrun.presentation.dto.EvaluatorMetricsRes;
 import com.guardbench.testrun.presentation.dto.ComparableTestRunListRes;
 import com.guardbench.testrun.presentation.dto.TestRunComparisonRes;
+import com.guardbench.testrun.presentation.dto.TestRunComparisonSummaryRes;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -232,6 +233,15 @@ public class TestRunQueryController {
         TestRunComparison comparison = compareTestRunsService.compare(currentRunId, comparisonRunId);
         return ApiResponse.entity(HttpStatus.OK, SUCCESS_MESSAGE_COMPARISON,
                 TestRunQueryResponseMapper.toComparisonRes(comparison));
+    }
+
+    @GetMapping("/{currentRunId}/comparisons/{comparisonRunId}/summary")
+    public ResponseEntity<ApiResponse<TestRunComparisonSummaryRes>> summarizeTestRunComparison(
+            @PathVariable @Positive(message = "currentRunId는 양의 정수여야 합니다.") long currentRunId,
+            @PathVariable @Positive(message = "comparisonRunId는 양의 정수여야 합니다.") long comparisonRunId) {
+        TestRunComparison comparison = compareTestRunsService.compare(currentRunId, comparisonRunId);
+        return ApiResponse.entity(HttpStatus.OK, SUCCESS_MESSAGE_COMPARISON,
+                TestRunQueryResponseMapper.toComparisonSummaryRes(comparison));
     }
 
     /**
