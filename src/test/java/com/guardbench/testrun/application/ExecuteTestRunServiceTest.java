@@ -79,6 +79,106 @@ class ExecuteTestRunServiceTest {
     }
 
     @Nested
+    @DisplayName("Application Target 호출 timing")
+    class TargetTiming {
+        @Test
+        @DisplayName("Target 시작과 완료 timing을 응답·classifier·terminal 로그에 순서대로 연결한다")
+        void logsTargetTimingBeforeResponseAndClassifier() {
+            LogCapture capture = LogCapture.attach(ExecuteTestRunService.class);
+            try {
+                claimPort.willAcquire(SNAPSHOT_ID);
+                contextPort.setContext(SNAPSHOT_ID, defaultContext());
+                evaluatorPort.willReturn(EvaluatorExecutionResult.succeeded("ALLOW"));
+                TargetExecutionPort targetStub = request -> {
+                    assertTrue(capture.hasMessageContaining("Application Target 호출을 시작합니다"));
+                    assertFalse(capture.hasMessageContaining("Application Target 호출을 완료했습니다"));
+                    java.util.concurrent.locks.LockSupport.parkNanos(20_000_000);
+                    return TargetExecutionResult.succeeded("safe response");
+                };
+                ExecuteTestRunService timedService = new ExecuteTestRunService(
+                        claimPort, executionRepository, contextPort, targetStub, evaluatorPort,
+                        outboxPort, new InlineTransactionalPhase(), FIXED_CLOCK);
+
+                timedService.execute(SNAPSHOT_ID);
+
+                String start = capture.firstMessageContaining("Application Target 호출을 시작합니다");
+                String complete = capture.firstMessageContaining("Application Target 호출을 완료했습니다");
+                assertTrue(start.contains("testRunId=1 snapshotId=100 attemptCount=1"));
+                assertTrue(complete.contains("testRunId=1 snapshotId=100 attemptCount=1"));
+                assertTrue(Long.parseLong(complete.split("durationMs=")[1]) >= 10);
+                assertFalse(start.contains(INPUT_TEXT));
+                assertFalse(complete.contains("safe response"));
+                List<String> messages = capture.messages();
+                List<String> ordered = List.of(start, complete,
+                        capture.firstMessageContaining("Application response 진단 정보"),
+                        capture.firstMessageContaining("Classifier 호출을 시작합니다"),
+                        capture.firstMessageContaining("Classifier 판정을 완료했습니다"),
+                        capture.firstMessageContaining("terminal 결과를 저장했습니다"));
+                for (int i = 1; i < ordered.size(); i++) {
+                    assertTrue(messages.indexOf(ordered.get(i - 1)) < messages.indexOf(ordered.get(i)));
+                }
+            } finally {
+                capture.detach();
+            }
+        }
+
+        @Test
+        @DisplayName("Target 실패 반환과 provider 예외 모두 timing과 안전한 오류 코드를 남긴다")
+        void logsReturnedAndThrownTargetFailures() {
+            for (boolean throwsException : List.of(false, true)) {
+                LogCapture capture = LogCapture.attach(ExecuteTestRunService.class);
+                try {
+                    claimPort.willAcquire(SNAPSHOT_ID);
+                    contextPort.setContext(SNAPSHOT_ID, defaultContext());
+                    if (throwsException) guardrailPort.willThrow(TargetFailureCode.PROVIDER_TIMEOUT);
+                    else guardrailPort.willReturn(TargetExecutionResult.failed(TargetFailureCode.PROVIDER_TIMEOUT));
+
+                    assertEquals(ExecuteTestRunService.ExecutionOutcome.PROVIDER_FAILED_RETRYABLE,
+                            service.execute(SNAPSHOT_ID));
+
+                    String failure = capture.firstMessageContaining("Application Target 호출에 실패했습니다");
+                    assertTrue(failure.contains("testRunId=1 snapshotId=100 attemptCount=1 durationMs="));
+                    assertTrue(failure.contains("errorStage=APPLICATION_TARGET errorCode=PROVIDER_TIMEOUT"));
+                    assertFalse(failure.contains(INPUT_TEXT));
+                    assertFalse(capture.hasMessageContaining("Application Target 호출을 완료했습니다"));
+                    assertEquals(0, evaluatorPort.callCount());
+                } finally {
+                    capture.detach();
+                }
+            }
+        }
+
+        @Test
+        @DisplayName("예상하지 못한 Target 예외의 원문과 credential은 timing 로그에 노출하지 않는다")
+        void sanitizesUnexpectedTargetFailureTiming() {
+            LogCapture capture = LogCapture.attach(ExecuteTestRunService.class);
+            try {
+                claimPort.willAcquire(SNAPSHOT_ID);
+                contextPort.setContext(SNAPSHOT_ID, defaultContext());
+                TargetExecutionPort targetStub = request -> {
+                    throw new IllegalStateException("Authorization: Bearer secret https://secret-endpoint " + INPUT_TEXT);
+                };
+                ExecuteTestRunService failedService = new ExecuteTestRunService(
+                        claimPort, executionRepository, contextPort, targetStub, evaluatorPort,
+                        outboxPort, new InlineTransactionalPhase(), FIXED_CLOCK);
+
+                failedService.execute(SNAPSHOT_ID);
+
+                String failure = capture.firstMessageContaining("Application Target 호출에 실패했습니다");
+                assertTrue(failure.contains("errorCode=PROVIDER_UNAVAILABLE"));
+                assertTrue(failure.contains("testRunId=1 snapshotId=100 attemptCount=1 durationMs="));
+                for (String message : capture.messages()) {
+                    assertFalse(message.contains("secret"));
+                    assertFalse(message.contains("Authorization"));
+                    assertFalse(message.contains(INPUT_TEXT));
+                }
+            } finally {
+                capture.detach();
+            }
+        }
+    }
+
+    @Nested
     @DisplayName("Application → Evaluator 분리 흐름")
     class ApplicationEvaluatorFlow {
 
