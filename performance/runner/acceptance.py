@@ -24,6 +24,12 @@ def _value(values: dict[str, Any], key: str) -> float | None:
     return float(value) if isinstance(value, (int, float)) else None
 
 
+def _rate_value(metric: dict[str, Any]) -> float | None:
+    """Read Rate metrics from historical and current k6 summary-export shapes."""
+    value = _value(metric, "rate")
+    return value if value is not None else _value(metric, "value")
+
+
 def evaluate(profile: dict[str, Any], summary: dict[str, Any],
              drain: dict[str, Any], final_queues: list[dict[str, Any]],
              aws_metrics: dict[str, Any], k6_threshold_failed: bool = False) -> dict[str, Any]:
@@ -38,11 +44,11 @@ def evaluate(profile: dict[str, Any], summary: dict[str, Any],
         checks.append({"name": f"api.create_latency.{percentile}", "actual": actual, "expected": f"< {expected} ms",
                        "passed": actual is not None and actual < expected})
 
-    create_errors = _value(_metric(summary, "test_run_create_errors"), "rate")
+    create_errors = _rate_value(_metric(summary, "test_run_create_errors"))
     checks.append({"name": "api.create_error_rate", "actual": create_errors,
                    "expected": f"<= {api['error_rate']}",
                    "passed": create_errors is not None and create_errors <= api["error_rate"]})
-    completion_failures = _value(_metric(summary, "test_run_completion_failures"), "rate")
+    completion_failures = _rate_value(_metric(summary, "test_run_completion_failures"))
     checks.append({"name": "completion.failure_rate", "actual": completion_failures,
                    "expected": f"<= {completion['failure_rate']}",
                    "passed": completion_failures is not None and completion_failures <= completion["failure_rate"]})
