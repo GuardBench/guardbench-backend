@@ -85,6 +85,13 @@ public final class TestRunQueryResponseMapper {
                 comparison.items().stream().map(TestRunQueryResponseMapper::toComparisonItemRes).toList());
     }
 
+    public static TestRunComparisonSummaryRes toComparisonSummaryRes(TestRunComparison comparison) {
+        return new TestRunComparisonSummaryRes(
+                comparison.currentRunId(), comparison.comparisonRunId(), comparison.totalCases(),
+                comparison.changedCount(), comparison.unchangedCount(), comparison.improvedCount(),
+                comparison.regressedCount(), comparison.notComparableCount());
+    }
+
     private static ComparableTestRunListItemRes toComparableItemRes(TestRunRegressionView item) {
         return new ComparableTestRunListItemRes(
                 item.id(), item.testSuiteId(),

@@ -51,7 +51,7 @@ Regression은 Quality Gate와 별도 유스케이스다.
 - 비교 가능성은 최소한 동일한 테스트 정의와 동일한 classifier contract version을 요구한다.
 - comparability key는 Snapshot의 전체 정의와 classifier contract version이다.
 - 변화 방향은 `comparisonRun → currentRun`이며, ExpectedResult가 `BLOCK`인 현재 `ALLOW`는 `SECURITY_REGRESSION`, ExpectedResult가 `ALLOW`인 현재 `BLOCK`은 `USABILITY_REGRESSION`이다. 반대 방향은 `IMPROVEMENT`, 동일 verdict는 `NO_CHANGE`다.
-- 구체적인 API는 `GET /api/v1/test-runs/{testRunId}/comparable-runs`와 `GET /api/v1/test-runs/{currentRunId}/comparisons/{comparisonRunId}`다.
+- 구체적인 API는 `GET /api/v1/test-runs/{testRunId}/comparable-runs`, `GET /api/v1/test-runs/{currentRunId}/comparisons/{comparisonRunId}`, case-level 항목을 제외한 `GET /api/v1/test-runs/{currentRunId}/comparisons/{comparisonRunId}/summary`다.
 
 ```text
 Completed TestRun A + Completed TestRun B

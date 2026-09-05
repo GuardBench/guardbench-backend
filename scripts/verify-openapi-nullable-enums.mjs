@@ -44,6 +44,16 @@ const nullableFieldRefs = [
   ['TestRunComparisonItemRes', 'currentVerdict', 'NullableAction'],
   ['TestRunComparisonItemRes', 'changeType', 'NullableRegressionChangeType'],
 ];
+const comparisonSummaryFields = [
+  'currentRunId',
+  'comparisonRunId',
+  'totalCases',
+  'changedCount',
+  'unchangedCount',
+  'improvedCount',
+  'regressedCount',
+  'notComparableCount',
+];
 
 if (nullableSchemas.length === 0) {
   failures.push('Nullable* schema를 찾지 못했습니다.');
@@ -90,11 +100,33 @@ if (!schemas.get('QualityGateRes')?.nullable) {
   failures.push('QualityGateRes: nullable: true가 필요합니다.');
 }
 
+const comparisonSchema = schemas.get('TestRunComparisonRes');
+const comparisonSummarySchema = schemas.get('TestRunComparisonSummaryRes');
+if (!comparisonSchema || !comparisonSummarySchema) {
+  failures.push('TestRun comparison 전체/요약 schema가 모두 필요합니다.');
+} else {
+  for (const fieldName of comparisonSummaryFields) {
+    const propertyPattern = new RegExp(`^        ${fieldName}:`);
+    const comparisonProperty = comparisonSchema.lines.find((line) => propertyPattern.test(line));
+    const summaryProperty = comparisonSummarySchema.lines.find((line) => propertyPattern.test(line));
+    if (!comparisonProperty || !summaryProperty || comparisonProperty.trim() !== summaryProperty.trim()) {
+      failures.push(`TestRunComparisonSummaryRes.${fieldName}: 전체 comparison과 같은 정의가 필요합니다.`);
+    }
+    const requiredLine = `        - ${fieldName}`;
+    if (!comparisonSchema.lines.includes(requiredLine) || !comparisonSummarySchema.lines.includes(requiredLine)) {
+      failures.push(`TestRunComparisonSummaryRes.${fieldName}: 두 schema의 required 필드여야 합니다.`);
+    }
+  }
+  if (comparisonSummarySchema.lines.some((line) => /^        items:/.test(line))) {
+    failures.push('TestRunComparisonSummaryRes: case-level items를 포함할 수 없습니다.');
+  }
+}
+
 if (failures.length > 0) {
   console.error(failures.join('\n'));
   process.exit(1);
 }
 
 console.log(
-  `${nullableSchemas.length}개 Nullable* enum과 ${nullableFieldRefs.length}개 nullable response field 참조를 확인했습니다.`,
+  `${nullableSchemas.length}개 Nullable* enum, ${nullableFieldRefs.length}개 nullable response field 참조, comparison summary 공통 필드를 확인했습니다.`,
 );
