@@ -10,6 +10,7 @@ import subprocess
 import sys
 import time
 import uuid
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -40,6 +41,13 @@ def _iso(value: datetime) -> str:
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
+
+
+def _required_revision(name: str) -> str:
+    value = os.environ.get(name, "").strip()
+    if not value or value.lower() == "unknown":
+        raise ConfigurationError(f"실제 성능 실행에는 {name}을(를) 명시해야 합니다.")
+    return value
 
 
 def reset_database(environment: dict[str, str]) -> None:
@@ -80,8 +88,6 @@ def apply_migrations(environment: dict[str, str], migration_dir: Path) -> None:
         if not isinstance(command, list) or not command or not all(isinstance(item, str) for item in command):
             raise ConfigurationError("PERFORMANCE_MIGRATION_COMMAND_JSON은 문자열 배열이어야 합니다.")
     else:
-        # The application owns Flyway history/checksums. A non-web Boot run applies
-        # the same migrations and exits, rather than replaying SQL outside Flyway.
         gradle_command = environment.get("PERFORMANCE_GRADLE_COMMAND", "./gradlew")
         command = [gradle_command, "bootRun", "--args=--spring.main.web-application-type=none"]
     migration_environment = dict(environment)
@@ -161,6 +167,15 @@ def _k6_environment(profile: dict[str, Any], run_id: str, suite_id: int, base_ur
     }
 
 
+def _threshold_inputs(profile: dict[str, Any], run_id: str, suite_id: int, base_url: str) -> dict[str, str]:
+    environment = _k6_environment(profile, run_id, suite_id, base_url)
+    names = (
+        "PERF_API_P50_MS", "PERF_API_P95_MS", "PERF_API_P99_MS", "PERF_API_ERROR_RATE",
+        "PERF_COMPLETION_MAX_SECONDS", "PERF_COMPLETION_FAILURE_RATE",
+    )
+    return {name: environment[name] for name in names}
+
+
 def run_k6(profile: dict[str, Any], run_id: str, suite_id: int, base_url: str,
            summary_path: Path, repo_root: Path) -> int:
     environment = os.environ.copy()
@@ -172,8 +187,6 @@ def run_k6(profile: dict[str, Any], run_id: str, suite_id: int, base_url: str,
         ], cwd=repo_root, env=environment, check=False)
     except OSError as exc:
         raise RunnerError("k6 workload 실행에 실패했습니다.") from exc
-    # k6 reserves exit 99 for a completed run whose thresholds failed. It is a
-    # performance result, so preserve the summary and complete the runner flow.
     if result.returncode not in {0, K6_THRESHOLD_FAILURE_EXIT_CODE}:
         raise RunnerError(f"k6 script 또는 실행 환경 오류로 종료되었습니다 (exit {result.returncode}).")
     if not summary_path.is_file():
@@ -191,12 +204,49 @@ def _read_json(path: Path) -> dict[str, Any]:
     return value
 
 
+def _collect_run_diagnostics(api: ApiClient, started_at: datetime, finished_at: datetime) -> dict[str, Any]:
+    runs = api.list_runs(created_from=started_at, created_to=finished_at)
+    failed_runs: list[dict[str, Any]] = []
+    error_counts: Counter[str] = Counter()
+    for run in runs:
+        run_id = run.get("id")
+        if not isinstance(run_id, int):
+            continue
+        detail = api.get_run(run_id)
+        outcome = detail.get("executionOutcome")
+        if outcome == "COMPLETED":
+            continue
+        errors: list[dict[str, Any]] = []
+        for item in api.list_run_results(run_id):
+            error = item.get("error")
+            if not isinstance(error, dict):
+                continue
+            stage = error.get("stage")
+            code = error.get("code")
+            if stage or code:
+                error_counts[f"{stage or 'UNKNOWN'}:{code or 'UNKNOWN'}"] += 1
+            errors.append({"stage": stage, "code": code})
+        failed_runs.append({
+            "id": run_id,
+            "status": detail.get("status"),
+            "executionOutcome": outcome,
+            "errors": errors,
+        })
+    return {
+        "test_run_count": len(runs),
+        "failed_test_run_ids": [item["id"] for item in failed_runs],
+        "failed_runs": failed_runs,
+        "error_summary": dict(sorted(error_counts.items())),
+    }
+
+
 def _report(result: dict[str, Any]) -> str:
     profile = result["profile"]
     workload = profile["workload"]
     acceptance = profile["acceptance"]
     capacity = result["infrastructure_capacity"]
     decision = result.get("acceptance", {}).get("status", "FAIL")
+    diagnostics = result.get("test_run_diagnostics", {})
     lines = [
         f"# {profile['test']['id']} performance report",
         "",
@@ -215,8 +265,11 @@ def _report(result: dict[str, Any]) -> str:
         "",
         "## Results",
         "",
-        f"- k6 summary: `k6-summary.json`",
-        f"- k6 thresholds: {result['k6']['thresholds']} (exit {result['k6']['exit_code']})",
+        "- k6 summary: `k6-summary.json`",
+        f"- Performance thresholds: {result['failure_categories']['thresholds']} (k6 exit {result['k6']['exit_code']})",
+        f"- Business execution failures: {result['failure_categories']['execution_failures']} TestRun(s)",
+        f"- Failed TestRun IDs: {diagnostics.get('failed_test_run_ids', [])}",
+        f"- Execution error summary: {diagnostics.get('error_summary', {})}",
         f"- Queue drain: {result['drain']}",
         f"- AWS metrics: `aws-metrics.json` ({result['aws_metrics'].get('status')})",
         f"- Decision: **{decision}**",
@@ -265,19 +318,22 @@ def execute(args: argparse.Namespace) -> int:
         raise ConfigurationError(
             "Baseline 비교의 DB 상태를 고정하려면 실제 실행에 --reset을 지정해야 합니다."
         )
-    base_url = os.environ.get("PERF_BASE_URL", "http://localhost:8080")
+    revisions = {
+        "application": _required_revision("APP_REVISION"),
+        "infrastructure": _required_revision("INFRA_REVISION"),
+    }
+    base_url = os.environ.get("PERF_BASE_URL", "").strip()
+    if not base_url:
+        raise ConfigurationError("실제 성능 실행에는 PERF_BASE_URL이 필요합니다.")
     api = ApiClient(base_url)
     source_urls, dlq_urls = queue_urls_from_environment()
     inspector = QueueInspector()
     preflight = _assert_preflight(api, inspector, source_urls, dlq_urls)
-    revisions = {"application": os.environ.get("APP_REVISION", "unknown"),
-                 "infrastructure": os.environ.get("INFRA_REVISION", "unknown")}
     infrastructure_capacity = InfrastructureCapacityCollector().collect()
     infrastructure_capacity["revisions"] = revisions
-    if args.reset:
-        environment = dict(os.environ)
-        reset_database(environment)
-        apply_migrations(environment, repo_root / "src/main/resources/db/migration")
+    environment = dict(os.environ)
+    reset_database(environment)
+    apply_migrations(environment, repo_root / "src/main/resources/db/migration")
 
     api.health_check()
     suite_id = api.create_suite(payload)
@@ -286,6 +342,7 @@ def execute(args: argparse.Namespace) -> int:
 
     started_at = _now()
     summary_path = result_dir / "k6-summary.json"
+    threshold_inputs = _threshold_inputs(profile, run_id, suite_id, base_url)
     k6_exit_code = run_k6(profile, run_id, suite_id, base_url, summary_path, repo_root)
     summary = _read_json(summary_path)
     workload = profile["workload"]
@@ -299,6 +356,8 @@ def execute(args: argparse.Namespace) -> int:
         profile, summary, drain, final_queues, metrics,
         k6_exit_code == K6_THRESHOLD_FAILURE_EXIT_CODE,
     )
+    diagnostics = _collect_run_diagnostics(api, started_at, finished_at)
+    threshold_failed = k6_exit_code == K6_THRESHOLD_FAILURE_EXIT_CODE
     result = {
         "run_id": run_id,
         "started_at": _iso(started_at),
@@ -310,8 +369,14 @@ def execute(args: argparse.Namespace) -> int:
         "profile": profile,
         "k6": {
             "exit_code": k6_exit_code,
-            "thresholds": "FAIL" if k6_exit_code == K6_THRESHOLD_FAILURE_EXIT_CODE else "PASS",
+            "thresholds": "FAIL" if threshold_failed else "PASS",
+            "threshold_inputs": threshold_inputs,
         },
+        "failure_categories": {
+            "thresholds": "FAIL" if threshold_failed else "PASS",
+            "execution_failures": len(diagnostics["failed_test_run_ids"]),
+        },
+        "test_run_diagnostics": diagnostics,
         "preflight": preflight,
         "drain": drain,
         "final_dlq": final_queues,
