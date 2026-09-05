@@ -55,7 +55,7 @@ class QueueInspector:
                 "visible": int(attributes.get("ApproximateNumberOfMessages", 0)),
                 "notVisible": int(attributes.get("ApproximateNumberOfMessagesNotVisible", 0)),
                 "delayed": int(attributes.get("ApproximateNumberOfMessagesDelayed", 0)),
-                "oldestAgeSeconds": int(attributes.get("ApproximateAgeOfOldestMessage", 0)),
+                "oldestAgeSeconds": None,
             })
         return result
 
