@@ -6,7 +6,17 @@ from typing import Any
 
 
 def _metric(summary: dict[str, Any], name: str) -> dict[str, Any]:
-    return summary.get("metrics", {}).get(name, {}).get("values", {})
+    """Return metric values from both k6 summary-export shapes.
+
+    k6 0.55 writes metric aggregates directly below ``metrics[name]`` while
+    older fixtures used a nested ``values`` object. Accept both so historical
+    artifacts remain readable without masking missing metrics.
+    """
+    metric = summary.get("metrics", {}).get(name, {})
+    if not isinstance(metric, dict):
+        return {}
+    values = metric.get("values")
+    return values if isinstance(values, dict) else metric
 
 
 def _value(values: dict[str, Any], key: str) -> float | None:
@@ -23,8 +33,7 @@ def evaluate(profile: dict[str, Any], summary: dict[str, Any],
 
     latency = _metric(summary, "test_run_create_latency")
     for percentile in ("p(50)", "p(95)", "p(99)"):
-        key = percentile
-        actual = _value(latency, key)
+        actual = _value(latency, percentile)
         expected = float(api["create_latency_ms"]["p" + percentile[2:-1]])
         checks.append({"name": f"api.create_latency.{percentile}", "actual": actual, "expected": f"< {expected} ms",
                        "passed": actual is not None and actual < expected})
