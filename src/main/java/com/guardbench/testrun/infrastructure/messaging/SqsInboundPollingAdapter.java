@@ -42,11 +42,34 @@ public class SqsInboundPollingAdapter {
     private final String queueUrl;
     private final TestRunQueue queueType;
     private final SqsProperties.Polling pollingConfig;
+    private final WorkItemConcurrencyController workItemConcurrencyController;
 
     // Worker 서비스들 — queue별로 하나만 사용됨
     private final ResolveTestRunService resolveService;
     private final ExecuteTestRunService executeService;
     private final HandleTestExecutionCompletedPort handleCompletedPort;
+
+    SqsInboundPollingAdapter(
+            SqsClient sqsClient,
+            TestRunMessageCodec codec,
+            String queueUrl,
+            TestRunQueue queueType,
+            SqsProperties.Polling pollingConfig,
+            ResolveTestRunService resolveService,
+            ExecuteTestRunService executeService,
+            HandleTestExecutionCompletedPort handleCompletedPort,
+            WorkItemConcurrencyController workItemConcurrencyController
+    ) {
+        this.sqsClient = Objects.requireNonNull(sqsClient);
+        this.codec = Objects.requireNonNull(codec);
+        this.queueUrl = Objects.requireNonNull(queueUrl);
+        this.queueType = Objects.requireNonNull(queueType);
+        this.pollingConfig = Objects.requireNonNull(pollingConfig);
+        this.workItemConcurrencyController = workItemConcurrencyController;
+        this.resolveService = resolveService;
+        this.executeService = executeService;
+        this.handleCompletedPort = handleCompletedPort;
+    }
 
     public SqsInboundPollingAdapter(
             SqsClient sqsClient,
@@ -58,14 +81,8 @@ public class SqsInboundPollingAdapter {
             ExecuteTestRunService executeService,
             HandleTestExecutionCompletedPort handleCompletedPort
     ) {
-        this.sqsClient = Objects.requireNonNull(sqsClient);
-        this.codec = Objects.requireNonNull(codec);
-        this.queueUrl = Objects.requireNonNull(queueUrl);
-        this.queueType = Objects.requireNonNull(queueType);
-        this.pollingConfig = Objects.requireNonNull(pollingConfig);
-        this.resolveService = resolveService;
-        this.executeService = executeService;
-        this.handleCompletedPort = handleCompletedPort;
+        this(sqsClient, codec, queueUrl, queueType, pollingConfig, resolveService, executeService,
+                handleCompletedPort, null);
     }
 
     /**
@@ -74,6 +91,10 @@ public class SqsInboundPollingAdapter {
      * @return 처리한 메시지 수 (ack + nack 포함)
      */
     public int poll() {
+        if (queueType == TestRunQueue.WORK_ITEMS && workItemConcurrencyController != null) {
+            return pollWorkItems();
+        }
+
         List<Message> messages = sqsClient.receiveMessage(ReceiveMessageRequest.builder()
                 .queueUrl(queueUrl)
                 .maxNumberOfMessages(pollingConfig.maxMessages())
@@ -90,6 +111,52 @@ public class SqsInboundPollingAdapter {
             processedCount++;
         }
         return processedCount;
+    }
+
+    private int pollWorkItems() {
+        int requestedMessages = workItemConcurrencyController.reserveAvailableSlots(
+                Math.min(pollingConfig.maxMessages(), 10));
+        if (requestedMessages == 0) {
+            log.debug("WorkItems polling을 건너뜁니다. configuredConcurrency={} currentInFlight={} availableSlots=0",
+                    workItemConcurrencyController.concurrency(),
+                    workItemConcurrencyController.currentInFlight());
+            return 0;
+        }
+
+        List<Message> messages;
+        try {
+            messages = receiveMessages(requestedMessages);
+        } catch (RuntimeException exception) {
+            workItemConcurrencyController.releaseSlots(requestedMessages);
+            throw exception;
+        }
+
+        if (messages.size() > requestedMessages) {
+            workItemConcurrencyController.releaseSlots(requestedMessages);
+            throw new IllegalStateException("SQS returned more WorkItems than reserved slots");
+        }
+        workItemConcurrencyController.releaseSlots(requestedMessages - messages.size());
+        Instant receivedAt = Instant.now();
+        for (Message message : messages) {
+            boolean submitted = workItemConcurrencyController.submit(() -> processMessage(message, receivedAt));
+            if (!submitted) {
+                log.warn("WorkItem 처리를 제출하지 못해 메시지를 재전달에 맡깁니다. queue={} messageId={} "
+                                + "currentInFlight={}",
+                        queueType.queueName(), message.messageId(),
+                        workItemConcurrencyController.currentInFlight());
+            }
+        }
+        return messages.size();
+    }
+
+    private List<Message> receiveMessages(int maxNumberOfMessages) {
+        return sqsClient.receiveMessage(ReceiveMessageRequest.builder()
+                .queueUrl(queueUrl)
+                .maxNumberOfMessages(maxNumberOfMessages)
+                .waitTimeSeconds(pollingConfig.waitTimeSeconds())
+                .visibilityTimeout(pollingConfig.visibilityTimeoutSeconds())
+                .messageSystemAttributeNames(MessageSystemAttributeName.SENT_TIMESTAMP)
+                .build()).messages();
     }
 
     private void processMessage(Message message, Instant receivedAt) {
@@ -120,8 +187,17 @@ public class SqsInboundPollingAdapter {
 
         boolean shouldAck;
         try {
-            log.info("SQS 메시지 처리를 시작합니다. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
-                    queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId);
+            Long workerDispatchWaitMs = decoded instanceof TestExecutionRequestedMessage
+                    ? Math.max(0, Instant.now().toEpochMilli() - receivedAt.toEpochMilli())
+                    : null;
+            Integer configuredConcurrency = workItemConcurrencyController == null
+                    ? null : workItemConcurrencyController.concurrency();
+            Integer currentInFlight = workItemConcurrencyController == null
+                    ? null : workItemConcurrencyController.currentInFlight();
+            log.info("SQS 메시지 처리를 시작합니다. queue={} eventId={} eventType={} testRunId={} snapshotId={} "
+                            + "workerDispatchWaitMs={} configuredConcurrency={} currentInFlight={}",
+                    queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId,
+                    workerDispatchWaitMs, configuredConcurrency, currentInFlight);
             shouldAck = dispatch(decoded);
         } catch (Exception exception) {
             log.error("SQS 메시지 처리에 실패했습니다. queue={} eventId={} eventType={} testRunId={} snapshotId={} failureType={}",
@@ -131,6 +207,16 @@ public class SqsInboundPollingAdapter {
         }
 
         if (shouldAck) {
+            if (workItemConcurrencyController != null) {
+                boolean acknowledged = workItemConcurrencyController.acknowledge(
+                        () -> acknowledgeMessage(message, decoded, snapshotId));
+                if (!acknowledged) {
+                    log.warn("WorkItem이 종료 timeout 이후 완료되어 ACK하지 않습니다. queue={} eventId={} "
+                                    + "testRunId={} snapshotId={}",
+                            queueType.queueName(), decoded.eventId(), decoded.testRunId(), snapshotId);
+                }
+                return;
+            }
             log.info("SQS 메시지 처리를 완료했습니다. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
                     queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId);
             if (deleteMessage(message)) {
@@ -142,6 +228,15 @@ public class SqsInboundPollingAdapter {
         log.warn("SQS 메시지 처리를 재시도로 보류했습니다. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
                 queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId);
         // nack: 삭제하지 않아 visibility timeout 후 재전달됨
+    }
+
+    private void acknowledgeMessage(Message message, TestRunMessage decoded, Long snapshotId) {
+        log.info("SQS 메시지 처리를 완료했습니다. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
+                queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId);
+        if (deleteMessage(message)) {
+            log.info("SQS 메시지를 삭제했습니다. queue={} eventId={} eventType={} testRunId={} snapshotId={}",
+                    queueType.queueName(), decoded.eventId(), decoded.eventType(), decoded.testRunId(), snapshotId);
+        }
     }
 
     private boolean dispatch(TestRunMessage decoded) {
