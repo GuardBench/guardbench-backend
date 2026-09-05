@@ -141,6 +141,7 @@ HTTP Application Target 실행, OpenAI-compatible response 정규화, SageMaker 
 
 - `GET /api/v1/test-runs/{testRunId}/comparable-runs`는 동일한 테스트 정의와 동일한 실제 Evaluator 설정을 사용한 완료 Run만 반환한다. Application Target/revision은 비교 축이므로 달라도 된다.
 - `GET /api/v1/test-runs/{currentRunId}/comparisons/{comparisonRunId}`는 comparison Run에서 current Run으로의 저장 verdict·Assertion 변화만 계산한다.
+- `GET /api/v1/test-runs/{currentRunId}/comparisons/{comparisonRunId}/summary`는 같은 집계에서 case-level `items`를 제외해 요약 화면의 응답 크기를 일정하게 유지한다.
 - Regression 경로는 Application 또는 Evaluator를 다시 호출하지 않는다.
 - 비교 불가능한 두 Run의 직접 비교 요청은 `409 TEST_RUNS_NOT_COMPARABLE`이다.
 - #113은 endpoint와 Run 식별자까지 고정하며 구체 comparability key와 Regression 상세 response DTO는 #119가 최종 소유한다.

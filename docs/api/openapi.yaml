@@ -651,6 +651,38 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '404': { $ref: '#/components/responses/TestRunNotFound' }
         '409': { $ref: '#/components/responses/TestRunComparisonConflict' }
+  /api/v1/test-runs/{currentRunId}/comparisons/{comparisonRunId}/summary:
+    parameters:
+      - $ref: '#/components/parameters/CurrentRunId'
+      - $ref: '#/components/parameters/ComparisonRunId'
+    get:
+      tags: [TestRun]
+      operationId: summarizeTestRunComparison
+      summary: 완료 TestRun 저장 결과 비교 요약
+      description: |
+        Result Detail처럼 변화 집계만 필요한 화면을 위한 경량 응답이다.
+        case-level items는 반환하지 않으며 집계 기준과 오류 계약은 전체 비교 API와 같다.
+      responses:
+        '200':
+          description: 비교 요약 성공
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TestRunComparisonSummaryApiResponse' }
+              example:
+                httpStatus: 200
+                message: TestRun 비교에 성공했습니다.
+                data:
+                  currentRunId: 901
+                  comparisonRunId: 800
+                  totalCases: 1000
+                  changedCount: 13
+                  unchangedCount: 985
+                  improvedCount: 8
+                  regressedCount: 5
+                  notComparableCount: 2
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '404': { $ref: '#/components/responses/TestRunNotFound' }
+        '409': { $ref: '#/components/responses/TestRunComparisonConflict' }
 components:
   parameters:
     IdempotencyKey:
@@ -1616,6 +1648,28 @@ components:
         items:
           type: array
           items: { $ref: '#/components/schemas/TestRunComparisonItemRes' }
+    TestRunComparisonSummaryRes:
+      type: object
+      description: case-level items를 제외한 저장 verdict 변화 집계다.
+      required:
+        - currentRunId
+        - comparisonRunId
+        - totalCases
+        - changedCount
+        - unchangedCount
+        - improvedCount
+        - regressedCount
+        - notComparableCount
+      additionalProperties: false
+      properties:
+        currentRunId: { type: integer, format: int64, minimum: 1 }
+        comparisonRunId: { type: integer, format: int64, minimum: 1 }
+        totalCases: { type: integer, minimum: 0 }
+        changedCount: { type: integer, minimum: 0, description: 개선 또는 Regression으로 분류된 케이스 수 }
+        unchangedCount: { type: integer, minimum: 0, description: 두 Run의 verdict가 같은 케이스 수 }
+        improvedCount: { type: integer, minimum: 0, description: ExpectedResult 기준으로 현재 Run이 개선된 케이스 수 }
+        regressedCount: { type: integer, minimum: 0, description: ExpectedResult 기준으로 현재 Run이 악화된 케이스 수 }
+        notComparableCount: { type: integer, minimum: 0, description: 두 Run 중 저장 verdict가 없어 변화 판단을 할 수 없는 케이스 수 }
     TestRunComparisonItemRes:
       type: object
       description: |
@@ -1751,6 +1805,11 @@ components:
         - $ref: '#/components/schemas/SuccessEnvelope'
         - type: object
           properties: { data: { $ref: '#/components/schemas/TestRunComparisonRes' } }
+    TestRunComparisonSummaryApiResponse:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties: { data: { $ref: '#/components/schemas/TestRunComparisonSummaryRes' } }
     SuccessEnvelope:
       type: object
       required: [httpStatus, message, data]
