@@ -3,6 +3,8 @@ package com.guardbench.testrun.application;
 import java.util.List;
 import java.util.Objects;
 
+import com.guardbench.testrun.domain.QualityGatePolicy;
+
 /**
  * TestRun 최종화에 필요한 실행 사실을 스칼라 값으로 표현하는 Application 계약이다.
  *
@@ -18,6 +20,8 @@ public record TestRunFinalizationFacts(
         String testRunStatus,
         int testCaseCount,
         String evaluatorReference,
+        double assertionPassRateThreshold,
+        double executionSuccessRateThreshold,
         List<SnapshotExecutionFact> snapshotFacts
 ) {
 
@@ -28,6 +32,7 @@ public record TestRunFinalizationFacts(
         if (testCaseCount <= 0) {
             throw new IllegalArgumentException("testCaseCount must be positive");
         }
+        new QualityGatePolicy(assertionPassRateThreshold, executionSuccessRateThreshold);
     }
 
     /**

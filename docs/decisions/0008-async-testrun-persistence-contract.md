@@ -30,6 +30,7 @@ test_run_idempotency
 
 - 같은 key와 fingerprint면 기존 TestRun을 반환한다.
 - 같은 key와 다른 fingerprint면 `409 IDEMPOTENCY_KEY_CONFLICT`다.
+- 사용자 지정 Quality Gate threshold는 fingerprint에 포함한다. 기본 0.95/0.95 정책은 배포 시점에 살아 있는 기존 idempotency record와의 호환을 위해 기존 TestSuite/Target fingerprint 형식을 유지한다.
 - TTL은 현재 3시간이다.
 - 만료 판단은 여러 인스턴스 간 clock drift를 피하기 위해 PostgreSQL `clock_timestamp()`을 사용한다.
 

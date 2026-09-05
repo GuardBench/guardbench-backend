@@ -72,6 +72,8 @@ class CreateTestRunServiceTest {
             assertTrue(acceptedLog.contains("targetModel=" + MODEL));
             assertTrue(acceptedLog.contains("evaluatorProviderCode=" + EVALUATOR_REGISTRATION.providerCode()));
             assertTrue(acceptedLog.contains("evaluatorModelId=" + EVALUATOR_REGISTRATION.modelId()));
+            assertTrue(acceptedLog.contains("assertionPassRateThreshold=0.95"));
+            assertTrue(acceptedLog.contains("executionSuccessRateThreshold=0.95"));
             assertFalse(acceptedLog.toLowerCase(java.util.Locale.ROOT).contains("authorization"));
             assertFalse(acceptedLog.toLowerCase(java.util.Locale.ROOT).contains("bearer"));
         } finally {
@@ -153,6 +155,25 @@ class CreateTestRunServiceTest {
 
         service.create(firstModel);
         ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(secondModel));
+
+        assertEquals(ApplicationErrorCode.IDEMPOTENCY_KEY_CONFLICT, exception.errorCode());
+    }
+
+    @Test
+    @DisplayName("같은 Idempotency-Key를 다른 Quality Gate 기준에 재사용하면 충돌로 거부한다")
+    void throwsConflictWhenSameKeyReusedForDifferentQualityGatePolicy() {
+        CreateTestRunFakeAdapters adapters = new CreateTestRunFakeAdapters();
+        adapters.givenTestSuite(1L, List.of(SOURCE));
+        CreateTestRunService service = newService(adapters);
+        TestRunCreateCommand first = new TestRunCreateCommand(
+                1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL,
+                0.9, 0.98, "idem-policy-key");
+        TestRunCreateCommand different = new TestRunCreateCommand(
+                1L, "HTTP_ENDPOINT", "https://example.com/v1/chat/completions", "v1", MODEL,
+                0.95, 0.98, "idem-policy-key");
+
+        service.create(first);
+        ApplicationException exception = assertThrows(ApplicationException.class, () -> service.create(different));
 
         assertEquals(ApplicationErrorCode.IDEMPOTENCY_KEY_CONFLICT, exception.errorCode());
     }

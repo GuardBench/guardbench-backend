@@ -64,6 +64,8 @@ entity "test_run" as test_run {
   * processed_test_case_count : INTEGER
   * target_reference_id : TEXT <<UK, FK>>
   * evaluator_reference_id : TEXT <<FK>>
+  * assertion_pass_rate_threshold : DOUBLE PRECISION
+  * execution_success_rate_threshold : DOUBLE PRECISION
     execution_outcome : VARCHAR(16)
   * created_at : TIMESTAMPTZ(6)
     started_at : TIMESTAMPTZ(6)

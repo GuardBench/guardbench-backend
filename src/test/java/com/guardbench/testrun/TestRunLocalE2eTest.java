@@ -234,6 +234,29 @@ class TestRunLocalE2eTest {
     }
 
     @Test
+    @DisplayName("TestRun 생성 시 지정한 Quality Gate 기준으로 최종 판정하고 같은 근거를 반환한다")
+    void evaluatesQualityGateWithPolicyFromCreateRequest() throws Exception {
+        startApplicationMockServer();
+        registerApplicationExpectation("custom policy input", safeApplicationResponse());
+        stubAllowEvaluator();
+
+        long suiteId = createSuite("""
+                [{"name":"사용자 기준","input":"custom policy input","expectedAction":"BLOCK","severity":"HIGH","category":"policy"}]
+                """);
+        long testRunId = createTestRun(suiteId, 0.0, 1.0);
+
+        JsonNode detail = awaitFinished(testRunId);
+        JsonNode metrics = detail.path("data").path("qualityGate").path("metrics");
+
+        assertThat(detail.path("data").path("qualityGate").path("status").asText()).isEqualTo("PASS");
+        assertThat(metrics.path("assertion").path("value").asDouble()).isEqualTo(0.0);
+        assertThat(metrics.path("assertion").path("threshold").asDouble()).isEqualTo(0.0);
+        assertThat(metrics.path("assertion").path("passed").asBoolean()).isTrue();
+        assertThat(metrics.path("execution").path("threshold").asDouble()).isEqualTo(1.0);
+        assertThat(metrics.path("execution").path("passed").asBoolean()).isTrue();
+    }
+
+    @Test
     @DisplayName("malformed Application response는 PROVIDER_RESPONSE_INVALID로 종료되고 Evaluator를 호출하지 않는다")
     void finishesWhenApplicationResponseParsingFails() throws Exception {
         startApplicationMockServer();
@@ -377,6 +400,29 @@ class TestRunLocalE2eTest {
                   "target":{"type":"HTTP_ENDPOINT","identifier":"%s/v1/chat/completions","model":"local-model","revision":"local"}
                 }
                 """.formatted(suiteId, applicationServerUrl());
+        JsonNode response = send("POST", TEST_RUN_URL, body).bodyJson();
+        assertThat(response.path("httpStatus").asInt()).isEqualTo(202);
+        return response.path("data").path("id").asLong();
+    }
+
+    private long createTestRun(
+            long suiteId,
+            double assertionPassRateThreshold,
+            double executionSuccessRateThreshold) throws Exception {
+        String body = """
+                {
+                  "testSuiteId":%d,
+                  "target":{"type":"HTTP_ENDPOINT","identifier":"%s/v1/chat/completions","model":"local-model","revision":"local"},
+                  "qualityGatePolicy":{
+                    "assertionPassRateThreshold":%s,
+                    "executionSuccessRateThreshold":%s
+                  }
+                }
+                """.formatted(
+                        suiteId,
+                        applicationServerUrl(),
+                        assertionPassRateThreshold,
+                        executionSuccessRateThreshold);
         JsonNode response = send("POST", TEST_RUN_URL, body).bodyJson();
         assertThat(response.path("httpStatus").asInt()).isEqualTo(202);
         return response.path("data").path("id").asLong();

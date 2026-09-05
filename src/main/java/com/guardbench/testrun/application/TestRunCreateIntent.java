@@ -11,6 +11,8 @@ public record TestRunCreateIntent(
         String targetType,
         String targetIdentifier,
         String targetRevision,
-        String targetModel
+        String targetModel,
+        double assertionPassRateThreshold,
+        double executionSuccessRateThreshold
 ) {
 }

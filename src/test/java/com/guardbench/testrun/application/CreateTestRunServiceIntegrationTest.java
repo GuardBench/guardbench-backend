@@ -80,6 +80,35 @@ class CreateTestRunServiceIntegrationTest {
                 "SELECT model FROM http_endpoint_target WHERE reference_id = ?",
                 String.class, result.target().referenceId());
         assertEquals(MODEL, storedModel);
+
+        Double assertionThreshold = jdbcTemplate.queryForObject(
+                "SELECT assertion_pass_rate_threshold FROM test_run WHERE id = ?",
+                Double.class, result.id());
+        Double executionThreshold = jdbcTemplate.queryForObject(
+                "SELECT execution_success_rate_threshold FROM test_run WHERE id = ?",
+                Double.class, result.id());
+        assertEquals(0.95, assertionThreshold);
+        assertEquals(0.95, executionThreshold);
+    }
+
+    @Test
+    @DisplayName("사용자 지정 Quality Gate 기준을 TestRun 정책 스냅샷으로 저장한다")
+    void persistsCustomQualityGatePolicyPerTestRun(
+            @Autowired CreateTestRunService service,
+            @Autowired JdbcTemplate jdbcTemplate) {
+        TestRunCreateCommand command = new TestRunCreateCommand(
+                900L, "HTTP_ENDPOINT", TARGET_URL, "v1", MODEL, 0.9, 0.98, null);
+
+        TestRunCreateResult result = service.create(command);
+
+        Double assertionThreshold = jdbcTemplate.queryForObject(
+                "SELECT assertion_pass_rate_threshold FROM test_run WHERE id = ?",
+                Double.class, result.id());
+        Double executionThreshold = jdbcTemplate.queryForObject(
+                "SELECT execution_success_rate_threshold FROM test_run WHERE id = ?",
+                Double.class, result.id());
+        assertEquals(0.9, assertionThreshold);
+        assertEquals(0.98, executionThreshold);
     }
 
     @Test

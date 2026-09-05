@@ -88,6 +88,79 @@ class TestRunCommandControllerTest {
         org.junit.jupiter.api.Assertions.assertEquals(
                 "31c83d18-12c4-47b7-9ed4-23e621cb9999", captor.getValue().idempotencyKey());
         org.junit.jupiter.api.Assertions.assertEquals("test-model", captor.getValue().targetModel());
+        org.junit.jupiter.api.Assertions.assertEquals(0.95, captor.getValue().assertionPassRateThreshold());
+        org.junit.jupiter.api.Assertions.assertEquals(0.95, captor.getValue().executionSuccessRateThreshold());
+    }
+
+    @Test
+    @DisplayName("Quality Gate 정책을 제출하면 두 기준값을 Command에 전달한다")
+    void passesQualityGatePolicyToCommand() throws Exception {
+        when(createTestRunService.create(any())).thenReturn(result(901L, 253));
+        ArgumentCaptor<TestRunCreateCommand> captor = ArgumentCaptor.forClass(TestRunCreateCommand.class);
+        String body = """
+                {
+                  "testSuiteId": 1,
+                  "target": {
+                    "type": "HTTP_ENDPOINT",
+                    "identifier": "https://example.com/v1/chat/completions",
+                    "model": "test-model"
+                  },
+                  "qualityGatePolicy": {
+                    "assertionPassRateThreshold": 0.9,
+                    "executionSuccessRateThreshold": 0.98
+                  }
+                }
+                """;
+
+        mockMvc.perform(post(BASE).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isAccepted());
+
+        verify(createTestRunService).create(captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals(0.9, captor.getValue().assertionPassRateThreshold());
+        org.junit.jupiter.api.Assertions.assertEquals(0.98, captor.getValue().executionSuccessRateThreshold());
+    }
+
+    @Test
+    @DisplayName("Quality Gate 정책의 일부 기준이 없으면 400 VALIDATION_ERROR를 반환한다")
+    void incompleteQualityGatePolicyReturnsValidationError() throws Exception {
+        String body = """
+                {
+                  "testSuiteId": 1,
+                  "target": {
+                    "type": "HTTP_ENDPOINT",
+                    "identifier": "https://example.com/v1/chat/completions",
+                    "model": "test-model"
+                  },
+                  "qualityGatePolicy": { "assertionPassRateThreshold": 0.9 }
+                }
+                """;
+
+        mockMvc.perform(post(BASE).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    @DisplayName("Quality Gate 기준이 0과 1 범위를 벗어나면 400 VALIDATION_ERROR를 반환한다")
+    void outOfRangeQualityGatePolicyReturnsValidationError() throws Exception {
+        String body = """
+                {
+                  "testSuiteId": 1,
+                  "target": {
+                    "type": "HTTP_ENDPOINT",
+                    "identifier": "https://example.com/v1/chat/completions",
+                    "model": "test-model"
+                  },
+                  "qualityGatePolicy": {
+                    "assertionPassRateThreshold": -0.01,
+                    "executionSuccessRateThreshold": 1.01
+                  }
+                }
+                """;
+
+        mockMvc.perform(post(BASE).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.code").value("VALIDATION_ERROR"));
     }
 
     @Test

@@ -16,6 +16,8 @@ class TestRunEntity {
     int processedTestCaseCount;
     String targetReferenceId;
     String evaluatorReferenceId;
+    double assertionPassRateThreshold;
+    double executionSuccessRateThreshold;
     String executionOutcome;
     Instant createdAt;
     Instant startedAt;
@@ -33,6 +35,8 @@ class TestRunEntity {
             int processedTestCaseCount,
             String targetReferenceId,
             String evaluatorReferenceId,
+            double assertionPassRateThreshold,
+            double executionSuccessRateThreshold,
             String executionOutcome,
             Instant createdAt,
             Instant startedAt,
@@ -46,6 +50,8 @@ class TestRunEntity {
         this.processedTestCaseCount = processedTestCaseCount;
         this.targetReferenceId = targetReferenceId;
         this.evaluatorReferenceId = evaluatorReferenceId;
+        this.assertionPassRateThreshold = assertionPassRateThreshold;
+        this.executionSuccessRateThreshold = executionSuccessRateThreshold;
         this.executionOutcome = executionOutcome;
         this.createdAt = createdAt;
         this.startedAt = startedAt;
@@ -61,6 +67,8 @@ class TestRunEntity {
             int processedTestCaseCount,
             String targetReferenceId,
             String evaluatorReferenceId,
+            double assertionPassRateThreshold,
+            double executionSuccessRateThreshold,
             String executionOutcome,
             Instant createdAt,
             Instant startedAt,
@@ -75,6 +83,8 @@ class TestRunEntity {
                 processedTestCaseCount,
                 targetReferenceId,
                 evaluatorReferenceId,
+                assertionPassRateThreshold,
+                executionSuccessRateThreshold,
                 executionOutcome,
                 createdAt,
                 startedAt,

@@ -357,6 +357,9 @@ paths:
                 identifier: https://example.com/v1/chat/completions
                 revision: v2
                 model: example-model
+              qualityGatePolicy:
+                assertionPassRateThreshold: 0.9
+                executionSuccessRateThreshold: 0.98
       responses:
         '202':
           description: |
@@ -1239,11 +1242,32 @@ components:
         TestSuite의 현재 TestCase 전체를 실행 대상으로 사용하며 TestCase ID 목록은 받지 않는다.
         TestCase가 없으면 409 TEST_SUITE_EMPTY로 응답한다.
         classifier 설정은 서버 deployment configuration으로 관리하며 요청에서 받지 않는다.
+        qualityGatePolicy를 생략하면 두 threshold 모두 0.95를 적용한다.
       required: [testSuiteId, target]
       additionalProperties: false
       properties:
         testSuiteId: { type: integer, format: int64, minimum: 1 }
         target: { $ref: '#/components/schemas/TargetReferenceReq' }
+        qualityGatePolicy:
+          $ref: '#/components/schemas/QualityGatePolicyReq'
+    QualityGatePolicyReq:
+      type: object
+      required: [assertionPassRateThreshold, executionSuccessRateThreshold]
+      additionalProperties: false
+      description: TestRun 생성 시 고정되어 해당 Run의 최종 판정에 사용되는 Quality Gate 정책
+      properties:
+        assertionPassRateThreshold:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+          description: 평가 가능한 Assertion 중 PASS 비율의 최소 통과 기준
+        executionSuccessRateThreshold:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+          description: 전체 Snapshot 중 성공한 실행 비율의 최소 통과 기준
     TestRunStatus:
       type: string
       description: |
@@ -1367,7 +1391,7 @@ components:
         status가 NOT_EVALUATED이면 metrics는 null이다.
         metrics는 평가 가능한 Assertion 통과율과 전체 Snapshot 실행 성공률 및
         판정 당시의 metric별 기준과 통과 여부다.
-        현재 정책에서는 두 비율이 각각 0.95 이상이면 PASS, 하나라도 미만이면 FAIL이다.
+        두 비율이 해당 TestRun 생성 시 고정된 threshold 이상이면 PASS, 하나라도 미만이면 FAIL이다.
         평가 가능한 Assertion이 없으면 NOT_EVALUATED이며 metrics는 null이다.
       required: [status, metrics]
       additionalProperties: false

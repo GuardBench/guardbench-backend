@@ -16,6 +16,8 @@ public record TestRunExecutionFacts(
         String testRunStatus,
         int testCaseCount,
         String evaluatorReference,
+        double assertionPassRateThreshold,
+        double executionSuccessRateThreshold,
         List<SnapshotExecutionFact> snapshotFacts
 ) {
 
@@ -25,6 +27,14 @@ public record TestRunExecutionFacts(
         Objects.requireNonNull(snapshotFacts, "snapshotFacts must not be null");
         if (testCaseCount <= 0) {
             throw new IllegalArgumentException("testCaseCount must be positive");
+        }
+        requireRate(assertionPassRateThreshold, "assertionPassRateThreshold");
+        requireRate(executionSuccessRateThreshold, "executionSuccessRateThreshold");
+    }
+
+    private static void requireRate(double value, String label) {
+        if (!Double.isFinite(value) || value < 0.0 || value > 1.0) {
+            throw new IllegalArgumentException(label + " must be between 0 and 1");
         }
     }
 

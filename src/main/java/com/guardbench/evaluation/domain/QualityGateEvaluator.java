@@ -6,9 +6,6 @@ import java.util.Objects;
 
 public final class QualityGateEvaluator {
 
-    private static final double MINIMUM_PASS_RATE = 0.95;
-    private static final double MINIMUM_EXECUTION_SUCCESS_RATE = 0.95;
-
     /**
      * 현재 TestRun의 생성된 Assertion과 전체 실행 결과를 집계한다.
      *
@@ -28,6 +25,8 @@ public final class QualityGateEvaluator {
             List<SnapshotEvaluation> evaluations,
             long totalTestCaseCount,
             long successfulExecutionCount,
+            double assertionPassRateThreshold,
+            double executionSuccessRateThreshold,
             Instant createdAt) {
         Objects.requireNonNull(reference, "TestRun evaluation reference must not be null");
         Objects.requireNonNull(evaluations, "Snapshot evaluations must not be null");
@@ -40,6 +39,8 @@ public final class QualityGateEvaluator {
             throw new IllegalArgumentException(
                     "Successful execution count must be within total TestCase count");
         }
+        requireThreshold(assertionPassRateThreshold, "Assertion pass rate threshold");
+        requireThreshold(executionSuccessRateThreshold, "Execution success rate threshold");
 
         if (evaluations.isEmpty()) {
             return new QualityGateResult(
@@ -56,10 +57,10 @@ public final class QualityGateEvaluator {
         QualityGateMetrics metrics = new QualityGateMetrics(
                 QualityGateMetric.evaluate(
                         divide(assertionPassCount, evaluations.size()),
-                        MINIMUM_PASS_RATE),
+                        assertionPassRateThreshold),
                 QualityGateMetric.evaluate(
                         divide(successfulExecutionCount, totalTestCaseCount),
-                        MINIMUM_EXECUTION_SUCCESS_RATE));
+                        executionSuccessRateThreshold));
 
         return new QualityGateResult(reference, evaluateStatus(metrics), metrics, createdAt);
     }
@@ -74,5 +75,11 @@ public final class QualityGateEvaluator {
 
     private double divide(long numerator, long denominator) {
         return (double) numerator / denominator;
+    }
+
+    private static void requireThreshold(double value, String label) {
+        if (!Double.isFinite(value) || value < 0.0 || value > 1.0) {
+            throw new IllegalArgumentException(label + " must be between 0 and 1");
+        }
     }
 }

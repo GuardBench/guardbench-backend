@@ -27,6 +27,7 @@ import com.guardbench.testrun.application.port.out.EvaluatorRegistration;
 import com.guardbench.testrun.application.port.out.TargetRegistration;
 import com.guardbench.testrun.application.port.out.TestCaseSnapshotSource;
 import com.guardbench.testrun.domain.SourceTestSuiteId;
+import com.guardbench.testrun.domain.QualityGatePolicy;
 import com.guardbench.testrun.domain.EvaluatorReference;
 import com.guardbench.testrun.domain.TargetReference;
 import com.guardbench.testrun.domain.TestCaseSnapshot;
@@ -151,6 +152,9 @@ public class CreateTestRunService {
                 new SourceTestSuiteId(command.testSuiteId()),
                 targetReference,
                 evaluatorReference,
+                new QualityGatePolicy(
+                        command.assertionPassRateThreshold(),
+                        command.executionSuccessRateThreshold()),
                 sources.size(),
                 now
         );
@@ -178,10 +182,12 @@ public class CreateTestRunService {
 
         log.info("TestRun을 접수했습니다. testRunId={} testCaseCount={} targetType={} targetIdentifier={} "
                         + "targetRevision={} targetModel={} evaluatorReferenceId={} evaluatorProviderCode={} "
-                        + "evaluatorModelId={} eventId={} eventType={}",
+                        + "evaluatorModelId={} assertionPassRateThreshold={} executionSuccessRateThreshold={} "
+                        + "eventId={} eventType={}",
                 testRunId.value(), sources.size(), command.targetType(), command.targetIdentifier(),
                 command.targetRevision(), command.targetModel(), evaluatorReference.value(),
                 evaluatorRegistration.providerCode(), evaluatorRegistration.modelId(),
+                command.assertionPassRateThreshold(), command.executionSuccessRateThreshold(),
                 requestedEvent.eventId(), requestedEvent.eventType());
         return toResult(testRun, command);
     }

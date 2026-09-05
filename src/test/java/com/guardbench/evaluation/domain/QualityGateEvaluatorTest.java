@@ -32,7 +32,7 @@ class QualityGateEvaluatorTest {
                     evaluation(3L, AssertionStatus.FAIL));
 
             QualityGateMetrics metrics = evaluator.evaluate(
-                    REFERENCE, evaluations, 5L, 3L, CREATED_AT).metrics();
+                    REFERENCE, evaluations, 5L, 3L, 0.95, 0.95, CREATED_AT).metrics();
 
             assertEquals(2.0 / 3.0, metrics.assertionPassRate());
             assertEquals(0.6, metrics.executionSuccessRate());
@@ -63,7 +63,7 @@ class QualityGateEvaluatorTest {
             evaluations.add(evaluation(20L, AssertionStatus.FAIL));
 
             QualityGateResult result = evaluator.evaluate(
-                    REFERENCE, evaluations, 20L, 19L, CREATED_AT);
+                    REFERENCE, evaluations, 20L, 19L, 0.95, 0.95, CREATED_AT);
 
             assertEquals(QualityGateStatus.PASS, result.status());
             assertEquals(0.95, result.metrics().assertionPassRate());
@@ -85,7 +85,7 @@ class QualityGateEvaluatorTest {
         @DisplayName("Assertion만 기준 미달이면 Assertion만 실패 근거로 남긴다")
         void failsOnlyAssertionMetricWhenAssertionRateIsBelowMinimum() {
             QualityGateResult result = evaluator.evaluate(
-                    REFERENCE, evaluations(18, 2), 20L, 20L, CREATED_AT);
+                    REFERENCE, evaluations(18, 2), 20L, 20L, 0.95, 0.95, CREATED_AT);
 
             assertEquals(QualityGateStatus.FAIL, result.status());
             assertEquals(false, result.metrics().assertion().passed());
@@ -96,7 +96,7 @@ class QualityGateEvaluatorTest {
         @DisplayName("실행만 기준 미달이면 실행만 실패 근거로 남긴다")
         void failsOnlyExecutionMetricWhenExecutionRateIsBelowMinimum() {
             QualityGateResult result = evaluator.evaluate(
-                    REFERENCE, evaluations(20, 0), 20L, 18L, CREATED_AT);
+                    REFERENCE, evaluations(20, 0), 20L, 18L, 0.95, 0.95, CREATED_AT);
 
             assertEquals(QualityGateStatus.FAIL, result.status());
             assertEquals(true, result.metrics().assertion().passed());
@@ -107,7 +107,7 @@ class QualityGateEvaluatorTest {
         @DisplayName("두 비율 모두 기준 미달이면 두 지표를 실패 근거로 남긴다")
         void failsBothMetricsWhenBothRatesAreBelowMinimum() {
             QualityGateResult result = evaluator.evaluate(
-                    REFERENCE, evaluations(18, 2), 20L, 18L, CREATED_AT);
+                    REFERENCE, evaluations(18, 2), 20L, 18L, 0.95, 0.95, CREATED_AT);
 
             assertEquals(QualityGateStatus.FAIL, result.status());
             assertEquals(false, result.metrics().assertion().passed());
@@ -115,10 +115,23 @@ class QualityGateEvaluatorTest {
         }
 
         @Test
+        @DisplayName("Run별 Assertion과 실행 기준을 각각 판정에 사용한다")
+        void usesIndependentThresholdsFromTestRunPolicy() {
+            QualityGateResult result = evaluator.evaluate(
+                    REFERENCE, evaluations(18, 2), 20L, 19L, 0.9, 1.0, CREATED_AT);
+
+            assertEquals(QualityGateStatus.FAIL, result.status());
+            assertEquals(0.9, result.metrics().assertion().threshold());
+            assertEquals(true, result.metrics().assertion().passed());
+            assertEquals(1.0, result.metrics().execution().threshold());
+            assertEquals(false, result.metrics().execution().passed());
+        }
+
+        @Test
         @DisplayName("평가 가능한 Assertion이 없으면 metrics 없이 NOT_EVALUATED다")
         void returnsNotEvaluatedWithoutAssertions() {
             QualityGateResult result = evaluator.evaluate(
-                    REFERENCE, List.of(), 2L, 0L, CREATED_AT);
+                    REFERENCE, List.of(), 2L, 0L, 0.9, 1.0, CREATED_AT);
 
             assertEquals(QualityGateStatus.NOT_EVALUATED, result.status());
             assertNull(result.metrics());

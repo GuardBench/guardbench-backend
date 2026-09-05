@@ -95,6 +95,8 @@ public class TestRunFinalizationFacade {
                 testRun.status().name(),
                 testRun.testCaseCount(),
                 testRun.evaluatorReference().value(),
+                testRun.qualityGatePolicy().assertionPassRateThreshold(),
+                testRun.qualityGatePolicy().executionSuccessRateThreshold(),
                 facts
         ));
     }

@@ -74,6 +74,7 @@ TestCaseSnapshot → OpenAI-compatible AI Application Target → Natural Languag
 ### TestRun 접수 — agreed contract
 
 - `POST /api/v1/test-runs`는 비동기 작업을 접수하고 `202 Accepted`를 반환한다.
+- TestRun 생성 요청의 선택적 `qualityGatePolicy`로 Assertion 통과율과 실행 성공률의 threshold를 각각 지정한다. 생략하면 기존 기본값인 0.95를 두 지표에 적용하며 생성된 Run에 정책 스냅샷을 고정한다.
 - `Idempotency-Key`는 선택 사항이다. 키와 정규화된 요청 fingerprint가 같으면 기존 접수 결과를, 다르면 `409 IDEMPOTENCY_KEY_CONFLICT`를 반환한다. 생략하면 요청마다 새 TestRun을 만든다.
 - 요청 핵심은 `testSuiteId`와 단일 `HTTP_ENDPOINT` Application `target`이다. Classifier 설정은 서버 deployment configuration이 소유한다.
 - `target.identifier`는 OpenAI-compatible chat completions를 호출할 full HTTP/HTTPS URL이고 `target.model`은 필수다. `target.revision`만 선택 값이다.
@@ -135,7 +136,7 @@ HTTP Application Target 실행, OpenAI-compatible response 정규화, SageMaker 
 
 현재 구현은 Application response를 내부에만 보존하고 Evaluator verdict와 Assertion을 public 결과에서 분리하며, 같은 TestRun의 Assertion과 실행 성공률로 Quality Gate를 계산한다.
 
-`QualityGateRes`는 `status`와 nullable `metrics`를 제공한다. `metrics.assertion`과 `metrics.execution`은 각각 판정 당시의 `value`, `threshold`, backend 판정 결과인 `passed`를 포함한다. 현재 정책에서는 두 지표가 각각 95% 이상이면 `PASS`, 하나라도 기준 미만이면 `FAIL`이다. 평가 가능한 Assertion이 하나도 없으면 존재하지 않는 근거를 0으로 만들지 않고 `NOT_EVALUATED`와 `metrics: null`을 반환한다. Assertion 실패와 실행 실패는 서로 다른 분모로 집계하며, Regression 또는 과거 Run 결과를 Quality Gate에 넣지 않는다.
+`QualityGateRes`는 `status`와 nullable `metrics`를 제공한다. `metrics.assertion`과 `metrics.execution`은 각각 판정 당시의 `value`, `threshold`, backend 판정 결과인 `passed`를 포함한다. 두 지표가 해당 TestRun의 threshold 이상이면 `PASS`, 하나라도 기준 미만이면 `FAIL`이다. 평가 가능한 Assertion이 하나도 없으면 존재하지 않는 근거를 0으로 만들지 않고 `NOT_EVALUATED`와 `metrics: null`을 반환한다. Assertion 실패와 실행 실패는 서로 다른 분모로 집계하며, Regression 또는 과거 Run 결과를 Quality Gate에 넣지 않는다.
 
 기존 공개 소비처의 순차 배포를 위해 `metrics.assertionPassRate`와 `metrics.executionSuccessRate`도 각각 구조화된 metric의 `value`와 같은 값으로 임시 유지한다. 두 필드는 deprecated이며 소비처가 구조화된 근거로 전환된 뒤 별도 계약 변경에서 제거한다.
 
@@ -176,4 +177,4 @@ Regression API는 #119에서 구현되었다. 비교 가능성은 TestCaseSnapsh
 
 ## MVP 이후
 
-로그인·권한, CSV 대량 등록, LLM 기반 생성, Dashboard·시계열 API, WebSocket/SSE, 사용자 정의 Quality Gate와 외부 배포 연동은 현재 계약 밖이다. 추가할 때 기존 Endpoint 의미를 암묵적으로 바꾸지 않고 별도 계약으로 설계한다.
+로그인·권한, CSV 대량 등록, LLM 기반 생성, Dashboard·시계열 API, WebSocket/SSE, threshold 외의 사용자 정의 Quality Gate 공식과 외부 배포 연동은 현재 계약 밖이다. 추가할 때 기존 Endpoint 의미를 암묵적으로 바꾸지 않고 별도 계약으로 설계한다.

@@ -162,6 +162,8 @@ public class FinalizeTestRunService {
                 evaluations,
                 facts.testCaseCount(),
                 successfulExecutionCount,
+                facts.assertionPassRateThreshold(),
+                facts.executionSuccessRateThreshold(),
                 now
         );
 
