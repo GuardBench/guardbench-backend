@@ -2,7 +2,9 @@ package com.guardbench.testrun.infrastructure.messaging;
 
 import java.util.EnumMap;
 import java.util.Map;
+import java.time.Duration;
 
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,7 +31,17 @@ import tools.jackson.databind.ObjectMapper;
 @Configuration
 @ConditionalOnProperty(name = "guardbench.worker.enabled", havingValue = "true")
 @EnableScheduling
+@EnableConfigurationProperties(WorkerProperties.class)
 class SqsWorkerConfiguration {
+
+    @Bean
+    WorkItemConcurrencyController workItemConcurrencyController(WorkerProperties properties) {
+        WorkerProperties.WorkItems workItems = properties.workItems();
+        return new WorkItemConcurrencyController(
+                workItems.concurrency(),
+                Duration.ofSeconds(workItems.shutdownTimeoutSeconds())
+        );
+    }
 
     @Bean
     TestRunMessageCodec testRunMessageCodec(ObjectMapper objectMapper) {
@@ -43,22 +55,23 @@ class SqsWorkerConfiguration {
             SqsProperties properties,
             ResolveTestRunService resolveService,
             ExecuteTestRunService executeService,
-            HandleTestExecutionCompletedPort handleCompletedPort
+            HandleTestExecutionCompletedPort handleCompletedPort,
+            WorkItemConcurrencyController workItemConcurrencyController
     ) {
         Map<TestRunQueue, String> queueUrls = resolveQueueUrls(sqsClient, properties);
         Map<TestRunQueue, SqsInboundPollingAdapter> adapters = new EnumMap<>(TestRunQueue.class);
 
         adapters.put(TestRunQueue.RESOLVE, new SqsInboundPollingAdapter(
                 sqsClient, codec, queueUrls.get(TestRunQueue.RESOLVE), TestRunQueue.RESOLVE,
-                properties.polling(), resolveService, null, null
+                properties.polling(), resolveService, null, null, null
         ));
         adapters.put(TestRunQueue.WORK_ITEMS, new SqsInboundPollingAdapter(
                 sqsClient, codec, queueUrls.get(TestRunQueue.WORK_ITEMS), TestRunQueue.WORK_ITEMS,
-                properties.polling(), null, executeService, null
+                properties.polling(), null, executeService, null, workItemConcurrencyController
         ));
         adapters.put(TestRunQueue.FINALIZE, new SqsInboundPollingAdapter(
                 sqsClient, codec, queueUrls.get(TestRunQueue.FINALIZE), TestRunQueue.FINALIZE,
-                properties.polling(), null, null, handleCompletedPort
+                properties.polling(), null, null, handleCompletedPort, null
         ));
 
         return adapters;

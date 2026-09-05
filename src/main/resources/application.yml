@@ -43,6 +43,9 @@ guardbench:
       delay-ms: 1000
   worker:
     enabled: ${WORKER_ENABLED:false}
+    work-items:
+      concurrency: ${GUARDBENCH_WORKER_WORK_ITEMS_CONCURRENCY:1}
+      shutdown-timeout-seconds: ${GUARDBENCH_WORKER_WORK_ITEMS_SHUTDOWN_TIMEOUT_SECONDS:30}
   # HTTP Application Target 호출 한도와 SSRF 방어 정책
   http-endpoint:
     connect-timeout-ms: 5000
