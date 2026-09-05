@@ -204,6 +204,8 @@ revision을 다음 application revision의 base로 사용한다.
 | `SAGEMAKER_CLASSIFIER_SYSTEM_PROMPT` | 승인된 classifier system prompt v1 | 비어 있으면 평가 시 configuration error로 실패. 배포 전에 반드시 주입 |
 | `SAGEMAKER_CLASSIFIER_USER_PROMPT_TEMPLATE` | 선택값 | 비어 있으면 `USER REQUEST / ASSISTANT RESPONSE` 기본 형식 사용 |
 | `SPRING_TASK_SCHEDULING_POOL_SIZE` | `4` | 세 long-poll scheduler와 Outbox Publisher를 서로 막지 않게 실행 |
+| `GUARDBENCH_WORKER_WORK_ITEMS_CONCURRENCY` | `1` | task 내부 WorkItems 동시 실행 상한. 양의 정수이며 Resolve/Finalize에는 적용하지 않음 |
+| `GUARDBENCH_WORKER_WORK_ITEMS_SHUTDOWN_TIMEOUT_SECONDS` | `30` | 종료 시 신규 WorkItem 수신을 중단하고 in-flight 작업을 기다리는 최대 시간 |
 | `GUARDBENCH_SQS_QUEUE_URLS_RESOLVE` | resolve Queue URL | startup의 `GetQueueUrl` 호출 제거 |
 | `GUARDBENCH_SQS_QUEUE_URLS_WORK_ITEMS` | work-items Queue URL | startup의 `GetQueueUrl` 호출 제거 |
 | `GUARDBENCH_SQS_QUEUE_URLS_RUN_FINALIZE` | finalize Queue URL | startup의 `GetQueueUrl` 호출 제거 |
@@ -219,6 +221,12 @@ revision을 다음 application revision의 base로 사용한다.
 | `guardbench-dev-gb-run-finalize` | `TestExecutionCompleted` | 같은 이름 + `-dlq` |
 
 세 Source Queue는 Standard, SSE-SQS, visibility timeout `30초`, retention `4일`, receive wait time `20초`, delivery delay `0초`다. 각 DLQ는 retention `14일`, `maxReceiveCount=5`이며 자기 Source ARN만 redrive를 허용한다.
+
+현재 Resolve/Finalize consumer는 한 번에 최대 10개를 받고 순차 처리하며, WorkItems consumer는 `GUARDBENCH_WORKER_WORK_ITEMS_CONCURRENCY`로 bounded executor의 최대 in-flight 수를 제한한다. WorkItems는 가용 slot만큼만 `ReceiveMessage`를 요청하고, 실제 수신한 메시지의 처리·ACK가 끝나거나 실패한 뒤 slot을 반환한다. 따라서 설정값이 2/4여도 scheduler pool 확장만으로 동시성을 만들지 않으며, WorkItems 외 queue의 처리 계약은 변하지 않는다. 수신 시점부터 실제 처리 시작까지의 대기는 `workerDispatchWaitMs`로 기록하고, `queueWaitMs`는 기존 SQS 전송 시각부터 배치 수신 시각까지의 의미를 유지한다.
+
+종료 시 WorkItems 신규 수신과 제출을 중단하고 `GUARDBENCH_WORKER_WORK_ITEMS_SHUTDOWN_TIMEOUT_SECONDS`만큼 in-flight 작업을 기다린다. 제한 시간 안에 끝난 작업만 기존 ACK 규칙을 적용하며, 미완료 작업은 조기 ACK하지 않아 SQS visibility 만료 후 재전달될 수 있다.
+
+배포 후에는 startup 로그의 `WorkItems worker 동시성 설정을 적용합니다`에서 `concurrency`와 `shutdownTimeoutSeconds`를 확인한다. 이후 WorkItem 처리 시작 로그의 `configuredConcurrency`, `currentInFlight`, `workerDispatchWaitMs`를 Logs Insights에서 `testRunId`·`snapshotId`와 함께 조회해 설정 상한 초과가 없는지, 수신 후 대기가 별도 기록되는지 확인한다.
 
 현재 consumer는 한 번에 최대 10개를 받고, 결과 DB commit 뒤 `DeleteMessage`한다. nack에는 `ChangeMessageVisibility`를 호출하지 않으므로 ADR 0005의 약 5초 조기 재시도 대신 현재 visibility가 끝나는 약 30초 뒤 재전달된다. 이는 최초 배포의 알려진 복구 지연으로 수용하고, 15초 Provider timeout보다 visibility를 짧게 낮추지는 않는다.
 
