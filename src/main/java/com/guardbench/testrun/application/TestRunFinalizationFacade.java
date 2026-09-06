@@ -76,7 +76,9 @@ public class TestRunFinalizationFacade {
         }
 
         TestRun testRun = testRunOpt.get();
-        List<TestCaseSnapshot> snapshots = snapshotRepository.findAllByTestRunId(new TestRunId(testRunId));
+        // 완료 후 중복 전달은 상태·QualityGateResult만 확인하며 실행 전문을 다시 읽지 않는다.
+        List<TestCaseSnapshot> snapshots = testRun.status() == TestRunStatus.FINISHED
+                ? List.of() : snapshotRepository.findAllByTestRunId(new TestRunId(testRunId));
 
         List<TestRunFinalizationFacts.SnapshotExecutionFact> facts = new ArrayList<>();
 
