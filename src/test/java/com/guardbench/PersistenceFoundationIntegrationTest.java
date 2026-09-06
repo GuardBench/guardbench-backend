@@ -21,11 +21,11 @@ import com.guardbench.testsupport.PostgresTestConfiguration;
 class PersistenceFoundationIntegrationTest {
 
     @Test
-    @DisplayName("빈 PostgreSQL에 현재 승인된 Flyway 스키마를 적용한다")
+    @DisplayName("빈 PostgreSQL에 V1과 V2 Flyway 스키마를 순서대로 적용한다")
     void appliesApprovedSchemaToPostgreSql(@Autowired Flyway flyway, @Autowired JdbcTemplate jdbcTemplate) {
         MigrationInfo current = flyway.info().current();
         assertNotNull(current);
-        assertEquals("1", current.getVersion().getVersion());
+        assertEquals("2", current.getVersion().getVersion());
         Integer tableCount = jdbcTemplate.queryForObject("""
                 SELECT count(*) FROM information_schema.tables
                 WHERE table_schema = 'public' AND table_name IN (
@@ -50,6 +50,73 @@ class PersistenceFoundationIntegrationTest {
                 WHERE table_schema = 'public'
                   AND constraint_name IN ('fk_snapshot_source_test_case', 'fk_test_run_suite')
                 """, Integer.class));
+        assertEquals(2, jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'test_run'
+                  AND column_name IN ('assertion_pass_rate_threshold', 'execution_success_rate_threshold')
+                """, Integer.class));
+        assertEquals(2, jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'test_run'
+                  AND column_name IN ('assertion_pass_rate_threshold', 'execution_success_rate_threshold')
+                  AND column_default = '0.95'
+                """, Integer.class));
+        assertEquals(1, jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM information_schema.table_constraints
+                WHERE table_schema = 'public'
+                  AND constraint_name = 'ck_test_run_quality_gate_thresholds'
+                """, Integer.class));
+    }
+
+    @Test
+    @DisplayName("기존 V1 PostgreSQL에는 checksum 오류 없이 V2만 적용한다")
+    void upgradesExistingV1SchemaWithoutChecksumMismatch(
+            @Autowired Flyway applicationFlyway,
+            @Autowired JdbcTemplate jdbcTemplate) {
+        String schema = "flyway_upgrade_test";
+        jdbcTemplate.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
+        jdbcTemplate.execute("CREATE SCHEMA " + schema);
+
+        try {
+            Flyway v1Flyway = Flyway.configure()
+                    .dataSource(applicationFlyway.getConfiguration().getDataSource())
+                    .defaultSchema(schema)
+                    .schemas(schema)
+                    .locations("classpath:db/migration")
+                    .target("1")
+                    .load();
+            v1Flyway.migrate();
+
+            MigrationInfo appliedV1 = v1Flyway.info().applied()[0];
+            assertEquals("1", appliedV1.getVersion().getVersion());
+            assertNotNull(appliedV1.getChecksum());
+            assertEquals(0, jdbcTemplate.queryForObject("""
+                    SELECT count(*) FROM information_schema.columns
+                    WHERE table_schema = ? AND table_name = 'test_run'
+                      AND column_name IN ('assertion_pass_rate_threshold', 'execution_success_rate_threshold')
+                    """, Integer.class, schema));
+
+            Flyway upgradeFlyway = Flyway.configure()
+                    .dataSource(applicationFlyway.getConfiguration().getDataSource())
+                    .defaultSchema(schema)
+                    .schemas(schema)
+                    .locations("classpath:db/migration")
+                    .load();
+            upgradeFlyway.migrate();
+
+            assertEquals("2", upgradeFlyway.info().current().getVersion().getVersion());
+            assertEquals(2, jdbcTemplate.queryForObject("""
+                    SELECT count(*) FROM information_schema.columns
+                    WHERE table_schema = ? AND table_name = 'test_run'
+                      AND column_name IN ('assertion_pass_rate_threshold', 'execution_success_rate_threshold')
+                    """, Integer.class, schema));
+            assertEquals(1, jdbcTemplate.queryForObject("""
+                    SELECT count(*) FROM information_schema.table_constraints
+                    WHERE table_schema = ? AND constraint_name = 'ck_test_run_quality_gate_thresholds'
+                    """, Integer.class, schema));
+        } finally {
+            jdbcTemplate.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
+        }
     }
 
     @Test
