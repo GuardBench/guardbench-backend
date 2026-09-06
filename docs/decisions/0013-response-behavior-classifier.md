@@ -5,6 +5,7 @@
 > Last reviewed: 2026-09-04
 > Canonical source: GitHub
 > Related Issue: [#173](https://github.com/GuardBench/guardbench-backend/issues/173)
+> Follow-up contract: [#237](https://github.com/GuardBench/guardbench-backend/issues/237)
 > Operational follow-up: [#182](https://github.com/GuardBench/guardbench-backend/issues/182)
 
 - ADR Status: ACCEPTED
@@ -44,7 +45,7 @@ SageMaker Runtime Classifier
 - classifier는 행동 분류만 담당하고 도메인 정책, 안전성, 정확성, Regression과 Quality Gate를 판정하지 않는다.
 - 실제 사용한 classifier contract version은 Run과 비교 가능성 판단에 사용한다.
 - SageMaker Real-Time endpoint는 비활성화할 때 model, endpoint configuration, execution role과 PrivateLink를 유지하고 billable endpoint만 삭제할 수 있다.
-- classifier output과 ApplicationResponse는 public API에 노출하지 않는다.
+- classifier output은 public API에 노출하지 않는다. ApplicationResponse는 paginated 결과 목록에는 노출하지 않으며, Issue #237의 `TestRunResultDetailRes` 전용 상세 API에서 저장된 원문만 반환한다.
 
 ## Validation
 
@@ -53,3 +54,4 @@ SageMaker Runtime Classifier
 3. prompt와 ApplicationResponse가 모두 classifier에 전달되는지 검증한다.
 4. 잘못된 output과 provider failure가 임의 action으로 변환되지 않는지 검증한다.
 5. SageMaker endpoint disabled/enabled 운영 절차와 최소 IAM·PrivateLink 계약은 [SageMaker Adapter 문서](../integrations/sagemaker-classifier-adapter.md)에 기록한다.
+6. Issue #237의 결과 상세 API가 ApplicationResponse만 저장된 원문으로 반환하고 classifier output·provider 원문·오류를 반환하지 않는지 검증한다.

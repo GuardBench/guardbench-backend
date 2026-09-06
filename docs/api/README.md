@@ -134,7 +134,7 @@ HTTP Application Target 실행, OpenAI-compatible response 정규화, SageMaker 
 | ALLOW | BLOCK | FALSE_POSITIVE |
 | ALLOW | ALLOW | TRUE_NEGATIVE |
 
-현재 구현은 Application response를 내부에만 보존하고 Evaluator verdict와 Assertion을 public 결과에서 분리하며, 같은 TestRun의 Assertion과 실행 성공률로 Quality Gate를 계산한다.
+현재 구현은 Application response를 `TestExecution`에 실행 당시 증거로 보존하고, paginated 결과 목록에서는 Evaluator verdict와 Assertion을 분리해 제공한다. `GET /api/v1/test-runs/{testRunId}/results/{testCaseSnapshotId}`의 상세 결과에서만 저장된 Application response 원문을 반환하며, 같은 TestRun의 Assertion과 실행 성공률로 Quality Gate를 계산한다.
 
 `QualityGateRes`는 `status`와 nullable `metrics`를 제공한다. `metrics.assertion`과 `metrics.execution`은 각각 판정 당시의 `value`, `threshold`, backend 판정 결과인 `passed`를 포함한다. 두 지표가 해당 TestRun의 threshold 이상이면 `PASS`, 하나라도 기준 미만이면 `FAIL`이다. 평가 가능한 Assertion이 하나도 없으면 존재하지 않는 근거를 0으로 만들지 않고 `NOT_EVALUATED`와 `metrics: null`을 반환한다. Assertion 실패와 실행 실패는 서로 다른 분모로 집계하며, Regression 또는 과거 Run 결과를 Quality Gate에 넣지 않는다.
 

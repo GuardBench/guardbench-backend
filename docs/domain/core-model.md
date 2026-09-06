@@ -35,7 +35,7 @@ classifier 설정은 사용자가 제출하는 profile이나 provider 선택이 
 - TestRun 요청에는 별도 평가 profile이 없으며 사용자는 classifier provider 설정을 직접 제출하지 않는다.
 - 하나의 TestRun은 classifier contract version을 사후에 불변하게 식별할 수 있어야 한다.
 - Application Target은 자연어 응답을 반환하며 `ALLOW`와 `BLOCK`을 직접 반환하는 판정 주체가 아니다.
-- ApplicationResponse는 내부 Evaluator 입력이며 public 결과 DTO에 노출하지 않는다.
+- ApplicationResponse는 내부 Evaluator 입력으로 사용하며 `TestRunResultItemRes` 목록에는 노출하지 않는다. FINISHED TestRun의 `TestRunResultDetailRes`에서 저장된 원문을 결과 증거로 조회할 수 있다.
 - Response Behavior Classifier만 ApplicationResponse를 GuardBench 공통 EvaluationResult로 정규화한다.
 - EvaluationResult가 있으면 ExpectedResult와 비교해 AssertionResult를 생성한다. Application 실행 또는 평가 실패로 EvaluationResult가 없으면 AssertionResult를 생성하지 않는다.
 - Quality Gate는 같은 TestRun의 Assertion 결과만 집계한다.
@@ -84,4 +84,4 @@ Completed TestRun A + Completed TestRun B
 
 #117을 통해 Application 실행 → Evaluator → Assertion Worker orchestration이 구현되었다. #118을 통해 Quality Gate가 현재 TestRun의 Assertion 통과율과 실행 성공률을 기준으로 판정하도록 전환되었고, #119를 통해 저장된 완료 TestRun 결과만 사용하는 Regression 비교 API가 구현되었다.
 
-따라서 현재 MVP backend는 Application Target 실행, Evaluator 판정, Assertion, 현재 Run Quality Gate, comparable historical Run의 stored-result Regression까지 목표 도메인 흐름을 구현한다.
+따라서 현재 MVP backend는 Application Target 실행, Evaluator 판정, Assertion, 저장된 Application response 결과 상세 조회, 현재 Run Quality Gate, comparable historical Run의 stored-result Regression까지 목표 도메인 흐름을 구현한다.
