@@ -83,6 +83,7 @@ GuardBench는 TestSuite, TestCase, TestRun, Snapshot, AI Application 실행 결�
 ### 비동기 처리
 
 - `test_run_idempotency`: HTTP 생성 요청 멱등성
+- `test_case_bulk_idempotency`: TestCase 일괄 등록의 요청 fingerprint와 생성 결과
 - `test_run_resolution_claim`: TestRun resolution lease
 - `test_execution_claim`: Snapshot execution lease
 - `outbox_event`: 비동기 이벤트의 transactional outbox
@@ -119,6 +120,7 @@ claim lease 및 idempotency 만료처럼 여러 Worker가 공유하는 동시성
 | `change_result` | 평가 persistence shape |
 | `quality_gate_result` | TestRun 최종 평가 |
 | `test_run_idempotency` | 생성 요청 멱등성 |
+| `test_case_bulk_idempotency` | TestCase 일괄 등록 요청 멱등성 |
 | `test_run_resolution_claim` | resolution lease |
 | `test_execution_claim` | execution lease |
 | `outbox_event` | transactional outbox |
