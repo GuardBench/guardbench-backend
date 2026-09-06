@@ -40,6 +40,9 @@ TestCaseSnapshot → OpenAI-compatible AI Application Target → Natural Languag
 - DTO 이름은 `{Domain}{UseCase}{Req|Res}` 형식이다.
 - HTTP 오류와 도메인 판정 결과는 다르다. Quality Gate가 `FAIL`이어도 조회가 성공하면 HTTP 200이다.
 - Application Error 목록과 우선순위는 [애플리케이션 오류](../conventions/application-errors.md)를 따른다.
+- 등록되지 않은 경로의 404와 Spring MVC의 405, 406, 415도 공통 Error Envelope를 사용한다.
+  오류 응답의 `Content-Type`은 `application/json`이고, Status와 `Allow`, `Accept` 등 프로토콜 헤더는 유지한다. 구체 Code는
+  [ADR 0014](../decisions/0014-http-standard-error-envelope.md)를 따른다.
 
 ### 목록 조회
 

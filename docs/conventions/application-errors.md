@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Last reviewed: 2026-09-04
+> Last reviewed: 2026-09-06
 > Canonical source: GitHub
 > Origin: [Notion 애플리케이션 오류 코드](https://app.notion.com/p/3c1eeed6b62d81d3a7c9f014bb788aa8)
 
@@ -32,14 +32,18 @@ Validation을 제외한 오류는 다음 구조를 사용한다.
 | Code | HTTP | 발생 조건 |
 | --- | ---: | --- |
 | `VALIDATION_ERROR` | 400 | Path·Query·Header·Body의 형식이나 값이 잘못됨 |
+| `ENDPOINT_NOT_FOUND` | 404 | 등록된 Handler가 없는 API 경로 |
 | `TEST_SUITE_NOT_FOUND` | 404 | 유효한 양의 ID에 해당하는 TestSuite가 없음 |
 | `TEST_CASE_NOT_FOUND` | 404 | 유효한 양의 ID에 해당하는 TestCase가 없음 |
 | `TEST_RUN_NOT_FOUND` | 404 | 유효한 양의 ID에 해당하는 TestRun이 없음 |
 | `TEST_RUN_RESULT_NOT_FOUND` | 404 | 요청한 TestRun에 해당 결과 Snapshot이 없음 |
+| `METHOD_NOT_ALLOWED` | 405 | API 경로는 존재하지만 요청한 HTTP Method를 지원하지 않음 |
+| `NOT_ACCEPTABLE` | 406 | 요청의 `Accept` 조건을 만족하는 응답 형식을 제공할 수 없음 |
 | `TEST_SUITE_EMPTY` | 409 | TestRun 생성 시 활성 TestCase가 없음 |
 | `IDEMPOTENCY_KEY_CONFLICT` | 409 | 같은 Idempotency-Key를 다른 TestRun 요청에 재사용 |
 | `TEST_RUN_NOT_FINISHED` | 409 | 종료가 필요한 결과·지표·비교 API에 FINISHED가 아닌 TestRun 사용 |
 | `TEST_RUNS_NOT_COMPARABLE` | 409 | 테스트 정의 또는 실제 Evaluator 설정이 다른 두 TestRun 비교 |
+| `UNSUPPORTED_MEDIA_TYPE` | 415 | 요청 `Content-Type`을 해당 API가 지원하지 않음 |
 | `INTERNAL_SERVER_ERROR` | 500 | 예상하지 못한 동기 서버 처리 실패 |
 
 기본 `message`는 다음을 권장한다. 문구를 개선할 수는 있지만 Code의 의미는 변경하지 않는다.
@@ -47,14 +51,18 @@ Validation을 제외한 오류는 다음 구조를 사용한다.
 | Code | 기본 message |
 | --- | --- |
 | `VALIDATION_ERROR` | 요청 값이 올바르지 않습니다. |
+| `ENDPOINT_NOT_FOUND` | 요청한 API Endpoint를 찾을 수 없습니다. |
 | `TEST_SUITE_NOT_FOUND` | TestSuite를 찾을 수 없습니다. |
 | `TEST_CASE_NOT_FOUND` | TestCase를 찾을 수 없습니다. |
 | `TEST_RUN_NOT_FOUND` | TestRun을 찾을 수 없습니다. |
 | `TEST_RUN_RESULT_NOT_FOUND` | TestRun 결과를 찾을 수 없습니다. |
+| `METHOD_NOT_ALLOWED` | 허용되지 않은 HTTP Method입니다. |
+| `NOT_ACCEPTABLE` | 요청한 응답 형식을 제공할 수 없습니다. |
 | `TEST_SUITE_EMPTY` | 실행 가능한 TestCase가 없습니다. |
 | `IDEMPOTENCY_KEY_CONFLICT` | Idempotency-Key가 다른 요청에 이미 사용되었습니다. |
 | `TEST_RUN_NOT_FINISHED` | TestRun이 아직 종료되지 않았습니다. |
 | `TEST_RUNS_NOT_COMPARABLE` | 두 TestRun은 비교할 수 없습니다. |
+| `UNSUPPORTED_MEDIA_TYPE` | 지원하지 않는 요청 형식입니다. |
 | `INTERNAL_SERVER_ERROR` | 서버 내부 오류가 발생했습니다. |
 
 ## Validation Error
@@ -105,6 +113,11 @@ Field 경로는 외부 API 이름을 사용한다.
 
 ## 404 Not Found
 
+### ENDPOINT_NOT_FOUND
+
+등록된 Handler가 없는 API 경로를 요청했을 때 사용한다. Path로 직접 식별한 도메인 리소스가
+없는 경우에는 아래의 리소스별 `*_NOT_FOUND`를 사용한다.
+
 ### TEST_SUITE_NOT_FOUND
 
 TestSuite 상세·수정, TestCase 목록·생성의 부모 TestSuite, 새로운 TestRun의 대상 TestSuite처럼 Path 또는 Body로 직접 식별한 TestSuite가 없을 때 사용한다.
@@ -118,6 +131,16 @@ TestCase 상세·수정·삭제 대상이 없을 때 사용한다. 삭제된 Tes
 ### TEST_RUN_NOT_FOUND
 
 TestRun 상세 또는 개별 결과 조회의 양의 ID가 존재하지 않을 때 사용한다. 빈 목록과 범위를 초과한 페이지는 `404`가 아니라 `200 OK`와 빈 `items`를 반환한다.
+
+## HTTP 표준 프로토콜 오류
+
+- 존재하는 API 경로에서 지원하지 않는 Method는 `405 METHOD_NOT_ALLOWED`다.
+- 요청의 `Accept` 조건을 만족하는 응답을 제공할 수 없으면 `406 NOT_ACCEPTABLE`이다.
+- 요청 `Content-Type`을 API가 지원하지 않으면 `415 UNSUPPORTED_MEDIA_TYPE`이다.
+- Spring MVC가 계산한 실제 Status와 `Allow`, `Accept` 등 프로토콜 헤더를 유지한다.
+- 응답은 `application/json` 공통 Error Envelope를 사용하며 요청 경로, Handler 정보와 예외 원문을 노출하지 않는다.
+
+세부 결정은 [ADR 0014](../decisions/0014-http-standard-error-envelope.md)를 따른다.
 
 ## 409 Conflict
 

@@ -12,14 +12,18 @@ package com.guardbench.common.error;
 public enum ApplicationErrorCode {
 
     VALIDATION_ERROR(400, "요청 값이 올바르지 않습니다."),
+    ENDPOINT_NOT_FOUND(404, "요청한 API Endpoint를 찾을 수 없습니다."),
     TEST_SUITE_NOT_FOUND(404, "TestSuite를 찾을 수 없습니다."),
     TEST_CASE_NOT_FOUND(404, "TestCase를 찾을 수 없습니다."),
     TEST_RUN_NOT_FOUND(404, "TestRun을 찾을 수 없습니다."),
     TEST_RUN_RESULT_NOT_FOUND(404, "TestRun 결과를 찾을 수 없습니다."),
+    METHOD_NOT_ALLOWED(405, "허용되지 않은 HTTP Method입니다."),
+    NOT_ACCEPTABLE(406, "요청한 응답 형식을 제공할 수 없습니다."),
     TEST_SUITE_EMPTY(409, "실행 가능한 TestCase가 없습니다."),
     IDEMPOTENCY_KEY_CONFLICT(409, "Idempotency-Key가 다른 요청에 이미 사용되었습니다."),
     TEST_RUN_NOT_FINISHED(409, "TestRun이 아직 종료되지 않았습니다."),
     TEST_RUNS_NOT_COMPARABLE(409, "두 TestRun은 비교할 수 없습니다."),
+    UNSUPPORTED_MEDIA_TYPE(415, "지원하지 않는 요청 형식입니다."),
     INTERNAL_SERVER_ERROR(500, "서버 내부 오류가 발생했습니다.");
 
     private final int httpStatus;
