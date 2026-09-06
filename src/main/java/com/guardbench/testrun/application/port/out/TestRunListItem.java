@@ -14,6 +14,7 @@ public record TestRunListItem(
         TestRunProgress progress,
         TestRunExecutionOutcome executionOutcome,
         String qualityGateStatusCode,
+        QualityGateMetricsView qualityGateMetrics,
         Instant createdAt,
         Instant startedAt,
         Instant completedAt,
@@ -31,6 +32,16 @@ public record TestRunListItem(
         }
         if (qualityGateStatusCode != null) {
             TestRunListCriteria.validateQualityGateStatusCode(qualityGateStatusCode);
+        }
+        if (qualityGateStatusCode == null && qualityGateMetrics != null) {
+            throw new IllegalArgumentException("undecided Quality Gate must not have metrics");
+        }
+        if ("NOT_EVALUATED".equals(qualityGateStatusCode) && qualityGateMetrics != null) {
+            throw new IllegalArgumentException("NOT_EVALUATED Quality Gate must not have metrics");
+        }
+        if (("PASS".equals(qualityGateStatusCode) || "FAIL".equals(qualityGateStatusCode))
+                && qualityGateMetrics == null) {
+            throw new IllegalArgumentException("evaluated Quality Gate must have metrics");
         }
     }
 }

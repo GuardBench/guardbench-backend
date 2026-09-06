@@ -1373,8 +1373,9 @@ components:
     TestRunListItemRes:
       type: object
       description: |
-        실행 이력 목록용 요약이다. Application Target revision과 Quality Gate metrics는 포함하지 않는다.
-        executionOutcome과 qualityGateStatus는 아직 결정되지 않았으면 null이다.
+        실행 이력 목록용 요약이다. Application Target revision은 포함하지 않는다.
+        executionOutcome, qualityGateStatus와 qualityGateMetrics는 아직 결정되지 않았으면 null이다.
+        Quality Gate가 NOT_EVALUATED이면 qualityGateMetrics도 null이다.
       required:
         - id
         - testSuiteId
@@ -1383,6 +1384,7 @@ components:
         - progress
         - executionOutcome
         - qualityGateStatus
+        - qualityGateMetrics
         - createdAt
         - startedAt
         - completedAt
@@ -1396,6 +1398,7 @@ components:
         progress: { $ref: '#/components/schemas/TestRunProgressRes' }
         executionOutcome: { $ref: '#/components/schemas/NullableTestRunExecutionOutcome' }
         qualityGateStatus: { $ref: '#/components/schemas/NullableQualityGateStatus' }
+        qualityGateMetrics: { $ref: '#/components/schemas/QualityGateMetricsRes' }
         createdAt: { type: string, format: date-time, description: UTC 기준 ISO 8601 접수 시각 }
         startedAt:
           type: string
@@ -1460,31 +1463,32 @@ components:
       additionalProperties: false
       properties:
         status: { $ref: '#/components/schemas/QualityGateStatus' }
-        metrics:
-          type: object
-          nullable: true
-          required: [assertionPassRate, executionSuccessRate, assertion, execution]
-          additionalProperties: false
-          description: 현재 TestRun의 Assertion 및 실행 집계 지표
-          properties:
-            assertionPassRate:
-              type: number
-              format: double
-              minimum: 0
-              maximum: 1
-              deprecated: true
-              description: 기존 소비처 호환용 Assertion PASS 비율. assertion.value와 같은 값이다.
-            executionSuccessRate:
-              type: number
-              format: double
-              minimum: 0
-              maximum: 1
-              deprecated: true
-              description: 기존 소비처 호환용 실행 성공 비율. execution.value와 같은 값이다.
-            assertion:
-              $ref: '#/components/schemas/QualityGateMetricRes'
-            execution:
-              $ref: '#/components/schemas/QualityGateMetricRes'
+        metrics: { $ref: '#/components/schemas/QualityGateMetricsRes' }
+    QualityGateMetricsRes:
+      type: object
+      nullable: true
+      required: [assertionPassRate, executionSuccessRate, assertion, execution]
+      additionalProperties: false
+      description: 현재 TestRun의 Assertion 및 실행 집계 지표. 미결정 또는 NOT_EVALUATED이면 null이다.
+      properties:
+        assertionPassRate:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+          deprecated: true
+          description: 기존 소비처 호환용 Assertion PASS 비율. assertion.value와 같은 값이다.
+        executionSuccessRate:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+          deprecated: true
+          description: 기존 소비처 호환용 실행 성공 비율. execution.value와 같은 값이다.
+        assertion:
+          $ref: '#/components/schemas/QualityGateMetricRes'
+        execution:
+          $ref: '#/components/schemas/QualityGateMetricRes'
     QualityGateMetricRes:
       type: object
       required: [value, threshold, passed]

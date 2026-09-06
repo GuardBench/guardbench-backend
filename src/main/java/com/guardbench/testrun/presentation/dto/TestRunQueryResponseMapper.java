@@ -138,6 +138,7 @@ public final class TestRunQueryResponseMapper {
                 toProgressRes(item.progress()),
                 item.executionOutcome() != null ? item.executionOutcome().name() : null,
                 item.qualityGateStatusCode(),
+                toQualityGateMetricsRes(item.qualityGateMetrics()),
                 toIso(item.createdAt()),
                 toIso(item.startedAt()),
                 toIso(item.completedAt()),
@@ -175,8 +176,11 @@ public final class TestRunQueryResponseMapper {
     }
 
     private static QualityGateRes toQualityGateRes(QualityGateView qualityGate) {
-        QualityGateMetricsView metrics = qualityGate.metrics();
-        QualityGateMetricsRes metricsRes = metrics != null
+        return new QualityGateRes(qualityGate.statusCode(), toQualityGateMetricsRes(qualityGate.metrics()));
+    }
+
+    private static QualityGateMetricsRes toQualityGateMetricsRes(QualityGateMetricsView metrics) {
+        return metrics != null
                 ? new QualityGateMetricsRes(
                         metrics.assertionPassRate(),
                         metrics.executionSuccessRate(),
@@ -189,7 +193,6 @@ public final class TestRunQueryResponseMapper {
                                 metrics.execution().threshold(),
                                 metrics.execution().passed()))
                 : null;
-        return new QualityGateRes(qualityGate.statusCode(), metricsRes);
     }
 
     private static PageMetaRes toPageMetaRes(PageResult<?> page) {

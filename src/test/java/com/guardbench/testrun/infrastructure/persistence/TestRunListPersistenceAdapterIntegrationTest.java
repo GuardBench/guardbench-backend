@@ -62,7 +62,14 @@ class TestRunListPersistenceAdapterIntegrationTest {
         PageResult<TestRunListItem> result = port.load(criteria);
 
         assertEquals(List.of(40_001L), result.items().stream().map(TestRunListItem::id).toList());
-        assertEquals("PASS", result.items().getFirst().qualityGateStatusCode());
+        TestRunListItem item = result.items().getFirst();
+        assertEquals("PASS", item.qualityGateStatusCode());
+        assertEquals(1.0, item.qualityGateMetrics().assertion().value());
+        assertEquals(0.95, item.qualityGateMetrics().assertion().threshold());
+        assertTrue(item.qualityGateMetrics().assertion().passed());
+        assertEquals(1.0, item.qualityGateMetrics().execution().value());
+        assertEquals(0.95, item.qualityGateMetrics().execution().threshold());
+        assertTrue(item.qualityGateMetrics().execution().passed());
     }
 
     @Test
@@ -75,6 +82,20 @@ class TestRunListPersistenceAdapterIntegrationTest {
 
         assertEquals(1, result.items().size());
         assertNull(result.items().getFirst().qualityGateStatusCode());
+        assertNull(result.items().getFirst().qualityGateMetrics());
+    }
+
+    @Test
+    @DisplayName("NOT_EVALUATED Quality Gate는 목록 metric evidence를 null로 반환한다")
+    void returnsNullMetricsForNotEvaluatedQualityGate() {
+        insertSuite(30_012L);
+        insertTestRun(40_012L, 30_012L, TestRunStatus.FINISHED, TestRunExecutionOutcome.INCOMPLETE, T0);
+        insertQualityGateResult(40_012L, "NOT_EVALUATED");
+
+        TestRunListItem item = port.load(TestRunListCriteria.firstPage()).items().getFirst();
+
+        assertEquals("NOT_EVALUATED", item.qualityGateStatusCode());
+        assertNull(item.qualityGateMetrics());
     }
 
     @Test

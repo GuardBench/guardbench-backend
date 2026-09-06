@@ -9,6 +9,8 @@ import java.util.List;
 import com.guardbench.testrun.application.port.out.LoadTestRunListPort;
 import com.guardbench.testrun.application.port.out.PageCriteria;
 import com.guardbench.testrun.application.port.out.PageResult;
+import com.guardbench.testrun.application.port.out.QualityGateMetricView;
+import com.guardbench.testrun.application.port.out.QualityGateMetricsView;
 import com.guardbench.testrun.application.port.out.TestRunListCriteria;
 import com.guardbench.testrun.application.port.out.TestRunListItem;
 import com.guardbench.testrun.application.port.out.TestRunProgress;
@@ -26,6 +28,9 @@ class GetTestRunListServiceTest {
         TestRunListItem item = new TestRunListItem(
                 901L, 1L, TestRunStatus.FINISHED, 253,
                 new TestRunProgress(253, 100.0), TestRunExecutionOutcome.COMPLETED, "PASS",
+                new QualityGateMetricsView(
+                        new QualityGateMetricView(0.98, 0.95, true),
+                        new QualityGateMetricView(1.0, 0.95, true)),
                 Instant.parse("2026-08-24T14:30:00Z"), Instant.parse("2026-08-24T14:30:03Z"),
                 Instant.parse("2026-08-24T14:35:00Z"), Instant.parse("2026-08-24T14:35:00Z"));
         PageResult<TestRunListItem> expected = PageResult.of(

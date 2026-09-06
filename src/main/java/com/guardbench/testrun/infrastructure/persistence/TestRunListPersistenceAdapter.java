@@ -10,6 +10,8 @@ import java.util.Objects;
 
 import com.guardbench.testrun.application.port.out.LoadTestRunListPort;
 import com.guardbench.testrun.application.port.out.PageResult;
+import com.guardbench.testrun.application.port.out.QualityGateMetricView;
+import com.guardbench.testrun.application.port.out.QualityGateMetricsView;
 import com.guardbench.testrun.application.port.out.SortDirection;
 import com.guardbench.testrun.application.port.out.SortOrder;
 import com.guardbench.testrun.application.port.out.TestRunListCriteria;
@@ -26,9 +28,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * TestRun 목록 조회 Port를 PostgreSQL query로 구현한다.
  *
- * <p>Quality Gate 상태는 {@code quality_gate_result}를 LEFT JOIN해서 읽고, evaluation Context의
- * Domain 타입이나 Repository를 사용하지 않는다. {@code gate_status} 원시 값을 이 Context가 소유한
- * nullable scalar code로만 전달한다.
+ * <p>Quality Gate 상태와 metric evidence는 {@code quality_gate_result}를 LEFT JOIN해서 읽고,
+ * evaluation Context의 Domain 타입이나 Repository를 사용하지 않는다. 저장된 원시 값을 이 Context가
+ * 소유한 nullable 조회 projection으로만 전달한다.
  *
  * <p>진행률은 {@code processed_test_case_count}와 {@code test_case_count}로 계산한다. 정렬 SQL은
  * 문자열 입력이 아니라 {@link TestRunListSortField}의 고정 mapping으로만 조립한다.
@@ -62,7 +64,10 @@ class TestRunListPersistenceAdapter implements LoadTestRunListPort {
         String selectSql = """
                 SELECT r.id, r.test_suite_id, r.status, r.test_case_count,
                        r.processed_test_case_count, r.execution_outcome,
-                       qgr.gate_status, r.created_at, r.started_at, r.completed_at,
+                       qgr.gate_status,
+                       qgr.assertion_pass_rate, qgr.assertion_pass_rate_threshold, qgr.assertion_passed,
+                       qgr.execution_success_rate, qgr.execution_success_rate_threshold, qgr.execution_passed,
+                       r.created_at, r.started_at, r.completed_at,
                        r.updated_at
                 """ + fromAndWhere
                 + " ORDER BY " + orderBy(criteria.sort())
@@ -121,6 +126,7 @@ class TestRunListPersistenceAdapter implements LoadTestRunListPort {
 
     private TestRunListItem mapItem(ResultSet resultSet, int rowNumber) throws SQLException {
         String executionOutcome = resultSet.getString("execution_outcome");
+        String qualityGateStatus = resultSet.getString("gate_status");
         return new TestRunListItem(
                 resultSet.getLong("id"),
                 resultSet.getLong("test_suite_id"),
@@ -130,11 +136,44 @@ class TestRunListPersistenceAdapter implements LoadTestRunListPort {
                         resultSet.getInt("processed_test_case_count"),
                         percent(resultSet.getInt("processed_test_case_count"), resultSet.getInt("test_case_count"))),
                 executionOutcome == null ? null : TestRunExecutionOutcome.valueOf(executionOutcome),
-                resultSet.getString("gate_status"),
+                qualityGateStatus,
+                mapQualityGateMetrics(resultSet, qualityGateStatus),
                 toInstant(resultSet, "created_at"),
                 toInstant(resultSet, "started_at"),
                 toInstant(resultSet, "completed_at"),
                 toInstant(resultSet, "updated_at"));
+    }
+
+    private QualityGateMetricsView mapQualityGateMetrics(ResultSet resultSet, String qualityGateStatus)
+            throws SQLException {
+        if (qualityGateStatus == null || "NOT_EVALUATED".equals(qualityGateStatus)) {
+            return null;
+        }
+        return new QualityGateMetricsView(
+                new QualityGateMetricView(
+                        requiredDouble(resultSet, "assertion_pass_rate"),
+                        requiredDouble(resultSet, "assertion_pass_rate_threshold"),
+                        requiredBoolean(resultSet, "assertion_passed")),
+                new QualityGateMetricView(
+                        requiredDouble(resultSet, "execution_success_rate"),
+                        requiredDouble(resultSet, "execution_success_rate_threshold"),
+                        requiredBoolean(resultSet, "execution_passed")));
+    }
+
+    private static double requiredDouble(ResultSet resultSet, String column) throws SQLException {
+        Double value = resultSet.getObject(column, Double.class);
+        if (value == null) {
+            throw new SQLException("Missing required Quality Gate metric column: " + column);
+        }
+        return value;
+    }
+
+    private static boolean requiredBoolean(ResultSet resultSet, String column) throws SQLException {
+        Boolean value = resultSet.getObject(column, Boolean.class);
+        if (value == null) {
+            throw new SQLException("Missing required Quality Gate metric column: " + column);
+        }
+        return value;
     }
 
     private static double percent(int processed, int total) {
