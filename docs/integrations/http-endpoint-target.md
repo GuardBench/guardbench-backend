@@ -85,9 +85,9 @@ guardbench:
 ```
 
 입력·endpoint URL, 인증 정보와 provider 원문은 일반 로그나 오류 결과에 기록하지 않는다.
-Application response는 Issue #186의 실행 진단 예외에 따라 애플리케이션 로그에 최대 512자 preview를
-마스킹 없이 기록할 수 있으며, 초과 응답은 `…[truncated]`로 제한한다. 이 preview는 public API나 DB에
-추가 저장하지 않는다.
+Application response 원문이나 preview도 애플리케이션 로그에 기록하지 않는다. 실행 로그에는
+응답 길이 metadata만 남기며, Application response는 classifier 입력과 TestExecution persistence에
+그대로 전달·저장한다.
 
 ## 저장과 재현성
 

@@ -126,30 +126,27 @@ public class ExecuteTestRunService {
         EvaluatorExecutionNormalization evaluatorNormalization = null;
         if (targetNormalization.isSuccess()) {
             ApplicationResponse response = targetNormalization.applicationResponse();
-            ApplicationResponseDiagnostic.DiagnosticValue responseDiagnostic =
-                    ApplicationResponseDiagnostic.of(response.value());
+            int responseLength = response.value().codePointCount(0, response.value().length());
             log.info("Application response 진단 정보를 기록합니다. testRunId={} snapshotId={} "
-                            + "responseLength={} responseTruncated={} applicationResponsePreview={}",
-                    context.testRunId(), snapshotId, responseDiagnostic.responseLength(),
-                    responseDiagnostic.truncated(), responseDiagnostic.preview());
+                            + "responseLength={}",
+                    context.testRunId(), snapshotId, responseLength);
             log.info("Classifier 호출을 시작합니다. testRunId={} snapshotId={} evaluatorReference={} "
-                            + "responseLength={} responseTruncated={}",
+                            + "responseLength={}",
                     context.testRunId(), snapshotId, context.evaluatorReference(),
-                    responseDiagnostic.responseLength(), responseDiagnostic.truncated());
+                    responseLength);
             evaluatorNormalization = callEvaluator(context, response);
             if (evaluatorNormalization.isSuccess()) {
                 log.info("Classifier 판정을 완료했습니다. testRunId={} snapshotId={} "
-                                + "classifierOutput={} evaluatorVerdict={} responseLength={} responseTruncated={}",
+                                + "classifierOutput={} evaluatorVerdict={} responseLength={}",
                         context.testRunId(), snapshotId, evaluatorNormalization.evaluationResult().action(),
-                        evaluatorNormalization.evaluationResult().action(), responseDiagnostic.responseLength(),
-                        responseDiagnostic.truncated());
+                        evaluatorNormalization.evaluationResult().action(), responseLength);
             } else {
                 TestExecutionError error = evaluatorNormalization.error();
                 log.warn("Classifier 판정에 실패했습니다. testRunId={} snapshotId={} "
-                                + "classifierOutput=null evaluatorVerdict=null responseLength={} responseTruncated={} "
+                                + "classifierOutput=null evaluatorVerdict=null responseLength={} "
                                 + "errorStage={} errorCode={} retryable={}",
-                        context.testRunId(), snapshotId, responseDiagnostic.responseLength(),
-                        responseDiagnostic.truncated(), error.stage(), error.code(), isRetryable(error.code()));
+                        context.testRunId(), snapshotId, responseLength,
+                        error.stage(), error.code(), isRetryable(error.code()));
             }
             if (!evaluatorNormalization.isSuccess()) {
                 TestExecutionError error = evaluatorNormalization.error();

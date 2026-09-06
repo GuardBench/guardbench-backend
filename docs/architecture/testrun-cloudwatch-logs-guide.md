@@ -50,13 +50,13 @@ fields @timestamp, @message
 ```
 
 - `실패로 재시도합니다` (WARN): `snapshotId`, `attemptCount`, `errorStage`, `errorCode`, `retryable=true`, `reason`(sanitized)
-- `Application response 진단 정보를 기록합니다` (INFO): `testRunId`, `snapshotId`, `responseLength`, `responseTruncated`, `applicationResponsePreview`
-- `Classifier 판정을 완료했습니다` (INFO): `classifierOutput`, `evaluatorVerdict`, 응답 길이·truncation 정보
-- `Classifier 판정에 실패했습니다` (WARN): `errorStage`, `errorCode`, `retryable`, 응답 길이·truncation 정보
+- `Application response 진단 정보를 기록합니다` (INFO): `testRunId`, `snapshotId`, `responseLength`
+- `Classifier 판정을 완료했습니다` (INFO): `classifierOutput`, `evaluatorVerdict`, `responseLength`
+- `Classifier 판정에 실패했습니다` (WARN): `errorStage`, `errorCode`, `retryable`, `responseLength`
 - `terminal 결과를 저장했습니다` (INFO): 성공 시 `evaluatorVerdict`, 실패 시 `errorStage`/`errorCode`/`retryable`
 
-`applicationResponsePreview`는 서비스 정책에 따라 마스킹하지 않지만 최대 512자(Unicode code point)까지만 기록하며,
-초과 시 `…[truncated]`를 붙인다. 줄바꿈·탭 등 제어 문자는 로그 한 줄 유지를 위해 escape한다.
+Application response 원문과 preview는 운영 로그에 기록하지 않는다. `responseLength`만
+Unicode code point 기준 길이로 기록하며, classifier 입력과 TestExecution persistence에는 원문을 그대로 전달한다.
 
 특정 Snapshot만 보고 싶으면 `snapshotId=<SNAPSHOT_ID>`를 filter에 추가한다.
 
@@ -84,7 +84,7 @@ fields @timestamp, @message
 ```
 
 `Snapshot assertion을 판정했습니다` 로그에서 `testRunId`, `snapshotId`, `expectedAction`, `evaluatorVerdict`,
-`assertionStatus`, `evaluated`, `evaluationReused`를 확인할 수 있다. 이를 통해 Application response 진단 로그와
+`assertionStatus`, `evaluated`, `evaluationReused`를 확인할 수 있다. 이를 통해 Application response 길이 진단 로그와
 classifier verdict가 Assertion으로 변환된 결과를 Snapshot 단위로 연결한다.
 
 한 줄에서 확인 가능한 필드:
@@ -157,7 +157,7 @@ Timestamp 누락/파싱 오류/음수이면 `sentTimestamp=null`, `queueWaitMs=n
 설정 조회/요청 준비, HTTP 호출, 응답 읽기·파싱을 포함하며 순수 네트워크 왕복 시간과는 다르다.
 Classifier 호출과 terminal persistence는 포함하지 않는다. 성공/실패 모두 같은
 `testRunId + snapshotId + attemptCount`로 연결한다. prompt, endpoint, credential과 예외 원문은
-추가 로그에 포함하지 않으며 기존 response preview 정책을 그대로 적용한다.
+추가 로그에 포함하지 않으며 Application response 원문과 preview도 기록하지 않는다.
 
 ### 개별 수신의 Queue wait
 

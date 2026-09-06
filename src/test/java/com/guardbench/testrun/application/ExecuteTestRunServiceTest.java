@@ -202,8 +202,31 @@ class ExecuteTestRunServiceTest {
         }
 
         @Test
-        @DisplayName("Application response 진단 로그는 512자까지 기록하고 초과분을 표시한다")
-        void logsApplicationResponseWithBoundedPreview() {
+        @DisplayName("짧은 Application response는 길이만 로그에 남기고 원문을 기록하지 않는다")
+        void doesNotLogShortApplicationResponse() {
+            String response = "sensitive response that must not be logged";
+            LogCapture logCapture = LogCapture.attach(ExecuteTestRunService.class);
+            try {
+                claimPort.willAcquire(SNAPSHOT_ID);
+                contextPort.setContext(SNAPSHOT_ID, defaultContext());
+                guardrailPort.willReturn(TargetExecutionResult.succeeded(response));
+                evaluatorPort.willReturn(EvaluatorExecutionResult.succeeded("ALLOW"));
+
+                service.execute(SNAPSHOT_ID);
+
+                assertTrue(logCapture.hasMessageContaining("responseLength=" + response.length()));
+                assertFalse(logCapture.hasMessageContaining(response));
+                assertFalse(logCapture.hasMessageContaining("applicationResponsePreview"));
+                assertEquals(response, executionRepository.savedExecutions().getFirst().applicationResponse().value());
+                assertEquals(response, evaluatorPort.lastRequest().applicationResponse());
+            } finally {
+                logCapture.detach();
+            }
+        }
+
+        @Test
+        @DisplayName("긴 Application response도 원문이나 preview 없이 길이만 로그에 남긴다")
+        void doesNotLogLongApplicationResponse() {
             String response = "가".repeat(600);
             LogCapture logCapture = LogCapture.attach(ExecuteTestRunService.class);
             try {
@@ -214,13 +237,11 @@ class ExecuteTestRunServiceTest {
 
                 service.execute(SNAPSHOT_ID);
 
-                String diagnosticLog = logCapture.firstMessageContaining("Application response 진단 정보");
-                assertTrue(diagnosticLog.contains("responseLength=600"));
-                assertTrue(diagnosticLog.contains("responseTruncated=true"));
-                assertTrue(diagnosticLog.contains("…[truncated]"));
-                String preview = diagnosticLog.substring(diagnosticLog.indexOf("applicationResponsePreview=")
-                        + "applicationResponsePreview=".length());
-                assertEquals(512, preview.codePointCount(0, preview.length()));
+                assertTrue(logCapture.hasMessageContaining("responseLength=600"));
+                assertFalse(logCapture.hasMessageContaining(response));
+                assertFalse(logCapture.hasMessageContaining("applicationResponsePreview"));
+                assertEquals(response, executionRepository.savedExecutions().getFirst().applicationResponse().value());
+                assertEquals(response, evaluatorPort.lastRequest().applicationResponse());
                 String classifierLog = logCapture.firstMessageContaining("Classifier 판정을 완료했습니다");
                 assertTrue(classifierLog.contains("classifierOutput=ALLOW"));
                 assertTrue(classifierLog.contains("evaluatorVerdict=ALLOW"));
