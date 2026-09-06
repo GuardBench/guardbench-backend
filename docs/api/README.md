@@ -116,7 +116,7 @@ HTTP Application Target 실행, OpenAI-compatible response 정규화, SageMaker 
 - 상세의 `qualityGate`는 실행 중 `null`이다. 종료 후 Quality Gate는 같은 TestRun의 Assertion 결과만 집계한다.
 - 개별 결과 목록은 `FINISHED`에서만 조회한다. 그 전에는 `409 TEST_RUN_NOT_FINISHED`다.
 - 개별 결과의 `TestRunResultItemRes`는 Snapshot input, `executionStatus`, `evaluatorVerdict`, `expectedAction`, `assertionStatus`와 안전한 `error`를 제공한다. 값은 실행 당시 저장 결과이며 현재 TestCase 수정과 무관하다.
-- Application의 자연어 응답은 내부 classifier 입력이지만 public DTO에는 `applicationResponse`, `targetResponse`, `naturalLanguageResponse` 어떤 이름으로도 노출하지 않는다.
+- 개별 결과 목록 `TestRunResultItemRes`에는 Application의 자연어 응답을 포함하지 않으며, `GET /api/v1/test-runs/{testRunId}/results/{testCaseSnapshotId}`의 `TestRunResultDetailRes`에서만 저장된 `applicationResponse`를 그대로 반환한다. 응답이 생성되지 않은 결과는 `null`이다.
 - `error.stage`는 `APPLICATION_TARGET | EVALUATOR`로 실패 단계를 구분한다. code의 구체 taxonomy는 #117이 소유하며 provider 원문, stack trace, credential과 ARN은 노출하지 않는다.
 - `evaluationOutcome` 필터는 `TRUE_POSITIVE | TRUE_NEGATIVE | FALSE_POSITIVE | FALSE_NEGATIVE` 상세 조회에 사용한다.
 - `attentionType`은 `FALSE_NEGATIVE | FALSE_POSITIVE | EXECUTION_FAILED | TIMED_OUT | NOT_STARTED`이며,
@@ -164,7 +164,7 @@ Regression API는 #119에서 구현되었다. 비교 가능성은 TestCaseSnapsh
 | Frontend Issue | 참조할 backend 공개 계약 | 구현 시 전제 |
 | --- | --- | --- |
 | #27 TestRun 생성 | `POST /api/v1/test-runs`, `TestRunCreateReq`, `TargetReferenceReq` | OpenAI-compatible HTTP Application endpoint와 필수 model만 제출하며 classifier 설정 입력은 없다. |
-| #28 실행 상세·결과 | `GET /api/v1/test-runs/{testRunId}`, `TestRunDetailRes`, `GET .../results`, `TestRunResultItemRes`, `QualityGateRes` | classifier verdict, ExpectedResult, Assertion, 실행 상태와 안전한 오류를 표시한다. ApplicationResponse는 표시하지 않는다. |
+| #28 실행 상세·결과 | `GET /api/v1/test-runs/{testRunId}`, `TestRunDetailRes`, `GET .../results`, `TestRunResultItemRes`, `GET .../results/{testCaseSnapshotId}`, `TestRunResultDetailRes`, `QualityGateRes` | 목록은 classifier verdict, ExpectedResult, Assertion, 실행 상태와 안전한 오류를 표시하고, 개별 상세에서 저장된 ApplicationResponse를 표시한다. |
 | #29 FN/FP 분석 | 결과의 `evaluationOutcome`과 `GET .../evaluator-metrics`의 `EvaluatorMetricsRes` | backend 분류를 source of truth로 사용한다. |
 | #30 Regression | `GET .../comparable-runs`, `GET .../comparisons/{comparisonRunId}` | backend가 반환한 comparable Run만 사용한다. provider 선택 UI나 재실행 흐름을 만들지 않고 저장된 비교 결과 DTO를 사용한다. |
 
