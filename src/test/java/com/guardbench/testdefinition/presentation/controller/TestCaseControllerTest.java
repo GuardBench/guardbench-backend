@@ -29,6 +29,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.guardbench.common.error.ApplicationErrorCode;
 import com.guardbench.common.error.ApplicationException;
 import com.guardbench.testdefinition.application.TestCaseDetail;
+import com.guardbench.testdefinition.application.TestCaseBulkCreateResult;
 import com.guardbench.testdefinition.application.TestCaseService;
 import com.guardbench.testdefinition.application.query.PageResult;
 import com.guardbench.testdefinition.domain.Action;
@@ -57,6 +58,80 @@ class TestCaseControllerTest {
                 .andExpect(header().string("Location", "/api/v1/test-cases/10"))
                 .andExpect(jsonPath("$.httpStatus").value(201))
                 .andExpect(jsonPath("$.data.expectedAction").value("BLOCK"));
+    }
+
+    @Test
+    @DisplayName("TestCase 일괄 등록은 201과 생성 ID 및 갱신된 전체 건수를 반환한다")
+    void bulkCreatesTestCases() throws Exception {
+        when(service.createBulk(eq(1L), any())).thenReturn(
+                new TestCaseBulkCreateResult(List.of(10L, 11L), 5L));
+
+        mockMvc.perform(post("/api/v1/test-suites/1/test-cases/bulk")
+                        .header("Idempotency-Key", "bulk-key-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validBulkCreateBody()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.httpStatus").value(201))
+                .andExpect(jsonPath("$.data.createdTestCaseIds[0]").value(10))
+                .andExpect(jsonPath("$.data.createdCount").value(2))
+                .andExpect(jsonPath("$.data.totalTestCaseCount").value(5));
+    }
+
+    @Test
+    @DisplayName("TestCase 일괄 등록에서 Idempotency-Key가 없으면 400 VALIDATION_ERROR를 반환한다")
+    void bulkCreateRequiresIdempotencyKey() throws Exception {
+        mockMvc.perform(post("/api/v1/test-suites/1/test-cases/bulk")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validBulkCreateBody()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    @DisplayName("공백 Idempotency-Key는 400 VALIDATION_ERROR를 반환한다")
+    void bulkCreateRejectsBlankIdempotencyKey() throws Exception {
+        mockMvc.perform(post("/api/v1/test-suites/1/test-cases/bulk")
+                        .header("Idempotency-Key", " \u2003")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validBulkCreateBody()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    @DisplayName("TestCase 일괄 등록의 항목 오류는 items 인덱스를 포함한 400 Validation 오류다")
+    void bulkCreateReturnsIndexedItemValidationErrors() throws Exception {
+        mockMvc.perform(post("/api/v1/test-suites/1/test-cases/bulk")
+                        .header("Idempotency-Key", "bulk-key-invalid")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"items":[{
+                                  "name":"정상",
+                                  "input":"입력",
+                                  "expectedAction":"BLOCK",
+                                  "severity":"HIGH",
+                                  "category":"PROMPT_INJECTION"
+                                },{
+                                  "name":" ",
+                                  "input":"입력",
+                                  "expectedAction":"BLOCK",
+                                  "severity":"HIGH",
+                                  "category":"PROMPT_INJECTION"
+                                }]}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.errors[*].field").value(hasItem("items[1].name")));
+    }
+
+    @Test
+    @DisplayName("빈 TestCase 일괄 등록 요청은 400 VALIDATION_ERROR를 반환한다")
+    void bulkCreateRejectsEmptyItems() throws Exception {
+        mockMvc.perform(post("/api/v1/test-suites/1/test-cases/bulk")
+                        .header("Idempotency-Key", "bulk-key-empty")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"items\":[]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.data.errors[*].field").value(hasItem("items")));
     }
 
     @Test
@@ -142,6 +217,10 @@ class TestCaseControllerTest {
                   "category": "PII"
                 }
                 """;
+    }
+
+    private static String validBulkCreateBody() {
+        return "{\"items\":[" + validCreateBody() + "," + validCreateBody() + "]}";
     }
 
     private static TestCaseDetail detail(long id) {
