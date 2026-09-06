@@ -1,0 +1,292 @@
+name: Dev Worker Image Sync
+
+on:
+  workflow_run:
+    workflows: ["Backend CI"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    name: detect successful dev deployment
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      should_sync: ${{ steps.detect.outputs.should_sync }}
+    steps:
+      - name: Detect successful deploy dev job
+        id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jobs="$(gh api --paginate \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100" \
+            --jq '[.jobs[]]')"
+
+          if jq -e 'any(.[]; .name == "deploy dev" and .conclusion == "success")' \
+            <<< "$jobs" >/dev/null; then
+            echo 'should_sync=true' >> "$GITHUB_OUTPUT"
+            echo 'Backend CI completed a successful dev deployment.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'should_sync=false' >> "$GITHUB_OUTPUT"
+            echo 'No successful deploy dev job; Worker sync is not required.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  sync_worker:
+    name: sync dev worker revision
+    needs: detect
+    if: needs.detect.outputs.should_sync == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: dev
+    concurrency:
+      group: guardbench-dev-worker-image-sync
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+      API_ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+      ECS_CONTAINER_NAME: ${{ vars.ECS_CONTAINER_NAME }}
+      WORKER_ECS_SERVICE: guardbench-dev-worker
+      WORKER_ECS_TASK_DEFINITION_FAMILY: guardbench-dev-worker
+    steps:
+      - name: Validate dev deployment configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$AWS_DEPLOY_ROLE_ARN"
+          test -n "$AWS_REGION"
+          test -n "$ECS_CLUSTER"
+          test -n "$API_ECS_SERVICE"
+          test -n "$ECS_CONTAINER_NAME"
+          test "$ECS_CONTAINER_NAME" = "app"
+          test "$WORKER_ECS_SERVICE" = "guardbench-dev-worker"
+          test "$WORKER_ECS_TASK_DEFINITION_FAMILY" = "guardbench-dev-worker"
+
+      - name: Configure AWS credentials through OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve API application image
+        id: api-image
+        shell: bash
+        run: |
+          set -euo pipefail
+          api_service_count="$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$API_ECS_SERVICE" \
+            --query 'length(services)' \
+            --output text)"
+          test "$api_service_count" = "1"
+
+          api_task_definition="$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$API_ECS_SERVICE" \
+            --query 'services[0].taskDefinition' \
+            --output text)"
+          test -n "$api_task_definition"
+          test "$api_task_definition" != "None"
+
+          aws ecs describe-task-definition \
+            --task-definition "$api_task_definition" \
+            --query taskDefinition \
+            --output json > api-task-definition.json
+
+          api_container_count="$(jq --arg name "$ECS_CONTAINER_NAME" \
+            '[.containerDefinitions[] | select(.name == $name)] | length' \
+            api-task-definition.json)"
+          test "$api_container_count" = "1"
+
+          api_image="$(jq -r --arg name "$ECS_CONTAINER_NAME" \
+            '.containerDefinitions[] | select(.name == $name) | .image' \
+            api-task-definition.json)"
+          test -n "$api_image"
+          test "$api_image" != "null"
+
+          api_worker_enabled="$(jq -r --arg name "$ECS_CONTAINER_NAME" '
+            .containerDefinitions[]
+            | select(.name == $name)
+            | .environment[]?
+            | select(.name == "WORKER_ENABLED")
+            | .value
+          ' api-task-definition.json)"
+          test "$api_worker_enabled" = "false"
+
+          echo "uri=${api_image}" >> "$GITHUB_OUTPUT"
+          {
+            echo '### Dev API revision'
+            echo "- Service: ${API_ECS_SERVICE}"
+            echo "- Task definition: ${api_task_definition}"
+            echo "- Image: ${api_image}"
+            echo "- WORKER_ENABLED: ${api_worker_enabled}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Register Worker revision with the same application image
+        id: worker-task-definition
+        env:
+          IMAGE_URI: ${{ steps.api-image.outputs.uri }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          worker_service_count="$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$WORKER_ECS_SERVICE" \
+            --query 'length(services)' \
+            --output text)"
+          test "$worker_service_count" = "1"
+
+          current_worker_task_definition="$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$WORKER_ECS_SERVICE" \
+            --query 'services[0].taskDefinition' \
+            --output text)"
+          test -n "$current_worker_task_definition"
+          test "$current_worker_task_definition" != "None"
+
+          current_worker_family="${current_worker_task_definition##*/}"
+          current_worker_family="${current_worker_family%:*}"
+          test "$current_worker_family" = "$WORKER_ECS_TASK_DEFINITION_FAMILY"
+
+          aws ecs describe-task-definition \
+            --task-definition "$WORKER_ECS_TASK_DEFINITION_FAMILY" \
+            --query taskDefinition \
+            --output json > worker-base-task-definition.json
+
+          test "$(jq -r '.status' worker-base-task-definition.json)" = "ACTIVE"
+          test "$(jq -r '.family' worker-base-task-definition.json)" = "$WORKER_ECS_TASK_DEFINITION_FAMILY"
+
+          worker_container_count="$(jq --arg name "$ECS_CONTAINER_NAME" \
+            '[.containerDefinitions[] | select(.name == $name)] | length' \
+            worker-base-task-definition.json)"
+          test "$worker_container_count" = "1"
+
+          worker_enabled="$(jq -r --arg name "$ECS_CONTAINER_NAME" '
+            .containerDefinitions[]
+            | select(.name == $name)
+            | .environment[]?
+            | select(.name == "WORKER_ENABLED")
+            | .value
+          ' worker-base-task-definition.json)"
+          worker_concurrency="$(jq -r --arg name "$ECS_CONTAINER_NAME" '
+            .containerDefinitions[]
+            | select(.name == $name)
+            | .environment[]?
+            | select(.name == "GUARDBENCH_WORKER_WORK_ITEMS_CONCURRENCY")
+            | .value
+          ' worker-base-task-definition.json)"
+          test "$worker_enabled" = "true"
+          test "$worker_concurrency" = "8"
+
+          jq --arg name "$ECS_CONTAINER_NAME" --arg image "$IMAGE_URI" '
+            .containerDefinitions |= map(
+              if .name == $name then .image = $image else . end
+            )
+            | del(
+              .taskDefinitionArn,
+              .revision,
+              .status,
+              .requiresAttributes,
+              .compatibilities,
+              .registeredAt,
+              .registeredBy,
+              .deregisteredAt
+            )
+          ' worker-base-task-definition.json > worker-next-task-definition.json
+
+          target_worker_task_definition="$(aws ecs register-task-definition \
+            --cli-input-json file://worker-next-task-definition.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)"
+          test -n "$target_worker_task_definition"
+          test "$target_worker_task_definition" != "None"
+          echo "arn=${target_worker_task_definition}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy and verify Worker revision
+        env:
+          IMAGE_URI: ${{ steps.api-image.outputs.uri }}
+          TARGET_WORKER_TASK_DEFINITION: ${{ steps.worker-task-definition.outputs.arn }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$WORKER_ECS_SERVICE" \
+            --task-definition "$TARGET_WORKER_TASK_DEFINITION" >/dev/null
+
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$WORKER_ECS_SERVICE"
+
+          worker_service_state="$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$WORKER_ECS_SERVICE" \
+            --query 'services[0]' \
+            --output json)"
+
+          actual_worker_task_definition="$(jq -r '.taskDefinition' <<< "$worker_service_state")"
+          worker_rollout_state="$(jq -r '
+            [.deployments[] | select(.status == "PRIMARY") | .rolloutState] | first // empty
+          ' <<< "$worker_service_state")"
+          desired_count="$(jq -r '.desiredCount' <<< "$worker_service_state")"
+          running_count="$(jq -r '.runningCount' <<< "$worker_service_state")"
+          pending_count="$(jq -r '.pendingCount' <<< "$worker_service_state")"
+
+          test "$actual_worker_task_definition" = "$TARGET_WORKER_TASK_DEFINITION"
+          test "$worker_rollout_state" = "COMPLETED"
+          test "$desired_count" -ge 2
+          test "$desired_count" -le 4
+          test "$desired_count" = "$running_count"
+          test "$pending_count" = "0"
+
+          aws ecs describe-task-definition \
+            --task-definition "$actual_worker_task_definition" \
+            --query taskDefinition \
+            --output json > deployed-worker-task-definition.json
+
+          deployed_worker_image="$(jq -r --arg name "$ECS_CONTAINER_NAME" \
+            '.containerDefinitions[] | select(.name == $name) | .image' \
+            deployed-worker-task-definition.json)"
+          deployed_worker_enabled="$(jq -r --arg name "$ECS_CONTAINER_NAME" '
+            .containerDefinitions[]
+            | select(.name == $name)
+            | .environment[]?
+            | select(.name == "WORKER_ENABLED")
+            | .value
+          ' deployed-worker-task-definition.json)"
+          deployed_worker_concurrency="$(jq -r --arg name "$ECS_CONTAINER_NAME" '
+            .containerDefinitions[]
+            | select(.name == $name)
+            | .environment[]?
+            | select(.name == "GUARDBENCH_WORKER_WORK_ITEMS_CONCURRENCY")
+            | .value
+          ' deployed-worker-task-definition.json)"
+
+          test "$deployed_worker_image" = "$IMAGE_URI"
+          test "$deployed_worker_enabled" = "true"
+          test "$deployed_worker_concurrency" = "8"
+
+          {
+            echo '### Dev Worker revision synchronized'
+            echo "- Service: ${WORKER_ECS_SERVICE}"
+            echo "- Task definition: ${actual_worker_task_definition}"
+            echo "- Image: ${deployed_worker_image}"
+            echo "- WORKER_ENABLED: ${deployed_worker_enabled}"
+            echo "- WorkItem concurrency: ${deployed_worker_concurrency}"
+            echo "- desired/running/pending: ${desired_count}/${running_count}/${pending_count}"
+            echo "- rollout: ${worker_rollout_state}"
+          } >> "$GITHUB_STEP_SUMMARY"
