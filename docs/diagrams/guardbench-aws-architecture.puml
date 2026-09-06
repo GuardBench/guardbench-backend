@@ -1,0 +1,101 @@
+@startuml
+title GuardBench MVP AWS Architecture and Runtime Flow
+
+' AWS Architecture Icons for PlantUML, pinned to a released icon set.
+!define AWSPuml https://raw.githubusercontent.com/awslabs/aws-icons-for-plantuml/v23.0/dist
+!include AWSPuml/AWSCommon.puml
+!include AWSPuml/Analytics/SageMaker.puml
+!include AWSPuml/ApplicationIntegration/SimpleQueueService.puml
+!include AWSPuml/Containers/ElasticContainerService.puml
+!include AWSPuml/Database/RDS.puml
+!include AWSPuml/NetworkingContentDelivery/CloudFront.puml
+!include AWSPuml/NetworkingContentDelivery/ElasticLoadBalancingApplicationLoadBalancer.puml
+!include AWSPuml/Storage/SimpleStorageService.puml
+
+left to right direction
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam linetype polyline
+skinparam ArrowColor #475569
+skinparam defaultTextAlignment center
+
+package "User and External Systems" #FFF7ED {
+  actor "User" as user
+  component "Frontend\nReact SPA" as frontend #F8FAFC
+  component "Performance Runner\n(k6 + Python)" as performance_runner #F8FAFC
+  rectangle "External Application Target\nOpenAI-compatible HTTP endpoint" as application_target #FFF7ED
+}
+
+package "AWS Cloud" #F8FAFC {
+  CloudFront(cloudfront, "Amazon CloudFront", "SPA delivery + /api/* routing")
+  SimpleStorageService(frontend_assets, "Amazon S3", "Frontend assets")
+  SimpleStorageService(performance_results, "Amazon S3", "Performance results")
+  SageMaker(classifier, "Amazon SageMaker", "Classifier")
+
+  package "GuardBench VPC" #EFF6FF {
+    ElasticLoadBalancingApplicationLoadBalancer(alb, "Application Load Balancer", "HTTP :80 → ECS :8080")
+
+    package "ECS Fargate Service" as ecs_service {
+      ElasticContainerService(ecs, "Amazon ECS", "API + workers")
+    }
+
+    SimpleQueueService(resolve_queue, "Amazon SQS", "gb-run-resolve")
+    SimpleQueueService(work_items_queue, "Amazon SQS", "gb-work-items")
+    SimpleQueueService(finalize_queue, "Amazon SQS", "gb-run-finalize")
+    RDS(rds, "Amazon RDS", "PostgreSQL")
+  }
+}
+
+' Hidden links keep the primary request path and queue stages readable.
+frontend -[hidden]right-> cloudfront
+cloudfront -[hidden]right-> alb
+alb -[hidden]right-> ecs
+ecs -[hidden]right-> classifier
+resolve_queue -[hidden]down-> work_items_queue
+work_items_queue -[hidden]down-> finalize_queue
+
+' User-facing request path and static frontend delivery.
+user --> frontend : uses
+frontend --> cloudfront : HTTPS
+cloudfront --> frontend_assets : static assets
+cloudfront --> alb : /api/*
+alb --> ecs : HTTP :8080
+
+' Asynchronous TestRun pipeline. SQS is a work notification boundary;
+' PostgreSQL remains the source of truth for current state and results.
+ecs --> resolve_queue : TestRunRequested
+ecs --> work_items_queue : TestExecutionRequested
+ecs --> finalize_queue : TestExecutionCompleted
+ecs --> rds : TestRun / Snapshot / Execution / Evaluation
+
+' Application execution and classifier evaluation.
+ecs --> application_target : request
+application_target --> ecs : response
+ecs --> classifier : prompt + response
+classifier --> ecs : verdict
+
+' Performance execution is a controlled external workload and stores all
+' generated artifacts, including acceptance failures, in S3 when configured.
+performance_runner --> alb : E2E workload
+performance_runner --> performance_results : upload result artifacts
+
+note right of ecs
+  API + Outbox Publisher + queue consumers
+  Logical stages: resolve → execute → finalize
+  Execution → Assertion → TestRun Finalize → Quality Gate
+  Service can scale horizontally without fixing
+  an experiment-specific task or concurrency value.
+end note
+
+note right of classifier
+  COMPLY / REFUSE
+  → ALLOW / BLOCK
+end note
+
+legend right
+  Solid arrows show runtime requests, messages, or artifact writes.
+  SQS queues represent the three logical asynchronous stages.
+  No capacity or concurrency experiment value is fixed here.
+endlegend
+@enduml
