@@ -157,6 +157,9 @@ export PERF_DLQ_URLS=<resolve-dlq-url>,<work-items-dlq-url>,<finalize-dlq-url>
 export AWS_REGION=ap-northeast-2
 export PERF_ECS_CLUSTER=<performance-cluster-name>
 export PERF_ECS_SERVICE=<performance-service-name>
+# Runner preflight expected values; these must match the deployed Performance Backend.
+export PERF_EXPECTED_WORK_ITEMS_CONCURRENCY=<expected-worker-concurrency>
+export PERF_EXPECTED_ECS_TASK_COUNT=<expected-ecs-task-count>
 export PERF_RDS_INSTANCE_ID=<db-instance-id>
 export PERF_SAGEMAKER_ENDPOINT_NAME=<classifier-endpoint-name>
 export PERF_SAGEMAKER_VARIANT_NAME=<classifier-variant-name>
@@ -171,7 +174,7 @@ export PERF_DLQ_FINALIZE_NAME=<finalize-dlq-name>
 # 입력과 실행 계획만 검증한다. API, AWS, DB를 호출하지 않는다.
 python3 -m performance.runner.cli --dry-run
 
-# 실제 비교 실행: preflight → Dataset seed → k6 → drain → metrics → report
+# 실제 비교 실행: preflight (worker concurrency/task count 포함) → Dataset seed → k6 → drain → metrics → report
 python3 -m performance.runner.cli
 ```
 
@@ -194,6 +197,17 @@ guardbench:
 `revisions`와 capture 시각을 함께 보존한다. `aws-metrics.json`은 실행 중 관측한 utilization,
 latency, queue 등의 시계열을 별도로 보존한다. `report.md`의 Application/Infrastructure
 revision과 snapshot의 revision은 `APP_REVISION`, `INFRA_REVISION` 환경변수로 주입한다.
+
+Runner는 실행 전에 `PERF_EXPECTED_WORK_ITEMS_CONCURRENCY`를 active ECS Task Definition의
+`GUARDBENCH_WORKER_WORK_ITEMS_CONCURRENCY`와 비교한다. 또한
+`PERF_EXPECTED_ECS_TASK_COUNT`를 Performance Service의 `desiredCount`와 snapshot 시점의
+`runningCount` 모두와 비교한다. 하나라도 다르면 Dataset seed와 k6 실행을 시작하지 않고
+명확한 preflight 오류로 종료한다.
+
+실제 WorkItem concurrency는 `result.json.infrastructure_capacity.ecs.work_items_concurrency`에
+기록한다. `result.json.experiment`는
+`(work_items_concurrency, concurrent_test_runs, ecs_task_count)` 튜플을 명시하며,
+여기서 `ecs_task_count`는 preflight를 통과한 Service의 configured `desiredCount`다.
 
 ## Spot Runner image와 결과 보존
 
