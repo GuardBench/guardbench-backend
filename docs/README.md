@@ -55,6 +55,7 @@
 | 결정 | [ADR 0010: TestRun 단일 Target 실행 모델](decisions/0010-single-target-test-run-model.md) | APPROVED | Backend | 2026-09-04 | 없음 |
 | 결정 | [ADR 0012: TestSuite/TestCase 영구 삭제와 historical identity](decisions/0012-testdefinition-hard-delete-and-historical-identity.md) | APPROVED | Backend | 2026-09-03 | 없음 |
 | 결정 | [ADR 0013: Response Behavior Classifier 실행 계약](decisions/0013-response-behavior-classifier.md) | APPROVED | Backend | 2026-09-04 | 없음 |
+| 결정 | [ADR 0014: HTTP 표준 오류 응답 Envelope](decisions/0014-http-standard-error-envelope.md) | APPROVED | Backend | 2026-09-06 | GitHub Issue #24 |
 | AI 개발 | [작업 워크플로](ai-development/workflow.md) | APPROVED | Team | 2026-09-01 | 현재 대화에서 승격 |
 | AI 개발 | [Backend CI와 dev Merge Gate](ai-development/backend-ci-merge-gate.md) | DRAFT | Backend | 2026-08-26 | 없음 |
 | AI 개발 | [코드 리뷰](ai-development/review.md) | APPROVED | Team | 2026-08-31 | PR #20·#23 사례와 Issue #33 |

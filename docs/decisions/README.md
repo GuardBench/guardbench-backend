@@ -18,6 +18,7 @@
 | PostgreSQL, JPA, Flyway, 물리 스키마 | [ADR 0002](0002-postgresql-persistence-contract.md), [ADR 0006](0006-independent-domain-contract-boundaries.md) | 결과 테이블과 Repository 매핑은 [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), 최종화 제약은 [ADR 0004](0004-testrun-finalization-atomicity.md), Outbox·idempotency·claim DDL은 [ADR 0008](0008-async-testrun-persistence-contract.md) |
 | TestSuite/TestCase 영구 삭제와 historical identity | [ADR 0012](0012-testdefinition-hard-delete-and-historical-identity.md), [ADR 0002](0002-postgresql-persistence-contract.md) | Domain·Port 경계를 바꾸면 [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md)과 [ADR 0006](0006-independent-domain-contract-boundaries.md) |
 | TestRun Target HTTP 입력 | [ADR 0010](0010-single-target-test-run-model.md), [API 안내](../api/README.md) | 접수+Outbox 원자 저장은 ADR 0005와 ADR 0008을 추가한다. |
+| HTTP 표준 오류 응답과 공통 Envelope | [ADR 0014](0014-http-standard-error-envelope.md), [애플리케이션 오류](../conventions/application-errors.md) | 개별 API Operation 계약을 바꾸면 [OpenAPI](../api/openapi.yaml)를 추가한다. |
 | AI Application Target, Response Behavior Classifier, Quality Gate와 Regression 역할 | [ADR 0013](0013-response-behavior-classifier.md) | 현재 API·DB 구현 확인은 [API 안내](../api/README.md)와 [TestRun Persistence 인덱스](../architecture/testrun-persistence.md)를 추가한다. |
 | TestExecution·SnapshotEvaluation·QualityGateResult Aggregate와 write-side Repository | [ADR 0001](0001-domain-type-ownership-and-aggregate-boundaries.md), [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), [ADR 0006](0006-independent-domain-contract-boundaries.md) | 물리 매핑은 [ADR 0002](0002-postgresql-persistence-contract.md), TestRun 최종화는 [ADR 0004](0004-testrun-finalization-atomicity.md), Worker 중복 처리는 [ADR 0005](0005-async-test-run-execution-contract.md) |
 | TestRun `FINISHED` 전환과 Quality Gate 원자 저장 | [ADR 0003](0003-result-aggregate-and-write-port-boundaries.md), [ADR 0004](0004-testrun-finalization-atomicity.md), [ADR 0006](0006-independent-domain-contract-boundaries.md) | PostgreSQL 제약은 [ADR 0002](0002-postgresql-persistence-contract.md), Worker 선점·잠금/CAS·retry는 [ADR 0005](0005-async-test-run-execution-contract.md) |
@@ -44,6 +45,8 @@ ADR 0009  TestCase 논리 삭제 동시성 계약
 
 ADR 0010  TestRun 단일 HTTP Target 실행 모델
 └─ ADR 0013  Response Behavior Classifier 실행, Quality Gate와 Regression 역할
+
+ADR 0014  HTTP 표준 오류 응답을 GuardBench Envelope로 통일
 
 ADR 0006  Context 간 Java 타입 공유와 직접 의존을 제한
 ```
