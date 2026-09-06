@@ -76,11 +76,62 @@ def _required_environment(name: str) -> str:
     return value
 
 
+def _positive_integer(value: Any, description: str) -> int:
+    if isinstance(value, bool):
+        raise ConfigurationError(f"{description}는 양의 정수여야 합니다.")
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ConfigurationError(f"{description}는 양의 정수여야 합니다.") from exc
+    if parsed < 1 or str(value).strip() != str(parsed):
+        raise ConfigurationError(f"{description}는 양의 정수여야 합니다.")
+    return parsed
+
+
+def expected_infrastructure_capacity_from_environment() -> dict[str, int]:
+    return {
+        "work_items_concurrency": _positive_integer(
+            _required_environment("PERF_EXPECTED_WORK_ITEMS_CONCURRENCY"),
+            "PERF_EXPECTED_WORK_ITEMS_CONCURRENCY",
+        ),
+        "ecs_task_count": _positive_integer(
+            _required_environment("PERF_EXPECTED_ECS_TASK_COUNT"),
+            "PERF_EXPECTED_ECS_TASK_COUNT",
+        ),
+    }
+
+
 def _required_response_field(response: dict[str, Any], field: str, resource: str) -> Any:
     value = response.get(field)
     if value is None or (isinstance(value, str) and not value.strip()):
         raise ConfigurationError(f"{resource} 조회 응답에 {field}가 없습니다.")
     return value
+
+
+def _container_work_items_concurrency(task_definition: dict[str, Any]) -> int:
+    containers = task_definition.get("containerDefinitions")
+    if not isinstance(containers, list):
+        raise ConfigurationError("ECS task definition에 containerDefinitions가 없습니다.")
+
+    matches: list[dict[str, Any]] = []
+    for container in containers:
+        if not isinstance(container, dict):
+            continue
+        environment = container.get("environment", [])
+        if not isinstance(environment, list):
+            continue
+        matches.extend(
+            item for item in environment
+            if isinstance(item, dict) and item.get("name") == "GUARDBENCH_WORKER_WORK_ITEMS_CONCURRENCY"
+        )
+    if len(matches) != 1:
+        raise ConfigurationError(
+            "ECS task definition에 GUARDBENCH_WORKER_WORK_ITEMS_CONCURRENCY 환경변수가 하나 필요합니다."
+        )
+    return _positive_integer(
+        matches[0].get("value"),
+        "GUARDBENCH_WORKER_WORK_ITEMS_CONCURRENCY",
+    )
 
 
 class InfrastructureCapacityCollector:
@@ -108,6 +159,7 @@ class InfrastructureCapacityCollector:
             ).get("taskDefinition", {})
             if not isinstance(task_definition, dict):
                 raise ConfigurationError("ECS task definition 조회 응답이 올바르지 않습니다.")
+            work_items_concurrency = _container_work_items_concurrency(task_definition)
 
             rds_response = self.rds_client.describe_db_instances(
                 DBInstanceIdentifier=rds_instance,
@@ -152,10 +204,17 @@ class InfrastructureCapacityCollector:
                 "ecs": {
                     "cluster_identifier": cluster,
                     "service_identifier": service,
-                    "desired_count": _required_response_field(ecs_service, "desiredCount", "ECS service"),
-                    "running_task_count": _required_response_field(ecs_service, "runningCount", "ECS service"),
+                    "desired_count": _positive_integer(
+                        _required_response_field(ecs_service, "desiredCount", "ECS service"),
+                        "ECS service desiredCount",
+                    ),
+                    "running_task_count": _positive_integer(
+                        _required_response_field(ecs_service, "runningCount", "ECS service"),
+                        "ECS service runningCount",
+                    ),
                     "task_cpu": _required_response_field(task_definition, "cpu", "ECS task definition"),
                     "task_memory": _required_response_field(task_definition, "memory", "ECS task definition"),
+                    "work_items_concurrency": work_items_concurrency,
                 },
                 "rds": {
                     "db_instance_identifier": _required_response_field(
