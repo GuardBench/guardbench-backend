@@ -35,6 +35,18 @@
 - 기존 경로가 명시적으로 대체되지 않았거나 호환성 필요성이 의심되면, 공개 계약을 임의로 깨거나 호환 경로를 추측해 추가하지 말고 필요성·영향 범위를 먼저 사용자에게 보고한다.
 - 호환성을 유지하기로 결정하면 Issue 또는 PR에 근거, 호환 대상과 영향 범위, 제거 조건 또는 유지 기간을 기록하고 그 계약을 검증하는 테스트를 함께 갱신한다.
 
+## Flyway Migration
+
+DB schema 또는 Flyway migration을 변경할 때 다음 규칙을 따른다.
+
+- dev, performance 등 공유 또는 배포 DB에 한 번이라도 적용된 versioned migration 파일은 immutable로 취급하고 수정·삭제·이름 변경하지 않는다.
+- table, column, index, constraint 등 schema 변경은 기존 migration을 고치는 대신 다음 순번의 새로운 versioned migration으로 추가한다.
+- 기존 migration 파일을 수정해야 한다고 판단되면 먼저 해당 migration의 공유/배포 DB 적용 여부와 `flyway_schema_history` 영향 범위를 확인하고 사용자에게 보고한다. 적용 여부를 확인하지 않은 채 기존 파일을 수정하지 않는다.
+- migration 구현 후 fresh DB에서 전체 migration chain이 처음부터 적용되는 경로와, 직전 schema가 적용된 DB에서 신규 migration만 순차 적용되는 upgrade 경로를 모두 검증한다.
+- migration flatten, version history 재작성, checksum을 바꾸는 기존 migration 수정, schema reset, `flyway_schema_history` 초기화는 일반 기능 구현의 일부로 수행하지 않는다. 필요하면 데이터 폐기와 배포 영향까지 포함해 사용자 또는 Issue의 명시적 승인을 먼저 받는다.
+- 공유/배포 DB가 존재하는 환경에서는 in-place upgrade compatibility를 기본 전제로 검토한다. 데이터나 migration history를 폐기할 수 있다고 임의로 가정하지 않는다.
+- migration PR에는 신규 version, 이전 schema에서의 upgrade 검증 결과, fresh DB 검증 결과, 기존 데이터/배포 DB 영향 여부를 기록한다.
+
 ## DDD Aggregate와 Context 경계
 
 - 같은 Bounded Context 안에서 Aggregate 사이에는 객체 참조나 가변 컬렉션 대신 그 Context가 소유한 전용 ID VO를 사용한다.
