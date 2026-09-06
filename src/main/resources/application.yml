@@ -27,6 +27,14 @@ spring:
 # SQS 런타임 설정 (DefaultCredentialsProvider 체인 사용, Spring Cloud AWS 없음)
 # SQS 빈 활성화: guardbench.sqs.enabled=true일 때만 SqsClient를 생성한다.
 guardbench:
+  test-case-bulk-idempotency:
+    cleanup:
+      enabled: ${GUARDBENCH_TEST_CASE_BULK_IDEMPOTENCY_CLEANUP_ENABLED:true}
+      # 각 batch를 별도 트랜잭션으로 삭제해 row lock, WAL, vacuum 부하를 제한한다.
+      batch-size: ${GUARDBENCH_TEST_CASE_BULK_IDEMPOTENCY_CLEANUP_BATCH_SIZE:500}
+      max-batches-per-run: ${GUARDBENCH_TEST_CASE_BULK_IDEMPOTENCY_CLEANUP_MAX_BATCHES_PER_RUN:10}
+      delay-ms: ${GUARDBENCH_TEST_CASE_BULK_IDEMPOTENCY_CLEANUP_DELAY_MS:900000}
+      initial-delay-ms: ${GUARDBENCH_TEST_CASE_BULK_IDEMPOTENCY_CLEANUP_INITIAL_DELAY_MS:60000}
   sqs:
     enabled: ${SQS_ENABLED:false}
     region: ${AWS_REGION:ap-northeast-2}
