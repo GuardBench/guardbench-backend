@@ -1,11 +1,19 @@
 package com.guardbench.testdefinition.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doAnswer;
 
-import java.util.List;
 import java.time.Instant;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,9 +22,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import com.guardbench.common.error.ApplicationErrorCode;
 import com.guardbench.common.error.ApplicationException;
+import com.guardbench.testdefinition.application.port.out.TestCaseBulkIdempotencyPort;
 import com.guardbench.testdefinition.application.query.PageResult;
 import com.guardbench.testdefinition.application.query.TestCaseListCriteria;
 import com.guardbench.testdefinition.application.query.TestCaseSummary;
@@ -38,6 +49,9 @@ class TestCaseServiceIntegrationTest {
 
     @Autowired
     private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
+    @MockitoSpyBean
+    private TestCaseBulkIdempotencyPort bulkIdempotencyPort;
 
     @Test
     @DisplayName("TestCase를 생성하고 상세 조회한 뒤 정의를 원자적으로 수정한다")
@@ -138,6 +152,72 @@ class TestCaseServiceIntegrationTest {
         assertEquals(2, replayed.totalTestCaseCount());
         assertEquals(2L, jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM test_case WHERE test_suite_id = ?", Long.class, suiteId));
+    }
+
+    @Test
+    @DisplayName("활성 판정 직후 key가 만료되면 claim을 다시 획득해 정상 생성한다")
+    void bulkCreateRetriesClaimAcrossExpirationBoundary() {
+        long suiteId = createSuite();
+        String idempotencyKey = "bulk-key-expiration-boundary";
+        TestCaseBulkCreateCommand command = new TestCaseBulkCreateCommand(
+                idempotencyKey, List.of(createCommand()));
+        TestCaseBulkCreateResult first = service.createBulk(suiteId, command);
+        AtomicBoolean expireBeforeRead = new AtomicBoolean(true);
+        doAnswer(invocation -> {
+            if (expireBeforeRead.compareAndSet(true, false)) {
+                jdbcTemplate.update("""
+                        UPDATE test_case_bulk_idempotency
+                        SET expires_at = clock_timestamp() - INTERVAL '1 microsecond'
+                        WHERE idempotency_key = ?
+                        """, idempotencyKey);
+            }
+            return invocation.callRealMethod();
+        }).when(bulkIdempotencyPort).findActiveByKey(idempotencyKey);
+
+        TestCaseBulkCreateResult renewed = service.createBulk(suiteId, command);
+
+        assertNotEquals(first.createdTestCaseIds(), renewed.createdTestCaseIds());
+        assertEquals(2, renewed.totalTestCaseCount());
+        assertEquals(2L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM test_case WHERE test_suite_id = ?", Long.class, suiteId));
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @DisplayName("같은 Idempotency-Key의 동시 요청은 한 번만 생성되고 같은 결과로 수렴한다")
+    void concurrentBulkCreateWithSameKeyCreatesOnce() throws Exception {
+        long suiteId = createSuite();
+        TestCaseBulkCreateCommand command = new TestCaseBulkCreateCommand(
+                "bulk-key-concurrent", List.of(createCommand(), createCommand()));
+        int workers = 2;
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(workers);
+
+        try {
+            List<Future<TestCaseBulkCreateResult>> futures = java.util.stream.IntStream
+                    .range(0, workers)
+                    .mapToObj(ignored -> executor.submit(() -> {
+                        assertTrue(start.await(10, TimeUnit.SECONDS));
+                        return service.createBulk(suiteId, command);
+                    }))
+                    .toList();
+
+            start.countDown();
+            TestCaseBulkCreateResult first = futures.get(0).get(60, TimeUnit.SECONDS);
+            TestCaseBulkCreateResult second = futures.get(1).get(60, TimeUnit.SECONDS);
+
+            assertEquals(first, second);
+            assertEquals(2L, jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM test_case WHERE test_suite_id = ?", Long.class, suiteId));
+            assertEquals(1L, jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM test_case_bulk_idempotency WHERE idempotency_key = ?",
+                    Long.class,
+                    command.idempotencyKey()));
+        } finally {
+            executor.shutdownNow();
+            jdbcTemplate.update("DELETE FROM test_case WHERE test_suite_id = ?", suiteId);
+            jdbcTemplate.update("DELETE FROM test_suite WHERE id = ?", suiteId);
+        }
     }
 
     @Test

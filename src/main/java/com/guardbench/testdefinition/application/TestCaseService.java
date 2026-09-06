@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +31,7 @@ import com.guardbench.testdefinition.domain.repository.TestSuiteRepository;
 public class TestCaseService {
 
     private static final Duration BULK_IDEMPOTENCY_TTL = Duration.ofHours(3);
+    private static final int BULK_CLAIM_ATTEMPTS = 2;
 
     private final TestSuiteRepository testSuiteRepository;
     private final TestCaseRepository testCaseRepository;
@@ -86,13 +88,10 @@ public class TestCaseService {
         String fingerprint = TestCaseBulkCreateFingerprint.of(suiteId, command);
         Instant now = clock.instant();
 
-        boolean claimed = bulkIdempotencyPort.tryClaim(
-                command.idempotencyKey(), fingerprint, suiteId, now, now.plus(BULK_IDEMPOTENCY_TTL));
-        if (!claimed) {
-            TestCaseBulkIdempotencyRecord existing = bulkIdempotencyPort
-                    .findActiveByKey(command.idempotencyKey())
-                    .orElseThrow(() -> new ApplicationException(
-                            ApplicationErrorCode.INTERNAL_SERVER_ERROR));
+        Optional<TestCaseBulkIdempotencyRecord> existingRecord = claimOrFindExisting(
+                command.idempotencyKey(), fingerprint, suiteId, now);
+        if (existingRecord.isPresent()) {
+            TestCaseBulkIdempotencyRecord existing = existingRecord.get();
             if (!existing.requestFingerprint().equals(fingerprint)
                     || existing.testSuiteId() != suiteId) {
                 throw new ApplicationException(ApplicationErrorCode.IDEMPOTENCY_KEY_CONFLICT);
@@ -120,6 +119,26 @@ public class TestCaseService {
         bulkIdempotencyPort.complete(
                 command.idempotencyKey(), fingerprint, suiteId, createdIds, totalTestCaseCount);
         return new TestCaseBulkCreateResult(createdIds, totalTestCaseCount);
+    }
+
+    private Optional<TestCaseBulkIdempotencyRecord> claimOrFindExisting(
+            String idempotencyKey,
+            String fingerprint,
+            long suiteId,
+            Instant now) {
+        for (int attempt = 0; attempt < BULK_CLAIM_ATTEMPTS; attempt++) {
+            boolean claimed = bulkIdempotencyPort.tryClaim(
+                    idempotencyKey, fingerprint, suiteId, now, now.plus(BULK_IDEMPOTENCY_TTL));
+            if (claimed) {
+                return Optional.empty();
+            }
+            Optional<TestCaseBulkIdempotencyRecord> existing =
+                    bulkIdempotencyPort.findActiveByKey(idempotencyKey);
+            if (existing.isPresent()) {
+                return existing;
+            }
+        }
+        throw new ApplicationException(ApplicationErrorCode.INTERNAL_SERVER_ERROR);
     }
 
     public TestCaseDetail get(long testCaseId) {
