@@ -2,16 +2,41 @@
 
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 from pathlib import Path
 from typing import Any
 
 from .config import ConfigurationError, load_dataset
 
 
+def _synthetic_seed_payload(manifest: dict[str, Any]) -> tuple[dict[str, Any], int]:
+    expected = manifest["source"]["expected_test_case_count"]
+    test_cases = [
+        {
+            "name": f"perf-{index:03d}",
+            "input": f"performance-case-{index:03d}",
+            "expectedAction": "ALLOW",
+            "severity": "LOW",
+            "category": "performance",
+        }
+        for index in range(1, expected + 1)
+    ]
+    payload = {
+        "name": manifest.get("name", manifest["id"]),
+        "description": (
+            f"Synthetic fixed-size workload for performance benchmarking ({expected} TestCases)."
+        ),
+        "testCases": test_cases,
+    }
+    return payload, expected
+
+
 def load_seed_payload(manifest_path: Path) -> tuple[dict[str, Any], int]:
     manifest = load_dataset(manifest_path)
+    if manifest["source"]["type"] == "synthetic-testset":
+        return _synthetic_seed_payload(manifest)
+
     source_path = (manifest_path.parent / manifest["source"]["path"]).resolve()
     try:
         source_bytes = source_path.read_bytes()
