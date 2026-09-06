@@ -1,0 +1,75 @@
+@startuml
+
+!define AWSPuml https://raw.githubusercontent.com/awslabs/aws-icons-for-plantuml/v23.0/dist
+!include AWSPuml/AWSCommon.puml
+!include AWSPuml/ApplicationIntegration/SimpleQueueService.puml
+!include AWSPuml/Containers/ElasticContainerService.puml
+!include AWSPuml/Database/RDS.puml
+!include AWSPuml/NetworkingContentDelivery/CloudFront.puml
+!include AWSPuml/NetworkingContentDelivery/ElasticLoadBalancingApplicationLoadBalancer.puml
+!include AWSPuml/Storage/SimpleStorageService.puml
+!include AWSPuml/Analytics/SageMaker.puml
+
+hide footbox
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam sequenceArrowThickness 1.5
+skinparam sequenceParticipantBorderColor #CBD5E1
+skinparam sequenceLifeLineBorderColor #CBD5E1
+skinparam sequenceLifeLineBackgroundColor #F8FAFC
+skinparam sequenceGroupBorderColor #CBD5E1
+skinparam sequenceGroupBackgroundColor #F8FAFC
+skinparam responseMessageBelowArrow true
+skinparam BoxPadding 10
+
+actor "User" as user
+participant "Frontend\nReact SPA" as frontend
+participant "$CloudFrontIMG()\nAmazon CloudFront" as cloudfront
+participant "$ElasticLoadBalancingApplicationLoadBalancerIMG()\nApplication Load Balancer" as alb
+participant "$ElasticContainerServiceIMG()\nAmazon ECS Fargate\nAPI + workers" as ecs
+participant "$RDSIMG()\nAmazon RDS\nPostgreSQL" as rds
+participant "$SimpleQueueServiceIMG()\nSQS\nresolve" as resolve_queue
+participant "$SimpleQueueServiceIMG()\nSQS\nwork-items" as work_queue
+participant "Application Target\nOpenAI-compatible HTTP" as target
+participant "$SageMakerIMG()\nAmazon SageMaker\nclassifier" as classifier
+participant "$SimpleQueueServiceIMG()\nSQS\nfinalize" as finalize_queue
+actor "Performance\nRunner" as runner
+participant "$SimpleStorageServiceIMG()\nAmazon S3\nperformance results" as results_s3
+
+== Request ==
+user -> frontend : submit TestRun
+frontend -> cloudfront : HTTPS /api/*
+cloudfront -> alb : /api/*
+alb -> ecs : HTTP :8080
+activate ecs
+ecs -> rds : persist TestRun + Snapshot
+ecs -> resolve_queue : TestRunRequested
+deactivate ecs
+
+== Resolve ==
+resolve_queue -> ecs : consume
+activate ecs
+ecs -> work_queue : TestExecutionRequested
+deactivate ecs
+
+== Execute ==
+work_queue -> ecs : consume
+activate ecs
+ecs -> target : HTTP request
+target --> ecs : ApplicationResponse
+ecs -> classifier : prompt + response
+classifier --> ecs : COMPLY / REFUSE
+ecs -> finalize_queue : TestExecutionCompleted
+deactivate ecs
+
+== Finalize ==
+finalize_queue -> ecs : consume
+activate ecs
+ecs -> rds : Assertion + Quality Gate
+rds --> ecs : TestRun FINISHED
+deactivate ecs
+
+== Performance artifacts ==
+runner -> ecs : E2E workload
+runner -> results_s3 : upload result artifacts
+@enduml
