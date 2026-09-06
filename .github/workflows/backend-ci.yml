@@ -439,6 +439,10 @@ jobs:
             exit 1
           fi
 
+          ECS_DEPLOYMENT_VERIFY_ATTEMPTS=12 \
+          ECS_DEPLOYMENT_VERIFY_INTERVAL_SECONDS=5 \
+          bash scripts/verify-ecs-deployment.sh
+
           service_state="$(aws ecs describe-services \
             --cluster "$ECS_CLUSTER" \
             --services "$ECS_SERVICE" \
@@ -465,6 +469,6 @@ jobs:
 
           if [[ "$actual_task_definition" != "$TARGET_TASK_DEFINITION" \
             || "$primary_rollout_state" != "COMPLETED" ]]; then
-            echo "Target deployment failed or rolled back; the service is not using the requested revision." >&2
+            echo "ECS deployment verification returned an inconsistent final state for ${TARGET_TASK_DEFINITION}." >&2
             exit 1
           fi
