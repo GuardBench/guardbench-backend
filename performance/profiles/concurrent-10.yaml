@@ -1,0 +1,33 @@
+test:
+  id: PERF-CONCURRENT-10
+  name: 10 concurrent large TestRuns
+  type: LOAD
+
+# Profile은 Test Type과 workload/acceptance criteria를 소유한다. Dataset 크기와 인프라 capacity는 별도 축이다.
+workload:
+  concurrent_test_runs: 10
+  ramp_up_seconds: 0
+  duration_seconds: 10
+  max_iterations_per_vu: 1
+  completion_timeout_seconds: 600
+  polling_interval_seconds: 2
+
+# 배포별 URL·model은 환경변수로 주입한다. Classifier 설정은 TestRun 입력이 아니라 Backend 배포가 소유한다.
+target:
+  type: HTTP_ENDPOINT
+  identifier: "${PERF_TARGET_URL}"
+  model: "${PERF_TARGET_MODEL}"
+  revision: "${PERF_TARGET_REVISION}"
+
+acceptance:
+  api:
+    create_latency_ms:
+      p50: 1000
+      p95: 2000
+      p99: 3000
+    error_rate: 0.0
+  completion:
+    max_seconds: 300
+    failure_rate: 0.0
+    queue_drain_seconds: 120
+    dlq_messages: 0
