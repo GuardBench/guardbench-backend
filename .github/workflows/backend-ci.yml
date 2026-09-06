@@ -429,14 +429,17 @@ jobs:
             --service "$ECS_SERVICE" \
             --task-definition "$TARGET_TASK_DEFINITION" >/dev/null
 
-          if ! aws ecs wait services-stable \
+          waiter_status=0
+          if aws ecs wait services-stable \
             --cluster "$ECS_CLUSTER" \
             --services "$ECS_SERVICE"; then
+            :
+          else
+            waiter_status=$?
             aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
               --query 'services[0].{taskDefinition:taskDefinition,deployments:deployments,events:events[0:10]}' \
               --output json
-            echo "ECS did not stabilize while deploying ${TARGET_TASK_DEFINITION}." >&2
-            exit 1
+            echo "ECS waiter exited with ${waiter_status}; continuing bounded rollout verification." >&2
           fi
 
           ECS_DEPLOYMENT_VERIFY_ATTEMPTS=12 \
