@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -193,6 +194,47 @@ class ApiResponseContractTest {
     @Nested
     @DisplayName("Application Error")
     class ApplicationErrorResponse {
+
+        @Test
+        @DisplayName("등록되지 않은 API 경로는 ENDPOINT_NOT_FOUND를 반환한다")
+        void unknownEndpointReturnsEndpointNotFound() throws Exception {
+            mockMvc.perform(get("/unknown-api-endpoint"))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.httpStatus").value(404))
+                    .andExpect(jsonPath("$.message").value("요청한 API Endpoint를 찾을 수 없습니다."))
+                    .andExpect(jsonPath("$.data.code").value("ENDPOINT_NOT_FOUND"));
+        }
+
+        @Test
+        @DisplayName("지원하지 않는 Method는 METHOD_NOT_ALLOWED와 Allow 헤더를 반환한다")
+        void unsupportedMethodReturnsMethodNotAllowed() throws Exception {
+            mockMvc.perform(get(BASE + "/accepted"))
+                    .andExpect(status().isMethodNotAllowed())
+                    .andExpect(header().string("Allow", "POST"))
+                    .andExpect(jsonPath("$.httpStatus").value(405))
+                    .andExpect(jsonPath("$.data.code").value("METHOD_NOT_ALLOWED"));
+        }
+
+        @Test
+        @DisplayName("제공할 수 없는 응답 형식은 NOT_ACCEPTABLE을 반환한다")
+        void unsupportedAcceptReturnsNotAcceptable() throws Exception {
+            mockMvc.perform(get(BASE + "/probes/901").accept(MediaType.APPLICATION_XML))
+                    .andExpect(status().isNotAcceptable())
+                    .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                    .andExpect(jsonPath("$.httpStatus").value(406))
+                    .andExpect(jsonPath("$.data.code").value("NOT_ACCEPTABLE"));
+        }
+
+        @Test
+        @DisplayName("지원하지 않는 요청 형식은 UNSUPPORTED_MEDIA_TYPE을 반환한다")
+        void unsupportedContentTypeReturnsUnsupportedMediaType() throws Exception {
+            mockMvc.perform(post(BASE + "/probes")
+                            .contentType(MediaType.TEXT_PLAIN)
+                            .content("safety"))
+                    .andExpect(status().isUnsupportedMediaType())
+                    .andExpect(jsonPath("$.httpStatus").value(415))
+                    .andExpect(jsonPath("$.data.code").value("UNSUPPORTED_MEDIA_TYPE"));
+        }
 
         @Test
         @DisplayName("404 Application Error는 Code와 HTTP Status가 일치한다")
