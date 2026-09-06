@@ -1,0 +1,14 @@
+id: large-suite-491-v1
+name: GuardBench 491-case large TestSuite performance dataset
+version: 1
+immutable: true
+source:
+  type: synthetic-testset
+  expected_test_case_count: 491
+generation:
+  method: synthetic fixed-size performance fixture
+  source: "mass_testset_20260831.csv"
+  note: >-
+    Fixed 491-case workload for large TestSuite performance benchmarking.
+    Test content quality and evaluator accuracy are intentionally out of scope;
+    case count is the controlled workload variable.
