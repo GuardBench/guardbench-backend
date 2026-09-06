@@ -293,6 +293,33 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
     }
 
     @Test
+    @DisplayName("Evaluator timeout 후에도 저장된 Application response를 반환한다")
+    void preservesApplicationResponseAfterEvaluatorTimeout() {
+        insertSuite(70_115L);
+        insertTestRun(80_115L, 70_115L);
+        insertSnapshot(90_115L, 80_115L, 115L, "case", "input", "BLOCK", "HIGH", "PII");
+        insertEvaluatorTimeoutExecution(90_115L, "response before evaluator timeout");
+
+        TestRunResultDetail detail = detailPort.load(80_115L, 90_115L).orElseThrow();
+
+        assertEquals("response before evaluator timeout", detail.applicationResponse());
+        assertEquals(TestExecutionStatus.TIMED_OUT, detail.item().execution().status());
+    }
+
+    @Test
+    @DisplayName("Target 실패 결과 상세는 Application response를 null로 반환한다")
+    void returnsNullApplicationResponseAfterTargetFailure() {
+        insertSuite(70_117L);
+        insertTestRun(80_117L, 70_117L);
+        insertSnapshot(90_117L, 80_117L, 117L, "case", "input", "BLOCK", "HIGH", "PII");
+        insertExecution(90_117L, "FAILED", null, "PROVIDER_ERROR", "안전한 오류");
+
+        TestRunResultDetail detail = detailPort.load(80_117L, 90_117L).orElseThrow();
+
+        assertNull(detail.applicationResponse());
+    }
+
+    @Test
     @DisplayName("Target 응답이 없는 NOT_STARTED 결과 상세는 Application response를 null로 반환한다")
     void returnsNullApplicationResponseWhenTargetDidNotStart() {
         insertSuite(70_121L);
@@ -401,6 +428,15 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
                     snapshot_id, result_status, application_response,
                     error_stage, error_code, error_message, started_at, completed_at)
                 VALUES (?, 'FAILED', ?, 'EVALUATOR', 'PROVIDER_ERROR', '안전한 오류', ?, ?)
+                """, snapshotId, applicationResponse, Timestamp.from(T0), Timestamp.from(T0));
+    }
+
+    private void insertEvaluatorTimeoutExecution(long snapshotId, String applicationResponse) {
+        jdbcTemplate.update("""
+                INSERT INTO test_execution (
+                    snapshot_id, result_status, application_response,
+                    error_stage, error_code, error_message, started_at, completed_at)
+                VALUES (?, 'TIMED_OUT', ?, 'EVALUATOR', 'PROVIDER_TIMEOUT', '안전한 오류', ?, ?)
                 """, snapshotId, applicationResponse, Timestamp.from(T0), Timestamp.from(T0));
     }
 
