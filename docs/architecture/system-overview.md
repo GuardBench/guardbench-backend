@@ -54,7 +54,7 @@ Regression은 위 실행 흐름에 포함되지 않는다. 완료된 두 TestRun
 
 #115와 #125를 통해 `HTTP_ENDPOINT` Application Target이 자연어 응답을 수집하고 OpenAI-compatible chat completions 요청·응답을 처리하는 Adapter가 구현되었다. #128은 MVP 계약을 단순화해 generic HTTP 경로를 제거하고 모든 HTTP Target에 `model`을 필수화했다.
 
-Response Behavior Classifier는 prompt와 Application response를 SageMaker Runtime에 전달하고 `COMPLY | REFUSE`를 `EvaluationResult(ALLOW | BLOCK)`으로 정규화한다. Worker는 classifier 결과와 Assertion을 저장하며, Application response는 내부 실행 결과로만 보존하고 public 결과에는 노출하지 않는다.
+Response Behavior Classifier는 prompt와 Application response를 SageMaker Runtime에 전달하고 `COMPLY | REFUSE`를 `EvaluationResult(ALLOW | BLOCK)`으로 정규화한다. Worker는 classifier 결과와 Assertion을 저장하며, Application response는 `TestExecution`에 보존한다. paginated 결과 목록에는 포함하지 않고, FINISHED TestRun의 전용 결과 상세 API에서만 저장된 원문을 반환한다.
 
 #118을 통해 Quality Gate가 현재 TestRun의 평가 가능한 Assertion 통과율과 전체 Snapshot 실행 성공률을 집계하도록 전환되었다. 각 비율은 TestRun 생성 시 고정된 threshold와 비교하며 정책 생략 시 두 기본값은 95%다. 평가 가능한 Assertion이 없으면 `NOT_EVALUATED`다.
 

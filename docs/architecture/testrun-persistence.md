@@ -14,6 +14,7 @@
 - `EvaluatorReference`는 실행 당시 Response Behavior Classifier의 provider/model 식별자를 저장한다.
 - Snapshot당 `TestExecution`은 하나다.
 - 성공한 execution은 AI Application response와 classifier가 정규화한 `ALLOW | BLOCK` verdict를 저장한다.
+- `GET /api/v1/test-runs/{testRunId}/results/{testCaseSnapshotId}`는 기존 `test_execution.application_response`를 읽어 실행 당시 원문을 반환한다. TestRun과 Snapshot 소속을 함께 확인하며 외부 Target·classifier를 재호출하지 않는다.
 - Regression은 완료된 Run들의 Snapshot 정의와 저장 verdict를 조회해 계산하며 Application Target이나 classifier를 재호출하지 않는다.
 - `quality_gate_result`는 판정 당시의 각 metric value, threshold, passed를 함께 저장해 과거 Run 조회가 이후 정책 상수 변경의 영향을 받지 않게 한다.
 - `test_run`은 생성 요청에서 결정된 assertion/execution threshold를 정책 스냅샷으로 저장하며 최종화는 이 값을 사용한다.
@@ -70,7 +71,7 @@ TestRun 상세 조회와 Regression 조회는 `http_endpoint_target`을 직접 J
 
 ## 관련 구현
 
-- TestRun write/query adapters: `testrun/infrastructure/persistence`
+- TestRun write/query adapters: `testrun/infrastructure/persistence` (결과 목록과 결과 상세 포함)
 - HTTP Target persistence: `target/infrastructure/persistence`
 - Response Behavior Classifier adapter: `evaluator/infrastructure/sagemaker`
 - Evaluation persistence: `evaluation/infrastructure/persistence`

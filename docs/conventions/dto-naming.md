@@ -14,6 +14,7 @@
 - 목록 조회: `TestRunListRes`
 - 상태 조회: `TestRunStatusRes`
 - 결과 조회: `TestRunResultRes`
+- 개별 결과 상세 조회: `TestRunResultDetailRes`
 
 CRUD 단어보다 실제 유스케이스를 쓴다. `TestRunReadRes`나 `TestRunGetRes` 대신 `TestRunResultRes`를 사용한다. `Request`, `Response`, `Req`, `Res`를 혼용하지 않고 `Req`/`Res`로 통일한다.
 

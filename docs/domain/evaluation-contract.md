@@ -15,7 +15,7 @@
 
 AI Application은 자연어 ApplicationResponse를 반환한다. `ALLOW`와 `BLOCK`은 Response Behavior Classifier가 prompt와 응답을 함께 평가해 만드는 GuardBench 공통 verdict다.
 
-ApplicationResponse는 내부 Evaluator 입력이며 frontend-facing API에 노출하지 않는다. 공개 결과는 TestCase input, 실행 상태·안전한 오류, Evaluator verdict, ExpectedResult와 Assertion을 제공한다.
+ApplicationResponse는 내부 Evaluator 입력이며 paginated 결과 목록에는 노출하지 않는다. FINISHED TestRun의 전용 결과 상세 API는 저장된 ApplicationResponse 원문을 `applicationResponse`로 제공하고, 공개 결과는 여전히 TestCase input, 실행 상태·안전한 오류, Evaluator verdict, ExpectedResult와 Assertion을 제공한다.
 
 TestRun 생성 요청에는 evaluator profile이나 provider 설정을 포함하지 않는다. Classifier system prompt, user prompt template, endpoint name과 contract version은 서버 배포 configuration으로 관리한다.
 
@@ -77,6 +77,6 @@ HTTP 오류 ≠ Application 실행 오류 ≠ Evaluator 오류 ≠ Assertion FAI
 
 ## 현재 구현
 
-현재 코드는 Application response를 내부 execution에 저장하고 SageMaker Response Behavior Classifier가 만든 `EvaluationResult`를 ExpectedResult와 Assertion에 사용한다. #118을 통해 현재 Run Quality Gate가 구현되었고 #119를 통해 저장된 완료 Run 기반 Regression API가 구현되었다.
+현재 코드는 Application response를 내부 execution에 저장하고 SageMaker Response Behavior Classifier가 만든 `EvaluationResult`를 ExpectedResult와 Assertion에 사용한다. #118을 통해 현재 Run Quality Gate가 구현되었고 #119를 통해 저장된 완료 Run 기반 Regression API가 구현되었으며, #237을 통해 FINISHED 결과 상세에서 저장된 Application response를 조회할 수 있다.
 
 Quality Gate는 현재 Run의 평가 가능한 Assertion 통과율과 전체 Snapshot 실행 성공률을 집계하고, 생성 시 해당 Run에 고정된 두 threshold와 비교한다. 정책을 생략한 Run은 두 기준 모두 95%다. 평가 가능한 Assertion이 없으면 `NOT_EVALUATED`와 null metrics를 저장한다. Regression은 comparable historical Run의 저장된 EvaluationResult만 비교하며 외부 Application Target이나 Evaluator를 재호출하지 않는다.

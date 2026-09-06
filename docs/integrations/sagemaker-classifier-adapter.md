@@ -101,4 +101,4 @@ SageMaker DJL LMI/vLLM endpoint에는 OpenAI-compatible chat completions JSON을
 5. 실제 TestRun 한 건으로 InvokeEndpoint, `COMPLY/REFUSE` parsing, `ALLOW/BLOCK` normalization을 검증한다.
 6. 개발·검증이 끝나면 `sagemaker_classifier_endpoint_enabled=false`로 다시 적용해 endpoint를 삭제한다.
 
-Prompt, ApplicationResponse, provider 원문 응답·오류, credential과 endpoint ARN은 일반 로그와 public API 결과에 남기지 않는다. ApplicationResponse는 기존처럼 내부 실행 결과로만 보존한다.
+Prompt, provider 원문 응답·오류, credential과 endpoint ARN은 일반 로그와 public API 결과에 남기지 않는다. ApplicationResponse는 일반 로그에 남기지 않으며 `TestRunResultDetailRes`의 `applicationResponse`로 저장된 실행 증거만 전용 상세 API에서 반환한다. Classifier output 자체는 public API에 노출하지 않는다.

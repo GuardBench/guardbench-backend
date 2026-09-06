@@ -35,6 +35,7 @@ Validation을 제외한 오류는 다음 구조를 사용한다.
 | `TEST_SUITE_NOT_FOUND` | 404 | 유효한 양의 ID에 해당하는 TestSuite가 없음 |
 | `TEST_CASE_NOT_FOUND` | 404 | 유효한 양의 ID에 해당하는 TestCase가 없음 |
 | `TEST_RUN_NOT_FOUND` | 404 | 유효한 양의 ID에 해당하는 TestRun이 없음 |
+| `TEST_RUN_RESULT_NOT_FOUND` | 404 | 요청한 TestRun에 해당 결과 Snapshot이 없음 |
 | `TEST_SUITE_EMPTY` | 409 | TestRun 생성 시 활성 TestCase가 없음 |
 | `IDEMPOTENCY_KEY_CONFLICT` | 409 | 같은 Idempotency-Key를 다른 TestRun 요청에 재사용 |
 | `TEST_RUN_NOT_FINISHED` | 409 | 종료가 필요한 결과·지표·비교 API에 FINISHED가 아닌 TestRun 사용 |
@@ -49,6 +50,7 @@ Validation을 제외한 오류는 다음 구조를 사용한다.
 | `TEST_SUITE_NOT_FOUND` | TestSuite를 찾을 수 없습니다. |
 | `TEST_CASE_NOT_FOUND` | TestCase를 찾을 수 없습니다. |
 | `TEST_RUN_NOT_FOUND` | TestRun을 찾을 수 없습니다. |
+| `TEST_RUN_RESULT_NOT_FOUND` | TestRun 결과를 찾을 수 없습니다. |
 | `TEST_SUITE_EMPTY` | 실행 가능한 TestCase가 없습니다. |
 | `IDEMPOTENCY_KEY_CONFLICT` | Idempotency-Key가 다른 요청에 이미 사용되었습니다. |
 | `TEST_RUN_NOT_FINISHED` | TestRun이 아직 종료되지 않았습니다. |

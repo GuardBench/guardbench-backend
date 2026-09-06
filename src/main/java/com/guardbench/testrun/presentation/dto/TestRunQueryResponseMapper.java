@@ -11,6 +11,7 @@ import com.guardbench.testrun.application.port.out.TestRunDetail;
 import com.guardbench.testrun.application.port.out.TestRunListItem;
 import com.guardbench.testrun.application.port.out.TestRunProgress;
 import com.guardbench.testrun.application.port.out.TestRunResultItem;
+import com.guardbench.testrun.application.port.out.TestRunResultDetail;
 import com.guardbench.testrun.application.port.out.TestRunResultListView;
 import com.guardbench.testrun.application.port.out.TestRunComparison;
 import com.guardbench.testrun.application.port.out.TestRunRegressionView;
@@ -63,6 +64,25 @@ public final class TestRunQueryResponseMapper {
                                 result.facets().executionFailed(),
                                 result.facets().timedOut(),
                                 result.facets().notStarted())));
+    }
+
+    public static TestRunResultDetailRes toResultDetailRes(TestRunResultDetail result) {
+        TestRunResultItem item = result.item();
+        return new TestRunResultDetailRes(
+                item.snapshotId(),
+                item.name(),
+                item.input(),
+                item.expectedAction().name(),
+                item.severity().name(),
+                item.category(),
+                item.execution().status().name(),
+                item.execution().evaluatorVerdict() != null
+                        ? item.execution().evaluatorVerdict().name() : null,
+                item.assertionStatusCode(),
+                item.evaluationOutcomeCode(),
+                item.attentionType() == null ? null : item.attentionType().name(),
+                toErrorRes(item.execution()),
+                result.applicationResponse());
     }
 
     public static EvaluatorMetricsRes toEvaluatorMetricsRes(EvaluatorMetricsView metrics) {

@@ -19,13 +19,16 @@ import org.springframework.transaction.annotation.Transactional;
 import com.guardbench.testrun.application.port.out.EvaluatorMetricsView;
 import com.guardbench.testrun.application.port.out.LoadTestRunEvaluatorMetricsPort;
 import com.guardbench.testrun.application.port.out.LoadTestRunResultListPort;
+import com.guardbench.testrun.application.port.out.LoadTestRunResultDetailPort;
 import com.guardbench.testrun.application.port.out.PageResult;
 import com.guardbench.testrun.application.port.out.SortOrder;
 import com.guardbench.testrun.application.port.out.TestRunResultAttentionType;
 import com.guardbench.testrun.application.port.out.TestRunResultItem;
 import com.guardbench.testrun.application.port.out.TestRunResultListView;
+import com.guardbench.testrun.application.port.out.TestRunResultDetail;
 import com.guardbench.testrun.application.port.out.TestRunResultListCriteria;
 import com.guardbench.testrun.application.port.out.TestRunResultSortField;
+import com.guardbench.testrun.domain.TestExecutionStatus;
 import com.guardbench.testsupport.PostgresTestConfiguration;
 
 /**
@@ -43,6 +46,9 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
 
     @Autowired
     private LoadTestRunResultListPort port;
+
+    @Autowired
+    private LoadTestRunResultDetailPort detailPort;
     @Autowired
     private LoadTestRunEvaluatorMetricsPort metricsPort;
 
@@ -257,6 +263,88 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
         assertNull(metrics.falseNegativeRate());
     }
 
+    @Test
+    @DisplayName("정상 결과 상세는 저장된 Application response를 반환한다")
+    void returnsStoredApplicationResponseForSucceededResult() {
+        insertSuite(70_101L);
+        insertTestRun(80_101L, 70_101L);
+        insertSnapshot(90_101L, 80_101L, 101L, "case", "input", "BLOCK", "HIGH", "PII");
+        insertModernExecution(90_101L, "ALLOW", "stored response");
+
+        TestRunResultDetail detail = detailPort.load(80_101L, 90_101L).orElseThrow();
+
+        assertEquals(90_101L, detail.item().snapshotId());
+        assertEquals("stored response", detail.applicationResponse());
+        assertEquals("FALSE_NEGATIVE", detail.item().evaluationOutcomeCode());
+    }
+
+    @Test
+    @DisplayName("Evaluator 실패 후에도 저장된 Application response를 반환한다")
+    void preservesApplicationResponseAfterEvaluatorFailure() {
+        insertSuite(70_111L);
+        insertTestRun(80_111L, 70_111L);
+        insertSnapshot(90_111L, 80_111L, 111L, "case", "input", "BLOCK", "HIGH", "PII");
+        insertEvaluatorFailureExecution(90_111L, "response before evaluator failure");
+
+        TestRunResultDetail detail = detailPort.load(80_111L, 90_111L).orElseThrow();
+
+        assertEquals("response before evaluator failure", detail.applicationResponse());
+        assertEquals(TestExecutionStatus.FAILED, detail.item().execution().status());
+    }
+
+    @Test
+    @DisplayName("Evaluator timeout 후에도 저장된 Application response를 반환한다")
+    void preservesApplicationResponseAfterEvaluatorTimeout() {
+        insertSuite(70_115L);
+        insertTestRun(80_115L, 70_115L);
+        insertSnapshot(90_115L, 80_115L, 115L, "case", "input", "BLOCK", "HIGH", "PII");
+        insertEvaluatorTimeoutExecution(90_115L, "response before evaluator timeout");
+
+        TestRunResultDetail detail = detailPort.load(80_115L, 90_115L).orElseThrow();
+
+        assertEquals("response before evaluator timeout", detail.applicationResponse());
+        assertEquals(TestExecutionStatus.TIMED_OUT, detail.item().execution().status());
+    }
+
+    @Test
+    @DisplayName("Target 실패 결과 상세는 Application response를 null로 반환한다")
+    void returnsNullApplicationResponseAfterTargetFailure() {
+        insertSuite(70_117L);
+        insertTestRun(80_117L, 70_117L);
+        insertSnapshot(90_117L, 80_117L, 117L, "case", "input", "BLOCK", "HIGH", "PII");
+        insertExecution(90_117L, "FAILED", null, "PROVIDER_ERROR", "안전한 오류");
+
+        TestRunResultDetail detail = detailPort.load(80_117L, 90_117L).orElseThrow();
+
+        assertNull(detail.applicationResponse());
+    }
+
+    @Test
+    @DisplayName("Target 응답이 없는 NOT_STARTED 결과 상세는 Application response를 null로 반환한다")
+    void returnsNullApplicationResponseWhenTargetDidNotStart() {
+        insertSuite(70_121L);
+        insertTestRun(80_121L, 70_121L);
+        insertSnapshot(90_121L, 80_121L, 121L, "case", "input", "BLOCK", "HIGH", "PII");
+        insertNotStartedExecution(90_121L);
+
+        TestRunResultDetail detail = detailPort.load(80_121L, 90_121L).orElseThrow();
+
+        assertNull(detail.applicationResponse());
+    }
+
+    @Test
+    @DisplayName("다른 TestRun의 Snapshot을 결과 상세로 조회하면 빈 결과를 반환한다")
+    void doesNotReturnSnapshotFromAnotherTestRun() {
+        insertSuite(70_131L);
+        insertTestRun(80_131L, 70_131L);
+        insertSnapshot(90_131L, 80_131L, 131L, "case", "input", "BLOCK", "HIGH", "PII");
+        insertModernExecution(90_131L, "BLOCK", "stored response");
+        insertSuite(70_132L);
+        insertTestRun(80_132L, 70_132L);
+
+        assertEquals(java.util.Optional.empty(), detailPort.load(80_132L, 90_131L));
+    }
+
     private void insertSuite(long id) {
         jdbcTemplate.update("""
                 INSERT INTO test_suite (id, name, description, created_at, updated_at)
@@ -332,6 +420,24 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
                 VALUES (?, 'SUCCEEDED', ?, ?, ?, ?)
                 """, snapshotId, applicationResponse, evaluatorVerdict,
                 Timestamp.from(T0), Timestamp.from(T0));
+    }
+
+    private void insertEvaluatorFailureExecution(long snapshotId, String applicationResponse) {
+        jdbcTemplate.update("""
+                INSERT INTO test_execution (
+                    snapshot_id, result_status, application_response,
+                    error_stage, error_code, error_message, started_at, completed_at)
+                VALUES (?, 'FAILED', ?, 'EVALUATOR', 'PROVIDER_ERROR', '안전한 오류', ?, ?)
+                """, snapshotId, applicationResponse, Timestamp.from(T0), Timestamp.from(T0));
+    }
+
+    private void insertEvaluatorTimeoutExecution(long snapshotId, String applicationResponse) {
+        jdbcTemplate.update("""
+                INSERT INTO test_execution (
+                    snapshot_id, result_status, application_response,
+                    error_stage, error_code, error_message, started_at, completed_at)
+                VALUES (?, 'TIMED_OUT', ?, 'EVALUATOR', 'PROVIDER_TIMEOUT', '안전한 오류', ?, ?)
+                """, snapshotId, applicationResponse, Timestamp.from(T0), Timestamp.from(T0));
     }
 
     private void insertAssertion(long snapshotId, String status) {

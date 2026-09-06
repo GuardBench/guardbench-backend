@@ -35,7 +35,7 @@ MVP classifier는 TestCase prompt와 Application response를 SageMaker Runtime e
 7. 현재 TestRun의 Assertion 결과를 집계해 Quality Gate를 판정한다.
 8. 필요하면 완료된 현재 Run과 비교 가능한 과거 Run의 저장 결과를 비교해 Regression을 조회한다.
 
-Application의 자연어 응답은 내부 classifier 입력으로만 사용하고 사용자-facing 결과에는 노출하지 않는다. 사용자는 TestCase input, classifier verdict, ExpectedResult, Assertion과 실행 오류를 확인한다.
+Application의 자연어 응답은 classifier 입력으로 사용하며, paginated 목록에는 포함하지 않는다. 사용자는 FINISHED 결과 상세에서 저장된 원문 Application response를 추가로 확인할 수 있고, 목록에서는 TestCase input, classifier verdict, ExpectedResult, Assertion과 실행 오류를 확인한다.
 
 ```text
 TestCaseSnapshot
