@@ -96,6 +96,26 @@ Fresh database는 V1 → V2 → V3를 순서대로 적용한다. 이미 V1 또�
 
 claim lease 및 idempotency 만료처럼 여러 Worker가 공유하는 동시성 시간 비교는 PostgreSQL DB time을 사용한다.
 
+### TestCase 일괄 등록 멱등성 정리
+
+- `test_case_bulk_idempotency`의 3시간 유효 기간은 변경하지 않는다.
+- 만료 레코드는 기본 15분 간격, 최초 기동 1분 후 정리한다.
+- 한 transaction은 `expires_at <= clock_timestamp()`인 행을 만료 시각 순서로 최대 500개 삭제한다.
+- `FOR UPDATE SKIP LOCKED`로 다른 요청이나 cleanup 인스턴스가 잠근 행을 건너뛴다. 따라서 활성 레코드와 처리 중인 claim을 삭제하지 않으며, 여러 인스턴스가 동시에 실행해도 같은 행을 중복 처리하지 않는다.
+- 각 batch는 별도 transaction으로 커밋하고 한 번의 스케줄 실행은 최대 10 batch, 즉 기본 최대 5,000개만 처리한다. 이 상한으로 장시간 row lock, WAL 증가와 vacuum 부하를 제한한다.
+- backlog가 기본 처리량을 넘으면 다음 15분 주기에 이어서 정리한다. 운영자는 환경 변수로 batch 크기, 실행당 batch 수와 주기를 조정할 수 있다.
+- 매 실행은 `deletedCount`, `batchCount`, `durationMs`, `batchSize`, `maxBatchesPerRun`, `limitReached`를 로그로 남긴다. `limitReached=true`가 반복되면 만료 backlog가 기본 실행 상한보다 빠르게 증가하는 신호다. 실패 로그에는 해당 실행에서 이미 커밋한 삭제 건수와 실패 batch 위치를 함께 남기며 다음 주기에 재시도한다.
+
+운영 설정은 다음 환경 변수가 소유한다.
+
+| 환경 변수 | 기본값 | 제약/의미 |
+| --- | ---: | --- |
+| `GUARDBENCH_TEST_CASE_BULK_IDEMPOTENCY_CLEANUP_ENABLED` | `true` | cleanup scheduler 활성화 |
+| `GUARDBENCH_TEST_CASE_BULK_IDEMPOTENCY_CLEANUP_BATCH_SIZE` | `500` | batch당 1~1,000행 |
+| `GUARDBENCH_TEST_CASE_BULK_IDEMPOTENCY_CLEANUP_MAX_BATCHES_PER_RUN` | `10` | 실행당 1~100 batch |
+| `GUARDBENCH_TEST_CASE_BULK_IDEMPOTENCY_CLEANUP_DELAY_MS` | `900000` | 이전 실행 완료 후 다음 실행까지 지연, 최소 1,000ms |
+| `GUARDBENCH_TEST_CASE_BULK_IDEMPOTENCY_CLEANUP_INITIAL_DELAY_MS` | `60000` | 애플리케이션 기동 후 최초 실행 지연, 0 이상 |
+
 ### ID와 시각
 
 - 주요 Aggregate 식별자는 PostgreSQL `BIGINT`를 사용한다.
@@ -144,6 +164,7 @@ claim lease 및 idempotency 만료처럼 여러 Worker가 공유하는 동시성
 
 - `PersistenceFoundationIntegrationTest`가 fresh PostgreSQL에 V1 → V2 → V3가 순서대로 적용되는지 검증한다.
 - 같은 테스트가 공유 database의 직전 schema인 V2에서 V3로 in-place upgrade되는지 검증한다.
+- cleanup PostgreSQL 통합 테스트가 활성 행 보존, batch 상한, 잠긴 claim 건너뛰기, 반복·동시 실행의 멱등성을 검증한다.
 - 현재 schema에는 Guardrail 전용 persistence object가 존재하지 않아야 한다.
 - `target_reference.target_type`은 `HTTP_ENDPOINT` 외 값을 허용하지 않는다.
 - HTTP Target URL/model DB 제약을 통합 테스트로 검증한다.
