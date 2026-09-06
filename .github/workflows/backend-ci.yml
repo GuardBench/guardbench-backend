@@ -60,6 +60,16 @@ jobs:
             echo 'verification_required=false' >> "$GITHUB_OUTPUT"
           fi
 
+  workflow_tests:
+    name: workflow tests
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/dev')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test ECS deployment verification
+        shell: bash
+        run: bash scripts/test-verify-ecs-deployment.sh
+
   test_fast:
     name: testFast
     needs: changes
