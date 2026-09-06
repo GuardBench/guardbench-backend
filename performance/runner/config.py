@@ -115,12 +115,23 @@ def load_dataset(path: Path) -> dict[str, Any]:
     source = dataset.get("source")
     if not dataset.get("id") or dataset.get("immutable") is not True:
         raise ConfigurationError("Dataset은 id와 immutable: true를 가져야 합니다.")
-    if not isinstance(source, dict) or source.get("type") != "http-testset" or not source.get("path"):
-        raise ConfigurationError("Dataset source는 http-testset path를 가져야 합니다.")
+    if not isinstance(source, dict):
+        raise ConfigurationError("Dataset source는 object여야 합니다.")
+
+    source_type = source.get("type")
     expected = source.get("expected_test_case_count")
     if isinstance(expected, bool) or not isinstance(expected, int) or expected < 1:
         raise ConfigurationError("Dataset의 expected_test_case_count가 올바르지 않습니다.")
-    sha256 = source.get("sha256")
-    if not isinstance(sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", sha256):
-        raise ConfigurationError("immutable Dataset source에는 sha256 checksum이 필요합니다.")
-    return dataset
+
+    if source_type == "http-testset":
+        if not source.get("path"):
+            raise ConfigurationError("http-testset Dataset source는 path를 가져야 합니다.")
+        sha256 = source.get("sha256")
+        if not isinstance(sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", sha256):
+            raise ConfigurationError("immutable http-testset Dataset source에는 sha256 checksum이 필요합니다.")
+        return dataset
+
+    if source_type == "synthetic-testset":
+        return dataset
+
+    raise ConfigurationError("Dataset source.type은 http-testset 또는 synthetic-testset이어야 합니다.")
