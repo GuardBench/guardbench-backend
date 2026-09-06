@@ -21,20 +21,21 @@ import com.guardbench.testsupport.PostgresTestConfiguration;
 class PersistenceFoundationIntegrationTest {
 
     @Test
-    @DisplayName("빈 PostgreSQL에 V1과 V2 Flyway 스키마를 순서대로 적용한다")
+    @DisplayName("빈 PostgreSQL에 V1부터 V3까지 Flyway 스키마를 순서대로 적용한다")
     void appliesApprovedSchemaToPostgreSql(@Autowired Flyway flyway, @Autowired JdbcTemplate jdbcTemplate) {
         MigrationInfo current = flyway.info().current();
         assertNotNull(current);
-        assertEquals("2", current.getVersion().getVersion());
+        assertEquals("3", current.getVersion().getVersion());
         Integer tableCount = jdbcTemplate.queryForObject("""
                 SELECT count(*) FROM information_schema.tables
                 WHERE table_schema = 'public' AND table_name IN (
                     'test_suite', 'test_case', 'test_run', 'test_case_snapshot', 'test_execution',
                     'assertion_result', 'change_result', 'quality_gate_result', 'test_run_idempotency',
                     'outbox_event', 'test_run_resolution_claim', 'test_execution_claim',
-                    'target_reference', 'http_endpoint_target', 'evaluator_reference')
+                    'target_reference', 'http_endpoint_target', 'evaluator_reference',
+                    'test_case_bulk_idempotency')
                 """, Integer.class);
-        assertEquals(15, tableCount);
+        assertEquals(16, tableCount);
         assertEquals(0, jdbcTemplate.queryForObject("""
                 SELECT count(*) FROM information_schema.tables
                 WHERE table_schema = 'public'
@@ -66,11 +67,16 @@ class PersistenceFoundationIntegrationTest {
                 WHERE table_schema = 'public'
                   AND constraint_name = 'ck_test_run_quality_gate_thresholds'
                 """, Integer.class));
+        assertEquals(1, jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM information_schema.table_constraints
+                WHERE table_schema = 'public'
+                  AND constraint_name = 'ck_test_case_bulk_idempotency_completion'
+                """, Integer.class));
     }
 
     @Test
-    @DisplayName("기존 V1 PostgreSQL에는 checksum 오류 없이 V2만 적용한다")
-    void upgradesExistingV1SchemaWithoutChecksumMismatch(
+    @DisplayName("기존 V2 PostgreSQL에는 checksum 오류 없이 V3만 적용한다")
+    void upgradesExistingV2SchemaWithoutChecksumMismatch(
             @Autowired Flyway applicationFlyway,
             @Autowired JdbcTemplate jdbcTemplate) {
         String schema = "flyway_upgrade_test";
@@ -78,22 +84,21 @@ class PersistenceFoundationIntegrationTest {
         jdbcTemplate.execute("CREATE SCHEMA " + schema);
 
         try {
-            Flyway v1Flyway = Flyway.configure()
+            Flyway v2Flyway = Flyway.configure()
                     .dataSource(applicationFlyway.getConfiguration().getDataSource())
                     .defaultSchema(schema)
                     .schemas(schema)
                     .locations("classpath:db/migration")
-                    .target("1")
+                    .target("2")
                     .load();
-            v1Flyway.migrate();
+            v2Flyway.migrate();
 
-            MigrationInfo appliedV1 = v1Flyway.info().applied()[0];
-            assertEquals("1", appliedV1.getVersion().getVersion());
-            assertNotNull(appliedV1.getChecksum());
+            MigrationInfo appliedV2 = v2Flyway.info().current();
+            assertEquals("2", appliedV2.getVersion().getVersion());
+            assertNotNull(appliedV2.getChecksum());
             assertEquals(0, jdbcTemplate.queryForObject("""
-                    SELECT count(*) FROM information_schema.columns
-                    WHERE table_schema = ? AND table_name = 'test_run'
-                      AND column_name IN ('assertion_pass_rate_threshold', 'execution_success_rate_threshold')
+                    SELECT count(*) FROM information_schema.tables
+                    WHERE table_schema = ? AND table_name = 'test_case_bulk_idempotency'
                     """, Integer.class, schema));
 
             Flyway upgradeFlyway = Flyway.configure()
@@ -104,15 +109,14 @@ class PersistenceFoundationIntegrationTest {
                     .load();
             upgradeFlyway.migrate();
 
-            assertEquals("2", upgradeFlyway.info().current().getVersion().getVersion());
-            assertEquals(2, jdbcTemplate.queryForObject("""
-                    SELECT count(*) FROM information_schema.columns
-                    WHERE table_schema = ? AND table_name = 'test_run'
-                      AND column_name IN ('assertion_pass_rate_threshold', 'execution_success_rate_threshold')
+            assertEquals("3", upgradeFlyway.info().current().getVersion().getVersion());
+            assertEquals(1, jdbcTemplate.queryForObject("""
+                    SELECT count(*) FROM information_schema.tables
+                    WHERE table_schema = ? AND table_name = 'test_case_bulk_idempotency'
                     """, Integer.class, schema));
             assertEquals(1, jdbcTemplate.queryForObject("""
                     SELECT count(*) FROM information_schema.table_constraints
-                    WHERE table_schema = ? AND constraint_name = 'ck_test_run_quality_gate_thresholds'
+                    WHERE table_schema = ? AND constraint_name = 'ck_test_case_bulk_idempotency_completion'
                     """, Integer.class, schema));
         } finally {
             jdbcTemplate.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
