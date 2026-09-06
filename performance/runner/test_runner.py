@@ -8,7 +8,7 @@ from unittest.mock import patch
 from performance.runner.acceptance import evaluate
 from performance.runner.config import ConfigurationError, load_profile, load_yaml
 from performance.runner.dataset import load_seed_payload
-from performance.runner.aws import InfrastructureCapacityCollector
+from performance.runner.aws import InfrastructureCapacityCollector, expected_infrastructure_capacity_from_environment
 from performance.runner.cli import K6_THRESHOLD_FAILURE_EXIT_CODE, RunnerError, run_k6
 from performance.runner.storage import RESULT_FILENAMES, ResultUploadError, upload_result_directory
 
@@ -45,6 +45,23 @@ def k6_profile() -> dict:
 
 
 class PerformanceRunnerTest(unittest.TestCase):
+    def test_expected_capacity_is_read_from_runner_environment(self):
+        with patch.dict(os.environ, {
+            "PERF_EXPECTED_WORK_ITEMS_CONCURRENCY": "4",
+            "PERF_EXPECTED_ECS_TASK_COUNT": "2",
+        }, clear=True):
+            expected = expected_infrastructure_capacity_from_environment()
+
+        self.assertEqual({"work_items_concurrency": 4, "ecs_task_count": 2}, expected)
+
+    def test_expected_capacity_rejects_non_positive_values(self):
+        with patch.dict(os.environ, {
+            "PERF_EXPECTED_WORK_ITEMS_CONCURRENCY": "0",
+            "PERF_EXPECTED_ECS_TASK_COUNT": "2",
+        }, clear=True):
+            with self.assertRaisesRegex(ConfigurationError, "PERF_EXPECTED_WORK_ITEMS_CONCURRENCY"):
+                expected_infrastructure_capacity_from_environment()
+
     def test_infrastructure_capacity_snapshot_collects_configured_capacity(self):
         class FakeEcs:
             def describe_services(self, **kwargs):
@@ -57,7 +74,17 @@ class PerformanceRunnerTest(unittest.TestCase):
 
             def describe_task_definition(self, **kwargs):
                 self.task_request = kwargs
-                return {"taskDefinition": {"cpu": "512", "memory": "1024"}}
+                return {"taskDefinition": {
+                    "cpu": "512",
+                    "memory": "1024",
+                    "containerDefinitions": [{
+                        "name": "backend",
+                        "environment": [{
+                            "name": "GUARDBENCH_WORKER_WORK_ITEMS_CONCURRENCY",
+                            "value": "2",
+                        }],
+                    }],
+                }}
 
         class FakeRds:
             def describe_db_instances(self, **kwargs):
@@ -96,6 +123,7 @@ class PerformanceRunnerTest(unittest.TestCase):
 
         self.assertEqual("guardbench-dev", snapshot["ecs"]["cluster_identifier"])
         self.assertEqual(2, snapshot["ecs"]["desired_count"])
+        self.assertEqual(2, snapshot["ecs"]["work_items_concurrency"])
         self.assertEqual("512", snapshot["ecs"]["task_cpu"])
         self.assertEqual("db.t4g.medium", snapshot["rds"]["db_instance_class"])
         self.assertEqual("ml.g4dn.xlarge", snapshot["sagemaker"]["instance_type"])
@@ -124,6 +152,26 @@ class PerformanceRunnerTest(unittest.TestCase):
             with self.assertRaisesRegex(ConfigurationError, "Infrastructure Capacity 조회에 실패했습니다"):
                 InfrastructureCapacityCollector(
                     ecs_client=FailingEcs(), rds_client=object(), sagemaker_client=object()
+                ).collect()
+
+    def test_infrastructure_capacity_snapshot_requires_worker_concurrency_environment(self):
+        class FakeEcs:
+            def describe_services(self, **kwargs):
+                return {"services": [{"taskDefinition": "task:1", "desiredCount": 1, "runningCount": 1}]}
+
+            def describe_task_definition(self, **kwargs):
+                return {"taskDefinition": {"cpu": "256", "memory": "512", "containerDefinitions": []}}
+
+        with patch.dict(os.environ, {
+            "PERF_ECS_CLUSTER": "cluster",
+            "PERF_ECS_SERVICE": "service",
+            "PERF_RDS_INSTANCE_ID": "db",
+            "PERF_SAGEMAKER_ENDPOINT_NAME": "endpoint",
+            "PERF_SAGEMAKER_VARIANT_NAME": "variant",
+        }, clear=True):
+            with self.assertRaisesRegex(ConfigurationError, "GUARDBENCH_WORKER_WORK_ITEMS_CONCURRENCY"):
+                InfrastructureCapacityCollector(
+                    ecs_client=FakeEcs(), rds_client=object(), sagemaker_client=object()
                 ).collect()
 
     def test_smoke_profile_is_valid_and_does_not_embed_dataset(self):
