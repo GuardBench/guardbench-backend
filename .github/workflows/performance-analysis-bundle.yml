@@ -96,8 +96,8 @@ jobs:
           set -euo pipefail
           aws logs describe-log-groups \
             --log-group-name-prefix "$LOG_GROUP" \
-            --query 'logGroups[?logGroupName==`'"$LOG_GROUP"'`].logGroupName' \
-            --output text | grep -Fx "$LOG_GROUP" >/dev/null
+            --output json \
+            | jq -e --arg name "$LOG_GROUP" '.logGroups | any(.logGroupName == $name)' >/dev/null
 
       - name: Collect CloudWatch Logs Insights diagnostics
         shell: bash
@@ -160,7 +160,7 @@ jobs:
 
           run_query queue-wait "fields @timestamp | filter @message like /WorkItem 수신 timing을 기록합니다/ ${filter} | parse @message /snapshotId=(?<snapshotId>[0-9]+)/ | parse @message /eventId=(?<eventId>[^ ]+)/ | parse @message /messageId=(?<messageId>[^ ]+)/ | parse @message /receivedAt=(?<receivedAt>[^ ]+)/ | parse @message /sentTimestamp=(?<sentTimestamp>[^ ]+)/ | parse @message /queueWaitMs=(?<queueWaitMs>[^ ]+)/ | display @timestamp, snapshotId, eventId, messageId, receivedAt, sentTimestamp, queueWaitMs | sort @timestamp asc"
 
-          run_query worker-concurrency "fields @timestamp | filter @message like /SQS 메시지 처리를 시작합니다/ and @message like /queue=WORK_ITEMS/ ${filter} | parse @message /snapshotId=(?<snapshotId>[0-9]+)/ | parse @message /workerDispatchWaitMs=(?<workerDispatchWaitMs>[^ ]+)/ | parse @message /configuredConcurrency=(?<configuredConcurrency>[^ ]+)/ | parse @message /currentInFlight=(?<currentInFlight>[^ ]+)/ | display @timestamp, snapshotId, workerDispatchWaitMs, configuredConcurrency, currentInFlight | sort @timestamp asc"
+          run_query worker-concurrency "fields @timestamp | filter @message like /SQS 메시지 처리를 시작합니다/ ${filter} | parse @message /snapshotId=(?<snapshotId>[0-9]+)/ | parse @message /workerDispatchWaitMs=(?<workerDispatchWaitMs>[^ ]+)/ | parse @message /configuredConcurrency=(?<configuredConcurrency>[^ ]+)/ | parse @message /currentInFlight=(?<currentInFlight>[^ ]+)/ | filter configuredConcurrency != 'null' | display @timestamp, snapshotId, workerDispatchWaitMs, configuredConcurrency, currentInFlight | sort @timestamp asc"
 
           run_query target-latency "fields @timestamp | filter (@message like /Application Target 호출을 완료했습니다/ or @message like /Application Target 호출에 실패했습니다/) ${filter} | parse @message /snapshotId=(?<snapshotId>[0-9]+)/ | parse @message /attemptCount=(?<attemptCount>[0-9]+)/ | parse @message /durationMs=(?<durationMs>[0-9]+)/ | parse @message /errorStage=(?<errorStage>[^ ]+)/ | parse @message /errorCode=(?<errorCode>[^ ]+)/ | display @timestamp, snapshotId, attemptCount, durationMs, errorStage, errorCode | sort @timestamp asc"
 
