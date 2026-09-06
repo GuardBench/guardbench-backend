@@ -90,15 +90,6 @@ jobs:
             echo "- Logs query window: ${start_epoch} ~ ${end_epoch} (UTC epoch, ±30s buffer)"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Verify CloudWatch Logs Insights access
-        shell: bash
-        run: |
-          set -euo pipefail
-          aws logs describe-log-groups \
-            --log-group-name-prefix "$LOG_GROUP" \
-            --output json \
-            | jq -e --arg name "$LOG_GROUP" '.logGroups | any(.logGroupName == $name)' >/dev/null
-
       - name: Collect CloudWatch Logs Insights diagnostics
         shell: bash
         env:
