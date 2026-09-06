@@ -19,12 +19,16 @@ import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
 import org.springframework.validation.method.ParameterErrors;
 import org.springframework.validation.method.ParameterValidationResult;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingPathVariableException;
 import org.springframework.web.bind.MissingRequestHeaderException;
@@ -38,7 +42,9 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.exc.MismatchedInputException;
@@ -178,6 +184,51 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return validationResponse(List.of(new FieldErrorDetail(field, MISSING_VALUE_MESSAGE)));
     }
 
+    @Override
+    protected ResponseEntity<Object> handleNoHandlerFoundException(
+            NoHandlerFoundException ex,
+            HttpHeaders headers,
+            HttpStatusCode status,
+            WebRequest request) {
+        return standardErrorResponse(ApplicationErrorCode.ENDPOINT_NOT_FOUND, status, headers);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleNoResourceFoundException(
+            NoResourceFoundException ex,
+            HttpHeaders headers,
+            HttpStatusCode status,
+            WebRequest request) {
+        return standardErrorResponse(ApplicationErrorCode.ENDPOINT_NOT_FOUND, status, headers);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleHttpRequestMethodNotSupported(
+            HttpRequestMethodNotSupportedException ex,
+            HttpHeaders headers,
+            HttpStatusCode status,
+            WebRequest request) {
+        return standardErrorResponse(ApplicationErrorCode.METHOD_NOT_ALLOWED, status, headers);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleHttpMediaTypeNotAcceptable(
+            HttpMediaTypeNotAcceptableException ex,
+            HttpHeaders headers,
+            HttpStatusCode status,
+            WebRequest request) {
+        return standardErrorResponse(ApplicationErrorCode.NOT_ACCEPTABLE, status, headers);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleHttpMediaTypeNotSupported(
+            HttpMediaTypeNotSupportedException ex,
+            HttpHeaders headers,
+            HttpStatusCode status,
+            WebRequest request) {
+        return standardErrorResponse(ApplicationErrorCode.UNSUPPORTED_MEDIA_TYPE, status, headers);
+    }
+
     private void addBindingErrors(
             List<FieldErrorDetail> errors, List<FieldError> fieldErrors, List<ObjectError> globalErrors) {
         for (FieldError fieldError : fieldErrors) {
@@ -280,5 +331,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private ResponseEntity<Object> errorResponse(HttpStatus status, String message, Object data) {
         return ResponseEntity.status(status).body(ApiResponse.of(status, message, data));
+    }
+
+    private ResponseEntity<Object> standardErrorResponse(
+            ApplicationErrorCode errorCode, HttpStatusCode status, HttpHeaders headers) {
+        HttpHeaders responseHeaders = new HttpHeaders();
+        responseHeaders.putAll(headers);
+        responseHeaders.setContentType(MediaType.APPLICATION_JSON);
+        return ResponseEntity.status(status)
+                .headers(responseHeaders)
+                .body(ApiResponse.of(status, errorCode.defaultMessage(), ErrorDetail.of(errorCode)));
     }
 }
