@@ -22,6 +22,8 @@ class PerformanceExecutionTest(unittest.TestCase):
         self.stack.enter_context(patch.dict(os.environ, {
             "APP_REVISION": "app-sha", "INFRA_REVISION": "infra-sha",
             "PERF_BASE_URL": "https://api.example.test",
+            "PERF_EXPECTED_WORK_ITEMS_CONCURRENCY": "2",
+            "PERF_EXPECTED_ECS_TASK_COUNT": "1",
             "PERF_TARGET_URL": "https://target.example.test/v1/chat/completions",
             "PERF_TARGET_MODEL": "model", "PERF_TARGET_REVISION": "target-sha",
         }, clear=True))
@@ -41,7 +43,8 @@ class PerformanceExecutionTest(unittest.TestCase):
         self.capacity.collect.return_value = {
             "captured_at": "2026-09-05T00:00:00Z",
             "ecs": dict(cluster_identifier="cluster", service_identifier="service", desired_count=1,
-                        running_task_count=1, task_cpu="256", task_memory="512"),
+                        running_task_count=1, task_cpu="256", task_memory="512",
+                        work_items_concurrency=2),
             "rds": dict(db_instance_identifier="perf", db_instance_class="db.t4g.micro"),
             "sagemaker": dict(endpoint_name="classifier", production_variant_name="AllTraffic",
                               instance_type="ml.m5.large", desired_instance_count=1, current_instance_count=1),
@@ -58,6 +61,9 @@ class PerformanceExecutionTest(unittest.TestCase):
         result = json.loads((self.result_dir / "result.json").read_text())
         self.assertEqual(7, result["dataset"]["suite_id"])
         self.assertEqual("perf", result["infrastructure_capacity"]["rds"]["db_instance_identifier"])
+        self.assertEqual(2, result["infrastructure_capacity"]["ecs"]["work_items_concurrency"])
+        self.assertEqual({"work_items_concurrency": 2, "concurrent_test_runs": 1, "ecs_task_count": 1},
+                         result["experiment"])
         self.metrics.validate_configuration.assert_called_once()
         self.api.create_suite.assert_called_once()
         self.k6.assert_called_once()
@@ -99,6 +105,27 @@ class PerformanceExecutionTest(unittest.TestCase):
     def test_capacity_failure_blocks_seed(self):
         self.capacity.collect.side_effect = ConfigurationError("capacity")
         with self.assertRaises(ConfigurationError):
+            cli.execute(self.args)
+        self.api.create_suite.assert_not_called()
+        self.k6.assert_not_called()
+
+    def test_capacity_mismatch_blocks_seed_and_workload(self):
+        with patch.dict(os.environ, {"PERF_EXPECTED_WORK_ITEMS_CONCURRENCY": "4"}):
+            with self.assertRaisesRegex(cli.RunnerError, "expected worker concurrency = 4"):
+                cli.execute(self.args)
+        self.api.create_suite.assert_not_called()
+        self.k6.assert_not_called()
+
+    def test_task_count_mismatch_blocks_seed_and_workload(self):
+        self.capacity.collect.return_value["ecs"]["desired_count"] = 2
+        with self.assertRaisesRegex(cli.RunnerError, "actual ECS desired task count = 2"):
+            cli.execute(self.args)
+        self.api.create_suite.assert_not_called()
+        self.k6.assert_not_called()
+
+    def test_running_task_count_mismatch_blocks_seed_and_workload(self):
+        self.capacity.collect.return_value["ecs"]["running_task_count"] = 2
+        with self.assertRaisesRegex(cli.RunnerError, "actual ECS running task count = 2"):
             cli.execute(self.args)
         self.api.create_suite.assert_not_called()
         self.k6.assert_not_called()
