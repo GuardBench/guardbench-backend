@@ -106,6 +106,9 @@ class TestRunQueryControllerTest {
             TestRunListItem item = new TestRunListItem(
                     901L, 1L, TestRunStatus.FINISHED, 253,
                     new TestRunProgress(253, 100.0), TestRunExecutionOutcome.COMPLETED, "PASS",
+                    new QualityGateMetricsView(
+                            new QualityGateMetricView(0.98, 0.9, true),
+                            new QualityGateMetricView(0.94, 0.9, true)),
                     Instant.parse("2026-08-24T14:30:00Z"), Instant.parse("2026-08-24T14:30:03Z"),
                     Instant.parse("2026-08-24T14:35:00Z"), Instant.parse("2026-08-24T14:35:00Z"));
             when(getTestRunListService.getTestRuns(any()))
@@ -118,6 +121,12 @@ class TestRunQueryControllerTest {
                     .andExpect(jsonPath("$.data.items[0].status").value("FINISHED"))
                     .andExpect(jsonPath("$.data.items[0].progress.percent").value(100.0))
                     .andExpect(jsonPath("$.data.items[0].qualityGateStatus").value("PASS"))
+                    .andExpect(jsonPath("$.data.items[0].qualityGateMetrics.assertion.value").value(0.98))
+                    .andExpect(jsonPath("$.data.items[0].qualityGateMetrics.assertion.threshold").value(0.9))
+                    .andExpect(jsonPath("$.data.items[0].qualityGateMetrics.assertion.passed").value(true))
+                    .andExpect(jsonPath("$.data.items[0].qualityGateMetrics.execution.value").value(0.94))
+                    .andExpect(jsonPath("$.data.items[0].qualityGateMetrics.execution.threshold").value(0.9))
+                    .andExpect(jsonPath("$.data.items[0].qualityGateMetrics.execution.passed").value(true))
                     .andExpect(jsonPath("$.data.page.totalElements").value(1));
         }
 
