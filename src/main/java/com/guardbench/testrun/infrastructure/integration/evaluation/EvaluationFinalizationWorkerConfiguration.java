@@ -14,6 +14,7 @@ import com.guardbench.evaluation.domain.SnapshotEvaluator;
 import com.guardbench.evaluation.domain.repository.QualityGateResultRepository;
 import com.guardbench.evaluation.domain.repository.SnapshotEvaluationRepository;
 import com.guardbench.testrun.application.port.in.HandleTestExecutionCompletedPort;
+import com.guardbench.testrun.application.CheckTestRunCompletionService;
 
 /**
  * Worker 활성화 시 Finalization 경계를 연결하는 Integration 설정이다.
@@ -49,9 +50,13 @@ class EvaluationFinalizationWorkerConfiguration {
 
     @Bean
     HandleTestExecutionCompletedPort handleTestExecutionCompletedPort(
-            FinalizeTestRunService finalizeTestRunService
+            FinalizeTestRunService finalizeTestRunService,
+            CheckTestRunCompletionService checkTestRunCompletionService
     ) {
         return testRunId -> {
+            if (!checkTestRunCompletionService.check(testRunId)) {
+                return true;
+            }
             FinalizeTestRunService.FinalizationOutcome outcome = finalizeTestRunService.finalize(testRunId);
             return switch (outcome) {
                 // Partial finalization(NotReady)은 오류가 아니라 정상적인 부분 완료 중간 상태다.
