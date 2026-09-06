@@ -1,8 +1,12 @@
 package com.guardbench.testdefinition.application;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,6 +17,8 @@ import com.guardbench.testdefinition.application.query.PageResult;
 import com.guardbench.testdefinition.application.query.TestCaseListCriteria;
 import com.guardbench.testdefinition.application.query.TestCaseListQuery;
 import com.guardbench.testdefinition.application.query.TestCaseSummary;
+import com.guardbench.testdefinition.application.port.out.TestCaseBulkIdempotencyPort;
+import com.guardbench.testdefinition.application.port.out.TestCaseBulkIdempotencyRecord;
 import com.guardbench.testdefinition.domain.ExpectedResult;
 import com.guardbench.testdefinition.domain.TestCase;
 import com.guardbench.testdefinition.domain.TestCaseId;
@@ -24,19 +30,25 @@ import com.guardbench.testdefinition.domain.repository.TestSuiteRepository;
 @Transactional(readOnly = true)
 public class TestCaseService {
 
+    private static final Duration BULK_IDEMPOTENCY_TTL = Duration.ofHours(3);
+    private static final int BULK_CLAIM_ATTEMPTS = 2;
+
     private final TestSuiteRepository testSuiteRepository;
     private final TestCaseRepository testCaseRepository;
     private final TestCaseListQuery testCaseListQuery;
+    private final TestCaseBulkIdempotencyPort bulkIdempotencyPort;
     private final Clock clock;
 
     public TestCaseService(
             TestSuiteRepository testSuiteRepository,
             TestCaseRepository testCaseRepository,
             TestCaseListQuery testCaseListQuery,
+            TestCaseBulkIdempotencyPort bulkIdempotencyPort,
             Clock clock) {
         this.testSuiteRepository = testSuiteRepository;
         this.testCaseRepository = testCaseRepository;
         this.testCaseListQuery = testCaseListQuery;
+        this.bulkIdempotencyPort = bulkIdempotencyPort;
         this.clock = clock;
     }
 
@@ -66,6 +78,67 @@ public class TestCaseService {
                 command.category(),
                 now);
         return TestCaseDetail.from(testCaseRepository.save(testCase));
+    }
+
+    @Transactional
+    public TestCaseBulkCreateResult createBulk(long suiteId, TestCaseBulkCreateCommand command) {
+        Objects.requireNonNull(command, "command must not be null");
+        TestSuiteId testSuiteId = new TestSuiteId(suiteId);
+        requireSuite(testSuiteId);
+        String fingerprint = TestCaseBulkCreateFingerprint.of(suiteId, command);
+        Instant now = clock.instant();
+
+        Optional<TestCaseBulkIdempotencyRecord> existingRecord = claimOrFindExisting(
+                command.idempotencyKey(), fingerprint, suiteId, now);
+        if (existingRecord.isPresent()) {
+            TestCaseBulkIdempotencyRecord existing = existingRecord.get();
+            if (!existing.requestFingerprint().equals(fingerprint)
+                    || existing.testSuiteId() != suiteId) {
+                throw new ApplicationException(ApplicationErrorCode.IDEMPOTENCY_KEY_CONFLICT);
+            }
+            return new TestCaseBulkCreateResult(
+                    existing.createdTestCaseIds(), existing.totalTestCaseCount());
+        }
+
+        List<TestCase> testCases = new ArrayList<>(command.items().size());
+        for (TestCaseCreateCommand item : command.items()) {
+            testCases.add(TestCase.create(
+                    testCaseRepository.nextIdentity(),
+                    testSuiteId,
+                    item.name(),
+                    item.input(),
+                    new ExpectedResult(item.expectedAction()),
+                    item.severity(),
+                    item.category(),
+                    now));
+        }
+        List<Long> createdIds = testCaseRepository.saveAll(testCases).stream()
+                .map(testCase -> testCase.id().value())
+                .toList();
+        long totalTestCaseCount = testCaseRepository.countByTestSuiteId(testSuiteId);
+        bulkIdempotencyPort.complete(
+                command.idempotencyKey(), fingerprint, suiteId, createdIds, totalTestCaseCount);
+        return new TestCaseBulkCreateResult(createdIds, totalTestCaseCount);
+    }
+
+    private Optional<TestCaseBulkIdempotencyRecord> claimOrFindExisting(
+            String idempotencyKey,
+            String fingerprint,
+            long suiteId,
+            Instant now) {
+        for (int attempt = 0; attempt < BULK_CLAIM_ATTEMPTS; attempt++) {
+            boolean claimed = bulkIdempotencyPort.tryClaim(
+                    idempotencyKey, fingerprint, suiteId, now, now.plus(BULK_IDEMPOTENCY_TTL));
+            if (claimed) {
+                return Optional.empty();
+            }
+            Optional<TestCaseBulkIdempotencyRecord> existing =
+                    bulkIdempotencyPort.findActiveByKey(idempotencyKey);
+            if (existing.isPresent()) {
+                return existing;
+            }
+        }
+        throw new ApplicationException(ApplicationErrorCode.INTERNAL_SERVER_ERROR);
     }
 
     public TestCaseDetail get(long testCaseId) {

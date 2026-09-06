@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Last reviewed: 2026-09-04
+> Last reviewed: 2026-09-07
 > Canonical source: GitHub
 > Origin: [GitHub Issue #4](https://github.com/GuardBench/guardbench-backend/issues/4)
 > Related: [ADR 0010](0010-single-target-test-run-model.md), [ADR 0012](0012-testdefinition-hard-delete-and-historical-identity.md), [ADR 0013](0013-response-behavior-classifier.md)
@@ -15,7 +15,7 @@
 
 GuardBench는 TestSuite, TestCase, TestRun, Snapshot, AI Application 실행 결과, 평가 결과와 비동기 처리 상태를 PostgreSQL에 저장한다.
 
-현재 구현과 fresh database schema를 ground truth로 사용한다. 이전 Guardrail 중심 스키마의 데이터와 Flyway upgrade compatibility는 보존하지 않는다.
+현재 구현과 순서가 고정된 Flyway migration을 ground truth로 사용한다. 현재 migration history 안에서는 공유 database의 in-place upgrade를 지원하지만, 폐기된 Guardrail 중심 migration history와 데이터의 upgrade compatibility는 보존하지 않는다.
 
 ## Decision
 
@@ -29,7 +29,13 @@ GuardBench는 TestSuite, TestCase, TestRun, Snapshot, AI Application 실행 결�
 
 ### Migration 기준
 
-현재 fresh database schema는 `src/main/resources/db/migration/V1__create_guardbench_schema.sql` 하나가 정의한다.
+현재 schema는 `src/main/resources/db/migration` 아래 migration을 버전 순서대로 적용해 정의한다.
+
+- `V1__create_guardbench_schema.sql`: 현재 GuardBench 기본 schema
+- `V2__add_quality_gate_thresholds.sql`: TestRun별 Quality Gate 기준
+- `V3__add_test_case_bulk_idempotency.sql`: TestCase 일괄 등록 멱등성
+
+Fresh database는 V1 → V2 → V3를 순서대로 적용한다. 이미 V1 또는 V2까지 적용된 공유 database는 적용되지 않은 다음 migration을 in-place로 적용하며, 적용된 migration 파일은 수정하지 않는다.
 
 이 V1은 현재 모델을 직접 생성하며 다음 과거 스키마를 만들지 않는다.
 
@@ -39,7 +45,7 @@ GuardBench는 TestSuite, TestCase, TestRun, Snapshot, AI Application 실행 결�
 - evaluator profile / checks / strictness 컬럼
 - 복합 `(snapshot_id, target_type)` execution/claim key
 
-기존 migration history에 대한 upgrade path는 제공하지 않는다. 적용 대상 database는 현재 V1 기준으로 초기화한다.
+현재 저장소에 존재하는 V1 이후 migration history의 upgrade path는 보존한다. 다만 현재 V1보다 앞선 폐기 schema나 저장소에서 제거된 과거 migration history를 현재 V1으로 변환하는 upgrade path는 제공하지 않는다.
 
 ### Test definition
 
@@ -83,6 +89,7 @@ GuardBench는 TestSuite, TestCase, TestRun, Snapshot, AI Application 실행 결�
 ### 비동기 처리
 
 - `test_run_idempotency`: HTTP 생성 요청 멱등성
+- `test_case_bulk_idempotency`: TestCase 일괄 등록의 요청 fingerprint와 생성 결과
 - `test_run_resolution_claim`: TestRun resolution lease
 - `test_execution_claim`: Snapshot execution lease
 - `outbox_event`: 비동기 이벤트의 transactional outbox
@@ -119,6 +126,7 @@ claim lease 및 idempotency 만료처럼 여러 Worker가 공유하는 동시성
 | `change_result` | 평가 persistence shape |
 | `quality_gate_result` | TestRun 최종 평가 |
 | `test_run_idempotency` | 생성 요청 멱등성 |
+| `test_case_bulk_idempotency` | TestCase 일괄 등록 요청 멱등성 |
 | `test_run_resolution_claim` | resolution lease |
 | `test_execution_claim` | execution lease |
 | `outbox_event` | transactional outbox |
@@ -134,9 +142,10 @@ claim lease 및 idempotency 만료처럼 여러 Worker가 공유하는 동시성
 
 ## Validation
 
-- `PersistenceFoundationIntegrationTest`가 fresh PostgreSQL에 현재 V1만 적용되는지 검증한다.
+- `PersistenceFoundationIntegrationTest`가 fresh PostgreSQL에 V1 → V2 → V3가 순서대로 적용되는지 검증한다.
+- 같은 테스트가 공유 database의 직전 schema인 V2에서 V3로 in-place upgrade되는지 검증한다.
 - 현재 schema에는 Guardrail 전용 persistence object가 존재하지 않아야 한다.
 - `target_reference.target_type`은 `HTTP_ENDPOINT` 외 값을 허용하지 않는다.
 - HTTP Target URL/model DB 제약을 통합 테스트로 검증한다.
 - TestRun 상세/Regression persistence integration test는 HTTP Target과 classifier reference 기준으로 검증한다.
-- 물리 ERD와 V1 schema는 동일한 테이블/관계를 설명해야 한다.
+- 물리 ERD와 현재 V1 → V2 → V3 적용 결과는 동일한 테이블/관계를 설명해야 한다.

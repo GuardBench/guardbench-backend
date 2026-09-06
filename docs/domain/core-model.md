@@ -27,6 +27,8 @@ classifier 설정은 사용자가 제출하는 profile이나 provider 선택이 
 ## 핵심 불변식
 
 - TestCase는 현재 정의만 보유하고 과거 실행 기준은 TestCaseSnapshot이 보존한다.
+- 기존 TestSuite에 여러 TestCase를 추가하는 유스케이스는 Application Service가 별도 Aggregate들을 하나의 트랜잭션으로 조율하며 부분 성공을 허용하지 않는다.
+- TestCase 일괄 등록 재시도는 요청 순서를 포함한 fingerprint와 필수 Idempotency-Key로 같은 생성 결과를 재사용한다.
 - TestCase 삭제는 물리 삭제이며 기존 Snapshot과 실행·판정 결과에 전파하지 않는다.
 - 하나의 TestRun은 하나의 Application Target만 실행한다.
 - MVP Application Target type은 `HTTP_ENDPOINT`다.

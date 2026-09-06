@@ -40,7 +40,7 @@ Validation을 제외한 오류는 다음 구조를 사용한다.
 | `METHOD_NOT_ALLOWED` | 405 | API 경로는 존재하지만 요청한 HTTP Method를 지원하지 않음 |
 | `NOT_ACCEPTABLE` | 406 | 요청의 `Accept` 조건을 만족하는 응답 형식을 제공할 수 없음 |
 | `TEST_SUITE_EMPTY` | 409 | TestRun 생성 시 활성 TestCase가 없음 |
-| `IDEMPOTENCY_KEY_CONFLICT` | 409 | 같은 Idempotency-Key를 다른 TestRun 요청에 재사용 |
+| `IDEMPOTENCY_KEY_CONFLICT` | 409 | 같은 Idempotency-Key를 다른 TestRun 접수 또는 TestCase 일괄 등록 요청에 재사용 |
 | `TEST_RUN_NOT_FINISHED` | 409 | 종료가 필요한 결과·지표·비교 API에 FINISHED가 아닌 TestRun 사용 |
 | `TEST_RUNS_NOT_COMPARABLE` | 409 | 테스트 정의 또는 실제 Evaluator 설정이 다른 두 TestRun 비교 |
 | `UNSUPPORTED_MEDIA_TYPE` | 415 | 요청 `Content-Type`을 해당 API가 지원하지 않음 |
@@ -153,6 +153,10 @@ TestSuite는 존재하지만 TestCase가 0개여서 TestRun을 생성할 수 없
 - 같은 Key와 같은 요청: 새 TestRun을 만들지 않고 기존 TestRun을 `202 Accepted`로 반환한다.
 - 같은 Key와 다른 요청: `409 IDEMPOTENCY_KEY_CONFLICT`로 응답한다.
 - Key 생략: 요청할 때마다 새로운 TestRun을 생성한다.
+
+TestCase 일괄 등록은 Key가 필수다. 같은 Key와 같은 Suite·항목·순서를 3시간 안에 재전송하면
+새 TestCase를 만들지 않고 최초 생성 ID와 완료 당시 전체 개수를 `201 Created`로 반환한다. 다른
+Suite, 항목, 순서 또는 정의에 재사용하면 `409 IDEMPOTENCY_KEY_CONFLICT`다.
 
 같은 요청의 재전송이면 현재 TestSuite가 이후 변경되었더라도 기존에 접수된 TestRun을 그대로 반환한다.
 

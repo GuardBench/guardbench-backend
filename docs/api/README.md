@@ -72,6 +72,7 @@ TestCaseSnapshot → OpenAI-compatible AI Application Target → Natural Languag
 - 초기 TestCase가 있으면 TestSuite와 한 트랜잭션에서 생성하며 최대 1000개다.
 - 이름 중복은 허용하고 ID로 식별한다. `category`는 고정 Enum이 아닌 비어 있지 않은 문자열이다.
 - TestCase는 독립 Aggregate다. 목록은 별도 API로 조회하며 TestSuite 응답에는 전체 배열 대신 `testCaseCount`가 있다.
+- 기존 Suite의 일괄 등록은 `POST /api/v1/test-suites/{suiteId}/test-cases/bulk`로 1~1000개를 원자적으로 추가한다. 필수 `Idempotency-Key`는 3시간 동안 같은 Suite·항목·순서의 재전송에 최초 생성 ID와 해당 트랜잭션이 관측한 완료 시점 전체 개수를 재사용하며, 다른 요청에 재사용하면 `409 IDEMPOTENCY_KEY_CONFLICT`다. 서로 다른 키의 동시 요청은 직렬화하지 않으므로 각 응답의 전체 개수에는 아직 커밋되지 않은 다른 요청이 포함되지 않을 수 있다.
 - TestCase 수정은 과거 TestRun의 Snapshot을 바꾸지 않는다. 삭제는 영구 삭제이며 과거 실행 결과는 유지한다.
 
 ### TestRun 접수 — agreed contract

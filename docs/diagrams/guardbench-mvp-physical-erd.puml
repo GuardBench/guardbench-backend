@@ -138,6 +138,17 @@ entity "test_run_idempotency" as idempotency {
   * expires_at : TIMESTAMPTZ(6)
 }
 
+entity "test_case_bulk_idempotency" as test_case_bulk_idempotency {
+  * idempotency_key : VARCHAR(100) <<PK>>
+  --
+  * request_fingerprint : CHAR(64)
+  * test_suite_id : BIGINT <<FK>>
+    created_test_case_ids : BIGINT[]
+    total_test_case_count : BIGINT
+  * created_at : TIMESTAMPTZ(6)
+  * expires_at : TIMESTAMPTZ(6)
+}
+
 entity "test_run_resolution_claim" as resolution_claim {
   * test_run_id : BIGINT <<PK, FK>>
   --
@@ -171,6 +182,7 @@ entity "outbox_event" as outbox {
 }
 
 test_suite ||--o{ test_case : contains
+test_suite ||--o{ test_case_bulk_idempotency : bulk request replay
 test_suite ||..o{ test_run : historical identity
 target_reference ||--o| test_run : referenced by
 target_reference ||--|| http_endpoint_target : HTTP target detail
@@ -214,7 +226,7 @@ note bottom of quality_gate
 end note
 
 legend left
-  This diagram is the current physical schema created by Flyway V1.
+  This diagram is the current physical schema created by the Flyway migration chain.
   TestCase → TestSuite uses ON DELETE RESTRICT.
   Snapshot source and TestRun suite IDs are historical scalars without FKs.
   Claim relations are technical leases, not Domain IDs or Aggregate Repositories.

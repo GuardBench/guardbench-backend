@@ -27,4 +27,4 @@ jobs:
       - name: Verify MVP operation count
         run: |
           count=$(grep -Ec '^    (get|post|put|patch|delete):' docs/api/openapi.yaml)
-          test "$count" -eq 19
+          test "$count" -eq 20
