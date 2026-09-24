@@ -116,10 +116,7 @@ final class TestRunPersistenceMapper {
     static TestExecution toDomain(TestExecutionEntity source) {
         TestExecutionId id = new TestExecutionId(new TestCaseSnapshotId(source.snapshotId));
         TestExecutionStatus status = TestExecutionStatus.valueOf(source.resultStatus);
-        TestExecutionError error = source.errorCode == null ? null : new TestExecutionError(
-                TestExecutionErrorStage.valueOf(source.errorStage),
-                TestExecutionErrorCode.valueOf(source.errorCode),
-                source.errorMessage);
+        TestExecutionError error = toError(source, status);
         return switch (status) {
             case SUCCEEDED -> TestExecution.succeeded(
                     id,
@@ -145,6 +142,29 @@ final class TestRunPersistenceMapper {
                     : TestExecution.timedOut(id, error, source.startedAt, source.completedAt);
             case NOT_STARTED -> TestExecution.notStarted(id);
         };
+    }
+
+    private static TestExecutionError toError(TestExecutionEntity source, TestExecutionStatus status) {
+        if (source.errorCode == null) {
+            if (status == TestExecutionStatus.FAILED || status == TestExecutionStatus.TIMED_OUT) {
+                throw new IllegalStateException("Persisted " + status
+                        + " execution requires an error code (snapshot_id=" + source.snapshotId + ")");
+            }
+            return null;
+        }
+
+        TestExecutionErrorCode code;
+        try {
+            code = TestExecutionErrorCode.valueOf(source.errorCode);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalStateException("Persisted test execution has unknown error code '"
+                    + source.errorCode + "' (snapshot_id=" + source.snapshotId + ")", exception);
+        }
+
+        return new TestExecutionError(
+                TestExecutionErrorStage.valueOf(source.errorStage),
+                code,
+                source.errorMessage);
     }
 
 }
