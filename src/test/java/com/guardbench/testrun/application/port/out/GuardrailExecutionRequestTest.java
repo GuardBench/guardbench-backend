@@ -38,6 +38,6 @@ class TargetExecutionRequestTest {
     @DisplayName("빈 input은 거부된다")
     void rejectsBlankInput() {
         assertThrows(IllegalArgumentException.class,
-                () -> new TargetExecutionRequest(TARGET_REFERENCE, "   "));
+                () -> new TargetExecutionRequest(TARGET_REFERENCE.value(), "   "));
     }
 }
