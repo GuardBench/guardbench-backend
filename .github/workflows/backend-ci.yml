@@ -206,7 +206,7 @@ jobs:
       - name: Run Qodana JVM Community
         uses: JetBrains/qodana-action@v2026.2
         with:
-          args: --linter,qodana-jvm-community,--within-docker,true
+          args: --linter qodana-jvm-community --within-docker true
           pr-mode: false
           post-pr-comment: false
           use-annotations: false
@@ -218,9 +218,29 @@ jobs:
           report="$(find "$RUNNER_TEMP/qodana/results" -type f -name '*.sarif.json' -print -quit)"
           test -n "$report"
           findings="$(jq '[.runs[]?.results[]?] | length' "$report")"
+          types="$(jq -r '
+            [
+              .runs[] as $run | $run.results[]? |
+              {
+                id: (.ruleId // "unknown"),
+                name: ($run.tool.driver.rules[.ruleIndex].shortDescription.text // .ruleId // "unknown")
+              }
+            ]
+            | group_by(.id)
+            | map({name: .[0].name, count: length})
+            | sort_by(-.count, .name)
+            | .[:10][]
+            | "- \(.name): \(.count)"
+          ' "$report")"
           {
             echo '### Qodana JVM Community'
             echo "- Analysis completed; findings: ${findings}"
+            echo '- Most frequent finding types:'
+            if [[ -n "$types" ]]; then
+              echo "$types"
+            else
+              echo '  - none'
+            fi
             echo '- Detailed SARIF/HTML report: `qodana-report` workflow artifact'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -253,6 +273,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          from collections import Counter
           from pathlib import Path
           from xml.etree import ElementTree
 
@@ -261,9 +282,22 @@ jobs:
               raise SystemExit('SpotBugs completed without producing XML reports')
 
           print('### SpotBugs main and test')
+          finding_types = Counter()
           for report in reports:
-              count = sum(1 for _ in ElementTree.parse(report).iter('BugInstance'))
+              bug_instances = list(ElementTree.parse(report).iter('BugInstance'))
+              count = len(bug_instances)
               print(f'- {report}: {count} findings')
+              for bug in bug_instances:
+                  bug_type = bug.get('type', 'UNKNOWN')
+                  short_message = (bug.findtext('ShortMessage') or '').strip()
+                  label = f'{bug_type}: {short_message}' if short_message else bug_type
+                  finding_types[label] += 1
+          print('- Most frequent finding types:')
+          if finding_types:
+              for label, count in finding_types.most_common(10):
+                  print(f'  - {label}: {count}')
+          else:
+              print('  - none')
           print('- Detailed HTML/XML reports: `spotbugs-reports` workflow artifact')
           PY
       - name: Upload SpotBugs reports
