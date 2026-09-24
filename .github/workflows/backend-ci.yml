@@ -215,8 +215,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          report="$(find "$RUNNER_TEMP/qodana/results" -type f -name '*.sarif.json' -print -quit)"
-          test -n "$report"
+          report="$RUNNER_TEMP/qodana/results/qodana.sarif.json"
+          test -s "$report"
           findings="$(jq '[.runs[]?.results[]?] | length' "$report")"
           types="$(jq -r '
             [
