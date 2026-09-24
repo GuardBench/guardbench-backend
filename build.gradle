@@ -2,6 +2,7 @@ plugins {
 	id 'java'
 	id 'org.springframework.boot' version '4.1.1'
 	id 'io.spring.dependency-management' version '1.1.7'
+	id 'com.github.spotbugs' version '6.5.11'
 }
 
 group = 'com.guardbench'
@@ -37,6 +38,22 @@ dependencies {
 	testImplementation 'org.testcontainers:testcontainers-localstack:2.0.5'
 	testImplementation 'org.mock-server:mockserver-netty:7.6.0'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+spotbugs {
+	toolVersion = '4.10.4'
+	ignoreFailures = true
+}
+
+tasks.withType(com.github.spotbugs.snom.SpotBugsTask).configureEach {
+	reports {
+		html {
+			required = true
+		}
+		xml {
+			required = true
+		}
+	}
 }
 
 tasks.named('test') {
