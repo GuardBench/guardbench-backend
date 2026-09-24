@@ -355,7 +355,7 @@ class ExecuteTestRunServiceTest {
 
             TargetExecutionRequest request = guardrailPort.lastRequest();
             assertNotNull(request);
-            assertEquals(TARGET_REFERENCE, request.targetReference().value());
+            assertEquals(TARGET_REFERENCE, request.referenceId());
             assertEquals(INPUT_TEXT, request.input());
         }
     }
