@@ -223,7 +223,12 @@ jobs:
               .runs[] as $run | $run.results[]? |
               {
                 id: (.ruleId // "unknown"),
-                name: ($run.tool.driver.rules[.ruleIndex].shortDescription.text // .ruleId // "unknown")
+                name: (
+                  (if (.ruleIndex | type) == "number" then
+                    $run.tool.driver.rules[.ruleIndex].shortDescription.text
+                  else null end)
+                  // .ruleId // "unknown"
+                )
               }
             ]
             | group_by(.id)
