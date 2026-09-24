@@ -115,7 +115,7 @@ class OpenAiCompatibleExecutionAdapterTest {
     }
 
     private TargetExecutionRequest request(String input) {
-        return new TargetExecutionRequest(TARGET_REFERENCE, input);
+        return new TargetExecutionRequest(TARGET_REFERENCE.value(), input);
     }
 
     private static void json(HttpExchange exchange, String body) throws IOException {
