@@ -1,6 +1,0 @@
-[mcp_servers.jqassistant_graph]
-command = "neo4j-mcp"
-startup_timeout_sec = 30
-enabled_tools = ["get-schema", "read-cypher"]
-env = { NEO4J_MCP_READ_ONLY = "true", NEO4J_MCP_TELEMETRY = "false" }
-env_vars = ["NEO4J_MCP_URI", "NEO4J_MCP_USERNAME", "NEO4J_MCP_PASSWORD", "NEO4J_MCP_DATABASE"]
