@@ -4,6 +4,7 @@ import static com.guardbench.architecture.GuardBenchArchitectureRules.COMMON_DOM
 import static com.guardbench.architecture.GuardBenchArchitectureRules.DOMAIN_DEPENDENCIES;
 import static com.guardbench.architecture.GuardBenchArchitectureRules.PACKAGE_BY_DOMAIN;
 import static com.guardbench.architecture.GuardBenchArchitectureRules.TESTRUN_DEPENDENCIES;
+import static com.guardbench.architecture.GuardBenchArchitectureRules.TESTRUN_INTEGRATION_BOUNDARY;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -63,14 +64,25 @@ class GuardBenchArchitectureRuleDetectionTest {
     }
 
     @Test
-    @DisplayName("승인된 Integration Adapter 패키지의 경계 간 의존은 위반으로 보지 않는다")
-    void dependencyDirectionRuleAllowsApprovedIntegrationAdapter() {
+    @DisplayName("Integration Adapter의 공급 Context Domain 직접 의존을 탐지한다")
+    void integrationBoundaryRuleDetectsProviderDomainDependency() {
         JavaClasses fixture = importer.importPackages(
                 "com.guardbench.testrun.infrastructure.integration.architecturefixture",
                 "com.guardbench.evaluation.domain.architecturefixture"
         );
 
-        assertNoViolation(TESTRUN_DEPENDENCIES, fixture);
+        assertViolation(TESTRUN_INTEGRATION_BOUNDARY, fixture, "EvaluationMarker");
+    }
+
+    @Test
+    @DisplayName("Integration Adapter의 공급 Context Application API 의존은 허용한다")
+    void integrationBoundaryRuleAllowsProviderApplicationDependency() {
+        JavaClasses fixture = importer.importPackages(
+                "com.guardbench.testrun.infrastructure.integration.applicationfixture",
+                "com.guardbench.testdefinition.application.architecturefixture"
+        );
+
+        assertNoViolation(TESTRUN_INTEGRATION_BOUNDARY, fixture);
     }
 
 

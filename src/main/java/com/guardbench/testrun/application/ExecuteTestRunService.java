@@ -32,7 +32,6 @@ import com.guardbench.testrun.domain.TestExecutionError;
 import com.guardbench.testrun.domain.TestExecutionErrorCode;
 import com.guardbench.testrun.domain.TestExecutionErrorStage;
 import com.guardbench.testrun.domain.TestExecutionId;
-import com.guardbench.testrun.domain.TargetReference;
 import com.guardbench.testrun.domain.repository.TestExecutionRepository;
 
 /**
@@ -194,7 +193,7 @@ public class ExecuteTestRunService {
         TargetExecutionResult result;
         try {
             result = targetExecutionPort.execute(new TargetExecutionRequest(
-                    new TargetReference(context.targetReference()), context.input()));
+                    context.targetReference(), context.input()));
         } catch (TargetProviderException exception) {
             result = TargetExecutionResult.failed(exception.failureCode());
         } catch (RuntimeException exception) {

@@ -139,7 +139,7 @@ public class CreateTestRunService {
         EvaluatorReference evaluatorReference = new EvaluatorReference(UUID.randomUUID().toString());
 
         registerTargetReferencePort.register(
-                targetReference,
+                targetReference.value(),
                 new TargetRegistration(
                         command.targetType(),
                         command.targetIdentifier(),

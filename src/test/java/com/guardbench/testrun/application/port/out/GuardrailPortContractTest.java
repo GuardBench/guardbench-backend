@@ -21,7 +21,7 @@ class GuardrailPortContractTest {
         @Test
         @DisplayName("준비 요청은 TestRun별 결정적 idempotency token을 생성한다")
         void createsDeterministicClientRequestToken() {
-            TargetPreparationRequest request = new TargetPreparationRequest(TARGET_REFERENCE, 42);
+            TargetPreparationRequest request = new TargetPreparationRequest(TARGET_REFERENCE.value(), 42);
 
             assertEquals("guardbench-test-run-42", request.idempotencyToken());
         }
@@ -37,7 +37,7 @@ class GuardrailPortContractTest {
         @DisplayName("양수가 아닌 testRunId는 거부된다")
         void rejectsNonPositiveTestRunId() {
             assertThrows(IllegalArgumentException.class,
-                    () -> new TargetPreparationRequest(TARGET_REFERENCE, 0));
+                    () -> new TargetPreparationRequest(TARGET_REFERENCE.value(), 0));
         }
     }
 

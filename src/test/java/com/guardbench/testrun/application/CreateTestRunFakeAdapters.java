@@ -30,7 +30,6 @@ import com.guardbench.testrun.domain.TestCaseSnapshot;
 import com.guardbench.testrun.domain.TestCaseSnapshotId;
 import com.guardbench.testrun.domain.TestRun;
 import com.guardbench.testrun.domain.TestRunId;
-import com.guardbench.testrun.domain.TargetReference;
 import com.guardbench.testrun.domain.EvaluatorReference;
 import com.guardbench.testrun.domain.repository.TestCaseSnapshotRepository;
 import com.guardbench.testrun.domain.repository.TestRunRepository;
@@ -148,8 +147,8 @@ final class CreateTestRunFakeAdapters
     }
 
     @Override
-    public void register(TargetReference reference, TargetRegistration registration) {
-        targetRegistrations.put(reference.value(), registration);
+    public void register(String referenceId, TargetRegistration registration) {
+        targetRegistrations.put(referenceId, registration);
     }
 
     @Override

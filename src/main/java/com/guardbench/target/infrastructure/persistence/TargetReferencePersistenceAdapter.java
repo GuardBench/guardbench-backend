@@ -7,7 +7,6 @@ import org.springframework.stereotype.Repository;
 
 import com.guardbench.testrun.application.port.out.RegisterTargetReferencePort;
 import com.guardbench.testrun.application.port.out.TargetRegistration;
-import com.guardbench.testrun.domain.TargetReference;
 
 /** TargetReference와 provider-specific 설정을 Target 소유 테이블에 저장한다. */
 @Repository
@@ -20,20 +19,20 @@ class TargetReferencePersistenceAdapter implements RegisterTargetReferencePort {
     }
 
     @Override
-    public void register(TargetReference reference, TargetRegistration registration) {
-        Objects.requireNonNull(reference, "target reference must not be null");
+    public void register(String referenceId, TargetRegistration registration) {
+        Objects.requireNonNull(referenceId, "target reference ID must not be null");
         Objects.requireNonNull(registration, "target registration must not be null");
         if (!HTTP_ENDPOINT.equals(registration.typeCode())) {
             throw new IllegalArgumentException("unsupported target type: " + registration.typeCode());
         }
         jdbcTemplate.update("INSERT INTO target_reference(reference_id, target_type) VALUES (?, ?)",
-                reference.value(), registration.typeCode());
-        registerHttpEndpoint(reference, registration);
+                referenceId, registration.typeCode());
+        registerHttpEndpoint(referenceId, registration);
     }
 
-    private void registerHttpEndpoint(TargetReference reference, TargetRegistration registration) {
+    private void registerHttpEndpoint(String referenceId, TargetRegistration registration) {
         jdbcTemplate.update("INSERT INTO http_endpoint_target(reference_id, endpoint_url, requested_revision, model) VALUES (?, ?, ?, ?)",
-                reference.value(), registration.identifier(), registration.revision(), registration.model());
+                referenceId, registration.identifier(), registration.revision(), registration.model());
     }
 
 }

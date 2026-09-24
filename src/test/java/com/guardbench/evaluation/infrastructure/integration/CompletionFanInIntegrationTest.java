@@ -1,4 +1,4 @@
-package com.guardbench.testrun.infrastructure.integration.evaluation;
+package com.guardbench.evaluation.infrastructure.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

@@ -20,7 +20,7 @@ final class HttpEndpointPreparationAdapter implements TargetPreparationPort {
     public void prepare(TargetPreparationRequest request) {
         Objects.requireNonNull(request, "preparation request must not be null");
         HttpEndpointTargetStore.HttpEndpointTarget target = targetStore
-                .findByReference(request.targetReference().value())
+                .findByReference(request.referenceId())
                 .orElseThrow(() -> new TargetProviderException(TargetFailureCode.TARGET_NOT_FOUND));
         try {
             HttpEndpointUrlValidator.parse(target.endpointUrl());
