@@ -7,6 +7,26 @@ description: Use the jQAssistant Neo4j graph to discover and narrow Java types, 
 
 Use the repository's `jqassistant_graph` MCP server as a structural index for Java bytecode. The graph helps locate relevant code; source files remain authoritative for current behavior and exact implementation.
 
+## Local MCP setup
+
+The repository does not own or manage personal Codex configuration. Each developer adds the following MCP block to their repository-root .codex/config.toml. The .codex/ directory is ignored by Git. Merge this entry into an existing personal config; never overwrite or reset that file.
+
+~~~toml
+[mcp_servers.jqassistant_graph]
+command = "neo4j-mcp"
+startup_timeout_sec = 30
+enabled_tools = ["get-schema", "read-cypher"]
+env = { NEO4J_MCP_READ_ONLY = "true", NEO4J_MCP_TELEMETRY = "false" }
+env_vars = [
+  "NEO4J_MCP_URI",
+  "NEO4J_MCP_USERNAME",
+  "NEO4J_MCP_PASSWORD",
+  "NEO4J_MCP_DATABASE"
+]
+~~~
+
+Install neo4j-mcp and ensure it is on PATH. Set the four connection variables in the environment that starts Codex; env_vars forwards those local values and does not load a .env file. The URI includes the Neo4j host and port. The allowlist exposes schema and read-only Cypher tools only. Keep credentials out of repository files. The project does not require the global ~/.codex/config.toml.
+
 ## Workflow
 
 1. Call `jqassistant_graph.get-schema` first when the graph schema is unknown or may have changed. Confirm labels, relationship directions, and properties instead of assuming them.
