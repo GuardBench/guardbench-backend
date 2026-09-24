@@ -18,6 +18,14 @@
 - 기존 미커밋 변경을 보존한다. 출처가 불명확한 변경을 되돌리지 않는다.
 - 현재 Issue/PR와 무관한 이슈, 다른 worktree, 다른 커밋을 대화 및 리뷰에서 끌어오지 않는다. 관련성이 필요할 때는 현재 Issue와의 관계를 먼저 명시한다.
 
+## 오래된 Issue 재검증과 구조 탐색
+
+- 오래전에 작성된 Issue를 구현하기 전에는 최신 기준 branch의 source, 테스트와 관련 `APPROVED` 계약을 확인해 문제가 현재도 존재하는지 재검증한다. Issue 작성 당시의 전제나 제안만으로 현재 동작을 단정하지 않는다.
+- Java 타입, 호출 관계, 의존 방향, reverse dependency/caller 등 구조 탐색이 필요한 경우 `.agents/skills/jqassistant-code-graph/SKILL.md`를 우선 적용해 jQAssistant graph로 후보와 조사 범위를 좁힌다.
+- graph 결과는 탐색용 근거다. `DEPENDS_ON`과 `INVOKES`를 runtime 실행 증거로 간주하거나 graph 결과를 현재 source보다 우선하지 않는다. 최종 판단은 현재 source, 관련 테스트와 `APPROVED` 계약에서 검증한다.
+- Issue 작성 당시와 현재 구현이 달라졌다면 기존 설명을 그대로 구현하지 말고 현재 유효성을 `VALID`, `PARTIALLY_STALE`, `STALE`로 분류한다. 구조 조사 결과에는 확인한 주요 source와 필요 시 사용한 graph query를 기록한다.
+- 현재 계약 결정이 실제로 남아 있는 `Decision` Issue는 에이전트가 대안을 임의로 선택하지 않는다. 최신 근거와 선택별 영향을 보고하고 결정권자 판단을 기다린다.
+
 ### 계약 대체와 호환성
 
 - 현재 Issue가 기존 계약, 공개 API, 내부 API 또는 모델을 **명시적으로 대체하거나 제거**하면 별도 요구가 없는 한 이전 내부 API, overload, deprecated shim, legacy 호환 경로를 임의로 보존하지 않는다.
