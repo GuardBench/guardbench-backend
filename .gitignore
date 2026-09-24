@@ -44,3 +44,6 @@ bin/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Codex local project configuration
+.codex/
