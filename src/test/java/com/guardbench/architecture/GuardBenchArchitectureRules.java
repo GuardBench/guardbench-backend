@@ -92,6 +92,53 @@ final class GuardBenchArchitectureRules {
             .as("testrun must not depend on other bounded contexts outside its integration adapters")
             .allowEmptyShould(true);
 
+    static final ArchRule TESTRUN_INTEGRATION_BOUNDARY = noClasses()
+            .that().resideInAPackage("com.guardbench.testrun.infrastructure.integration..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                    "com.guardbench.testdefinition.domain..",
+                    "com.guardbench.testdefinition.infrastructure..",
+                    "com.guardbench.testdefinition.presentation..",
+                    "com.guardbench.evaluation.domain..",
+                    "com.guardbench.evaluation.infrastructure..",
+                    "com.guardbench.evaluation.presentation..",
+                    "com.guardbench.target.domain..",
+                    "com.guardbench.target.infrastructure..",
+                    "com.guardbench.target.presentation.."
+            )
+            .as("ADR 0006: testrun integration adapters may use provider application APIs, "
+                    + "but not provider domain, repository, infrastructure, or presentation types")
+            .allowEmptyShould(true);
+
+    static final ArchRule EVALUATION_INTEGRATION_BOUNDARY = noClasses()
+            .that().resideInAPackage("com.guardbench.evaluation.infrastructure.integration..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                    "com.guardbench.testrun.domain..",
+                    "com.guardbench.testrun.infrastructure..",
+                    "com.guardbench.testrun.presentation..",
+                    "com.guardbench.testdefinition.domain..",
+                    "com.guardbench.testdefinition.infrastructure..",
+                    "com.guardbench.testdefinition.presentation..",
+                    "com.guardbench.target.domain..",
+                    "com.guardbench.target.infrastructure..",
+                    "com.guardbench.target.presentation.."
+            )
+            .as("ADR 0006: evaluation integration adapters may use provider application APIs, "
+                    + "but not provider domain, repository, infrastructure, or presentation types")
+            .allowEmptyShould(true);
+
+    static final ArchRule TARGET_TESTRUN_BOUNDARY = noClasses()
+            .that().resideInAPackage("com.guardbench.target..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                    "com.guardbench.testrun.domain..",
+                    "com.guardbench.testrun.infrastructure..",
+                    "com.guardbench.testrun.presentation..",
+                    "com.guardbench.testdefinition..",
+                    "com.guardbench.evaluation.."
+            )
+            .as("ADR 0006: target adapters may implement testrun application ports, "
+                    + "but must not depend on bounded-context domain or implementation types")
+            .allowEmptyShould(true);
+
     static final ArchRule EVALUATION_DEPENDENCIES = noClasses()
             .that().resideInAPackage("com.guardbench.evaluation..")
             .should().dependOnClassesThat().resideInAPackage("com.guardbench.target..")

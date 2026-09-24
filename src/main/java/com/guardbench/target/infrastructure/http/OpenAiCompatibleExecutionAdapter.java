@@ -37,7 +37,7 @@ final class OpenAiCompatibleExecutionAdapter implements TargetExecutionPort {
     public TargetExecutionResult execute(TargetExecutionRequest request) {
         Objects.requireNonNull(request, "execution request must not be null");
         HttpEndpointTargetStore.HttpEndpointTarget target = targetStore
-                .findByReference(request.targetReference().value())
+                .findByReference(request.referenceId())
                 .orElse(null);
         if (target == null) return TargetExecutionResult.failed(TargetFailureCode.TARGET_NOT_FOUND);
         return execute(request, target);

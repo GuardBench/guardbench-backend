@@ -11,6 +11,9 @@ import static com.guardbench.architecture.GuardBenchArchitectureRules.EVALUATOR_
 import static com.guardbench.architecture.GuardBenchArchitectureRules.PACKAGE_BY_DOMAIN;
 import static com.guardbench.architecture.GuardBenchArchitectureRules.TESTDEFINITION_DEPENDENCIES;
 import static com.guardbench.architecture.GuardBenchArchitectureRules.TESTRUN_DEPENDENCIES;
+import static com.guardbench.architecture.GuardBenchArchitectureRules.TESTRUN_INTEGRATION_BOUNDARY;
+import static com.guardbench.architecture.GuardBenchArchitectureRules.EVALUATION_INTEGRATION_BOUNDARY;
+import static com.guardbench.architecture.GuardBenchArchitectureRules.TARGET_TESTRUN_BOUNDARY;
 
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
@@ -59,6 +62,24 @@ class GuardBenchArchitectureTest {
     @DisplayName("testrun은 Integration Adapter 밖에서 다른 Bounded Context 패키지에 의존하지 않는다")
     void testRunDependsOnOtherContextsOnlyInsideIntegrationAdapters() {
         TESTRUN_DEPENDENCIES.check(productionClasses);
+    }
+
+    @Test
+    @DisplayName("testrun Integration Adapter는 다른 Context의 Domain/Infrastructure에 의존하지 않는다")
+    void testRunIntegrationAdaptersUseApplicationBoundariesOnly() {
+        TESTRUN_INTEGRATION_BOUNDARY.check(productionClasses);
+    }
+
+    @Test
+    @DisplayName("evaluation Integration Adapter는 TestRun Application 경계만 사용한다")
+    void evaluationIntegrationAdaptersUseApplicationBoundariesOnly() {
+        EVALUATION_INTEGRATION_BOUNDARY.check(productionClasses);
+    }
+
+    @Test
+    @DisplayName("target Adapter는 TestRun Application Port만 사용하고 Domain 구현에는 의존하지 않는다")
+    void targetAdaptersUseTestRunApplicationPortsOnly() {
+        TARGET_TESTRUN_BOUNDARY.check(productionClasses);
     }
 
     @Test

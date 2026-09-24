@@ -136,7 +136,7 @@ public class ResolveTestRunService {
             long materializationStartedNanos = System.nanoTime();
             log.info("Target 준비를 시작합니다. testRunId={} attemptCount={}", testRunId, attemptCount);
             TargetPreparationRequest request = new TargetPreparationRequest(
-                    testRun.targetReference(),
+                    testRun.targetReference().value(),
                     testRunId);
             preparationPort.prepare(request);
             log.info("Target 준비를 완료했습니다. testRunId={} attemptCount={} elapsedMs={}",

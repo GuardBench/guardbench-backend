@@ -9,7 +9,6 @@ import java.util.Optional;
 
 import com.guardbench.testrun.application.port.out.TargetPreparationRequest;
 import com.guardbench.testrun.application.port.out.TargetProviderException;
-import com.guardbench.testrun.domain.TargetReference;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,7 +29,7 @@ class HttpEndpointPreparationAdapterTest {
                 new HttpEndpointTargetStore.HttpEndpointTarget("target-ref", "https://example.com/chat")));
 
         assertDoesNotThrow(() -> new HttpEndpointPreparationAdapter(targetStore)
-                .prepare(new TargetPreparationRequest(new TargetReference("target-ref"), 1)));
+                .prepare(new TargetPreparationRequest("target-ref", 1)));
     }
 
     @Test
@@ -40,7 +39,7 @@ class HttpEndpointPreparationAdapterTest {
 
         TargetProviderException exception = assertThrows(TargetProviderException.class, () ->
                 new HttpEndpointPreparationAdapter(targetStore)
-                        .prepare(new TargetPreparationRequest(new TargetReference("target-ref"), 1)));
+                        .prepare(new TargetPreparationRequest("target-ref", 1)));
 
         assertEquals(com.guardbench.testrun.application.port.out.TargetFailureCode.TARGET_NOT_FOUND,
                 exception.failureCode());
