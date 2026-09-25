@@ -56,6 +56,24 @@ tasks.withType(com.github.spotbugs.snom.SpotBugsTask).configureEach {
 	}
 }
 
+def spotbugsMainOnlyAnalyze = providers.environmentVariable('SPOTBUGS_MAIN_ONLY_ANALYZE')
+	.map { raw -> raw.split(',').collect { it.trim() }.findAll { !it.isEmpty() } }
+
+def spotbugsTestOnlyAnalyze = providers.environmentVariable('SPOTBUGS_TEST_ONLY_ANALYZE')
+	.map { raw -> raw.split(',').collect { it.trim() }.findAll { !it.isEmpty() } }
+
+tasks.named('spotbugsMain', com.github.spotbugs.snom.SpotBugsTask) {
+	if (spotbugsMainOnlyAnalyze.isPresent()) {
+		onlyAnalyze.set(spotbugsMainOnlyAnalyze)
+	}
+}
+
+tasks.named('spotbugsTest', com.github.spotbugs.snom.SpotBugsTask) {
+	if (spotbugsTestOnlyAnalyze.isPresent()) {
+		onlyAnalyze.set(spotbugsTestOnlyAnalyze)
+	}
+}
+
 tasks.named('test') {
 	useJUnitPlatform()
 }

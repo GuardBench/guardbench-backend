@@ -180,16 +180,12 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   qodana:
-    name: Qodana JVM Community
+    name: Qodana PR changes
     needs: changes
     if: >-
-      always() &&
-      (
-        (github.event_name == 'workflow_dispatch' && inputs.deployment_mode == 'source') ||
-        (github.event_name != 'workflow_dispatch' &&
-        needs.changes.result == 'success' &&
-        needs.changes.outputs.verification_required == 'true')
-      )
+      github.event_name == 'pull_request' &&
+      needs.changes.result == 'success' &&
+      needs.changes.outputs.verification_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -197,21 +193,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
           cache: gradle
-      - name: Run Qodana JVM Community
+      - name: Run Qodana for PR changes
         uses: JetBrains/qodana-action@v2026.2
         with:
           args: --linter qodana-jvm-community --within-docker true
-          pr-mode: false
+          pr-mode: true
           post-pr-comment: false
           use-annotations: false
           upload-result: true
-      - name: Summarize Qodana findings
+      - name: Summarize Qodana PR findings
         shell: bash
         run: |
           set -euo pipefail
@@ -238,8 +235,9 @@ jobs:
             | "- \(.name): \(.count)"
           ' "$report")"
           {
-            echo '### Qodana JVM Community'
-            echo "- Analysis completed; findings: ${findings}"
+            echo '### Qodana JVM Community — PR changes'
+            echo '- Mode: pull-request incremental analysis'
+            echo "- Findings in changed files: ${findings}"
             echo '- Most frequent finding types:'
             if [[ -n "$types" ]]; then
               echo "$types"
@@ -250,30 +248,111 @@ jobs:
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
   spotbugs:
-    name: SpotBugs main and test
+    name: SpotBugs PR changed classes
     needs: changes
     if: >-
-      always() &&
-      (
-        (github.event_name == 'workflow_dispatch' && inputs.deployment_mode == 'source') ||
-        (github.event_name != 'workflow_dispatch' &&
-        needs.changes.result == 'success' &&
-        needs.changes.outputs.verification_required == 'true')
-      )
+      github.event_name == 'pull_request' &&
+      needs.changes.result == 'success' &&
+      needs.changes.outputs.verification_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
       - uses: actions/setup-java@v4
         id: java
         with:
           distribution: temurin
           java-version: '21'
           cache: gradle
-      - name: Run SpotBugs for main and test source sets
+      - name: Resolve changed Java classes
+        id: changed
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
         shell: bash
-        run: ./gradlew spotbugsMain spotbugsTest --no-daemon
-      - name: Summarize SpotBugs findings
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(
+            git diff --name-only --diff-filter=ACMRT "$BASE" "$HEAD" -- src/main/java src/test/java               | grep -E '^src/(main|test)/java/.+\.java$' || true
+          )
+
+          main_classes=()
+          test_classes=()
+
+          for file in "${files[@]}"; do
+            case "${file##*/}" in
+              package-info.java|module-info.java)
+                continue
+                ;;
+            esac
+
+            if [[ "$file" == src/main/java/* ]]; then
+              class_name="${file#src/main/java/}"
+              class_name="${class_name%.java}"
+              class_name="${class_name//\//.}"
+              main_classes+=("${class_name}*")
+            elif [[ "$file" == src/test/java/* ]]; then
+              class_name="${file#src/test/java/}"
+              class_name="${class_name%.java}"
+              class_name="${class_name//\//.}"
+              test_classes+=("${class_name}*")
+            fi
+          done
+
+          join_by_comma() {
+            local IFS=,
+            echo "$*"
+          }
+
+          main_filter="$(join_by_comma "${main_classes[@]}")"
+          test_filter="$(join_by_comma "${test_classes[@]}")"
+          main_count="${#main_classes[@]}"
+          test_count="${#test_classes[@]}"
+          total_count="$((main_count + test_count))"
+
+          {
+            echo "main_filter=${main_filter}"
+            echo "test_filter=${test_filter}"
+            echo "main_count=${main_count}"
+            echo "test_count=${test_count}"
+            echo "total_count=${total_count}"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo '### SpotBugs PR scope'
+            echo "- Changed main classes: ${main_count}"
+            echo "- Changed test classes: ${test_count}"
+            echo "- Total changed Java classes: ${total_count}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run SpotBugs for changed classes
+        if: steps.changed.outputs.total_count != '0'
+        env:
+          SPOTBUGS_MAIN_ONLY_ANALYZE: ${{ steps.changed.outputs.main_filter }}
+          SPOTBUGS_TEST_ONLY_ANALYZE: ${{ steps.changed.outputs.test_filter }}
+          MAIN_COUNT: ${{ steps.changed.outputs.main_count }}
+          TEST_COUNT: ${{ steps.changed.outputs.test_count }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tasks=()
+          if [[ "$MAIN_COUNT" != "0" ]]; then
+            tasks+=(spotbugsMain)
+          fi
+          if [[ "$TEST_COUNT" != "0" ]]; then
+            tasks+=(spotbugsTest)
+          fi
+          ./gradlew "${tasks[@]}" --no-daemon
+
+      - name: Summarize SpotBugs PR findings
+        if: always()
+        env:
+          MAIN_COUNT: ${{ steps.changed.outputs.main_count }}
+          TEST_COUNT: ${{ steps.changed.outputs.test_count }}
+          TOTAL_COUNT: ${{ steps.changed.outputs.total_count }}
         shell: bash
         run: |
           set -euo pipefail
@@ -281,22 +360,39 @@ jobs:
           from collections import Counter
           from pathlib import Path
           from xml.etree import ElementTree
+          import os
+
+          main_count = int(os.environ.get('MAIN_COUNT') or 0)
+          test_count = int(os.environ.get('TEST_COUNT') or 0)
+          total_count = int(os.environ.get('TOTAL_COUNT') or 0)
+
+          print('### SpotBugs — PR changed classes')
+          print('- Mode: changed-class analysis via onlyAnalyze')
+          print(f'- Changed main classes: {main_count}')
+          print(f'- Changed test classes: {test_count}')
+
+          if total_count == 0:
+              print('- No changed Java classes; SpotBugs analysis skipped without falling back to a full scan.')
+              raise SystemExit(0)
 
           reports = sorted(Path('build/reports/spotbugs').rglob('*.xml'))
           if not reports:
-              raise SystemExit('SpotBugs completed without producing XML reports')
+              raise SystemExit('SpotBugs was requested but produced no XML reports')
 
-          print('### SpotBugs main and test')
           finding_types = Counter()
+          total_findings = 0
           for report in reports:
               bug_instances = list(ElementTree.parse(report).iter('BugInstance'))
               count = len(bug_instances)
+              total_findings += count
               print(f'- {report}: {count} findings')
               for bug in bug_instances:
                   bug_type = bug.get('type', 'UNKNOWN')
                   short_message = (bug.findtext('ShortMessage') or '').strip()
                   label = f'{bug_type}: {short_message}' if short_message else bug_type
                   finding_types[label] += 1
+
+          print(f'- Findings in analyzed changed classes: {total_findings}')
           print('- Most frequent finding types:')
           if finding_types:
               for label, count in finding_types.most_common(10):
@@ -305,13 +401,14 @@ jobs:
               print('  - none')
           print('- Detailed HTML/XML reports: `spotbugs-reports` workflow artifact')
           PY
-      - name: Upload SpotBugs reports
-        if: always()
+
+      - name: Upload SpotBugs PR reports
+        if: steps.changed.outputs.total_count != '0'
         uses: actions/upload-artifact@v4
         with:
           name: spotbugs-reports
           path: build/reports/spotbugs/
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14
 
   verify:
