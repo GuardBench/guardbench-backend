@@ -1,0 +1,129 @@
+name: Static Analysis Full Scan
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qodana:
+    name: Qodana full scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Run Qodana JVM Community full scan
+        uses: JetBrains/qodana-action@v2026.2
+        with:
+          args: --linter qodana-jvm-community --within-docker true
+          pr-mode: false
+          post-pr-comment: false
+          use-annotations: false
+          upload-result: true
+      - name: Summarize Qodana findings
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/qodana/results/qodana.sarif.json"
+          test -s "$report"
+          findings="$(jq '[.runs[]?.results[]?] | length' "$report")"
+          types="$(jq -r '
+            [
+              .runs[] as $run | $run.results[]? |
+              {
+                id: (.ruleId // "unknown"),
+                name: (
+                  (if (.ruleIndex | type) == "number" then
+                    $run.tool.driver.rules[.ruleIndex].shortDescription.text
+                  else null end)
+                  // .ruleId // "unknown"
+                )
+              }
+            ]
+            | group_by(.id)
+            | map({name: .[0].name, count: length})
+            | sort_by(-.count, .name)
+            | .[:10][]
+            | "- \(.name): \(.count)"
+          ' "$report")"
+          {
+            echo '### Qodana JVM Community — full scan'
+            echo '- Mode: manual full repository analysis'
+            echo "- Findings: ${findings}"
+            echo '- Most frequent finding types:'
+            if [[ -n "$types" ]]; then
+              echo "$types"
+            else
+              echo '  - none'
+            fi
+            echo '- Detailed SARIF/HTML report: `qodana-report` workflow artifact'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+  spotbugs:
+    name: SpotBugs full main and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        id: java
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Run SpotBugs full scan
+        shell: bash
+        run: ./gradlew spotbugsMain spotbugsTest --no-daemon
+      - name: Summarize SpotBugs findings
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          from collections import Counter
+          from pathlib import Path
+          from xml.etree import ElementTree
+
+          reports = sorted(Path('build/reports/spotbugs').rglob('*.xml'))
+          if not reports:
+              raise SystemExit('SpotBugs completed without producing XML reports')
+
+          print('### SpotBugs — full scan')
+          print('- Mode: manual full main + test analysis')
+          finding_types = Counter()
+          total_findings = 0
+          for report in reports:
+              bug_instances = list(ElementTree.parse(report).iter('BugInstance'))
+              count = len(bug_instances)
+              total_findings += count
+              print(f'- {report}: {count} findings')
+              for bug in bug_instances:
+                  bug_type = bug.get('type', 'UNKNOWN')
+                  short_message = (bug.findtext('ShortMessage') or '').strip()
+                  label = f'{bug_type}: {short_message}' if short_message else bug_type
+                  finding_types[label] += 1
+
+          print(f'- Total findings: {total_findings}')
+          print('- Most frequent finding types:')
+          if finding_types:
+              for label, count in finding_types.most_common(10):
+                  print(f'  - {label}: {count}')
+          else:
+              print('  - none')
+          print('- Detailed HTML/XML reports: `spotbugs-reports` workflow artifact')
+          PY
+      - name: Upload SpotBugs reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spotbugs-reports
+          path: build/reports/spotbugs/
+          if-no-files-found: error
+          retention-days: 14
