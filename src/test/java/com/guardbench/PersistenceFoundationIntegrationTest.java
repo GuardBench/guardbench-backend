@@ -21,11 +21,11 @@ import com.guardbench.testsupport.PostgresTestConfiguration;
 class PersistenceFoundationIntegrationTest {
 
     @Test
-    @DisplayName("빈 PostgreSQL에 V1부터 V3까지 Flyway 스키마를 순서대로 적용한다")
+    @DisplayName("빈 PostgreSQL에 V1부터 V4까지 Flyway 스키마를 순서대로 적용한다")
     void appliesApprovedSchemaToPostgreSql(@Autowired Flyway flyway, @Autowired JdbcTemplate jdbcTemplate) {
         MigrationInfo current = flyway.info().current();
         assertNotNull(current);
-        assertEquals("3", current.getVersion().getVersion());
+        assertEquals("4", current.getVersion().getVersion());
         Integer tableCount = jdbcTemplate.queryForObject("""
                 SELECT count(*) FROM information_schema.tables
                 WHERE table_schema = 'public' AND table_name IN (
@@ -72,11 +72,16 @@ class PersistenceFoundationIntegrationTest {
                 WHERE table_schema = 'public'
                   AND constraint_name = 'ck_test_case_bulk_idempotency_completion'
                 """, Integer.class));
+        assertEquals(2, jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM information_schema.table_constraints
+                WHERE table_schema = 'public'
+                  AND constraint_name IN ('ck_execution_error_code', 'ck_execution_timeout_error_code')
+                """, Integer.class));
     }
 
     @Test
-    @DisplayName("기존 V2 PostgreSQL에는 checksum 오류 없이 V3만 적용한다")
-    void upgradesExistingV2SchemaWithoutChecksumMismatch(
+    @DisplayName("기존 V3 PostgreSQL에는 checksum 오류 없이 V4만 적용한다")
+    void upgradesExistingV3SchemaWithoutChecksumMismatch(
             @Autowired Flyway applicationFlyway,
             @Autowired JdbcTemplate jdbcTemplate) {
         String schema = "flyway_upgrade_test";
@@ -84,19 +89,19 @@ class PersistenceFoundationIntegrationTest {
         jdbcTemplate.execute("CREATE SCHEMA " + schema);
 
         try {
-            Flyway v2Flyway = Flyway.configure()
+            Flyway v3Flyway = Flyway.configure()
                     .dataSource(applicationFlyway.getConfiguration().getDataSource())
                     .defaultSchema(schema)
                     .schemas(schema)
                     .locations("classpath:db/migration")
-                    .target("2")
+                    .target("3")
                     .load();
-            v2Flyway.migrate();
+            v3Flyway.migrate();
 
-            MigrationInfo appliedV2 = v2Flyway.info().current();
-            assertEquals("2", appliedV2.getVersion().getVersion());
-            assertNotNull(appliedV2.getChecksum());
-            assertEquals(0, jdbcTemplate.queryForObject("""
+            MigrationInfo appliedV3 = v3Flyway.info().current();
+            assertEquals("3", appliedV3.getVersion().getVersion());
+            assertNotNull(appliedV3.getChecksum());
+            assertEquals(1, jdbcTemplate.queryForObject("""
                     SELECT count(*) FROM information_schema.tables
                     WHERE table_schema = ? AND table_name = 'test_case_bulk_idempotency'
                     """, Integer.class, schema));
@@ -109,7 +114,7 @@ class PersistenceFoundationIntegrationTest {
                     .load();
             upgradeFlyway.migrate();
 
-            assertEquals("3", upgradeFlyway.info().current().getVersion().getVersion());
+            assertEquals("4", upgradeFlyway.info().current().getVersion().getVersion());
             assertEquals(1, jdbcTemplate.queryForObject("""
                     SELECT count(*) FROM information_schema.tables
                     WHERE table_schema = ? AND table_name = 'test_case_bulk_idempotency'
@@ -117,6 +122,11 @@ class PersistenceFoundationIntegrationTest {
             assertEquals(1, jdbcTemplate.queryForObject("""
                     SELECT count(*) FROM information_schema.table_constraints
                     WHERE table_schema = ? AND constraint_name = 'ck_test_case_bulk_idempotency_completion'
+                    """, Integer.class, schema));
+            assertEquals(2, jdbcTemplate.queryForObject("""
+                    SELECT count(*) FROM information_schema.table_constraints
+                    WHERE table_schema = ?
+                      AND constraint_name IN ('ck_execution_error_code', 'ck_execution_timeout_error_code')
                     """, Integer.class, schema));
         } finally {
             jdbcTemplate.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");

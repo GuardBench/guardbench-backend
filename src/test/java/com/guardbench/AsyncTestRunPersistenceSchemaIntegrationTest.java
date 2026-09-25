@@ -16,6 +16,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import com.guardbench.testrun.domain.TestExecutionErrorCode;
 import com.guardbench.testrun.support.fixture.TestRunPersistenceFixture;
 import com.guardbench.testsupport.PostgresTestConfiguration;
 
@@ -153,6 +154,89 @@ class AsyncTestRunPersistenceSchemaIntegrationTest {
                         Timestamp.from(CREATED_AT)
                 )
         );
+    }
+
+    @Test
+    @DisplayName("TestExecution은 누락·미지원 오류 코드와 잘못된 timeout 코드를 저장하지 않는다")
+    void rejectsInvalidTestExecutionErrorValues(@Autowired JdbcTemplate jdbcTemplate) {
+        insertTestRunFixture();
+        fixture.insertSnapshot(1000L, 100L, 11L, CREATED_AT);
+
+        assertThrows(
+                DataIntegrityViolationException.class,
+                () -> jdbcTemplate.update(
+                        """
+                        INSERT INTO test_execution(
+                            snapshot_id, result_status, error_stage, error_code, error_message,
+                            started_at, completed_at
+                        ) VALUES (?, 'FAILED', 'APPLICATION_TARGET', NULL, ?, ?, ?)
+                        """,
+                        1000L,
+                        "안전한 오류",
+                        Timestamp.from(CREATED_AT),
+                        Timestamp.from(CREATED_AT)
+                )
+        );
+
+        assertThrows(
+                DataIntegrityViolationException.class,
+                () -> jdbcTemplate.update(
+                        """
+                        INSERT INTO test_execution(
+                            snapshot_id, result_status, error_stage, error_code, error_message,
+                            started_at, completed_at
+                        ) VALUES (?, 'FAILED', 'APPLICATION_TARGET', 'UNKNOWN_ERROR', ?, ?, ?)
+                        """,
+                        1000L,
+                        "안전한 오류",
+                        Timestamp.from(CREATED_AT),
+                        Timestamp.from(CREATED_AT)
+                )
+        );
+
+        assertThrows(
+                DataIntegrityViolationException.class,
+                () -> jdbcTemplate.update(
+                        """
+                        INSERT INTO test_execution(
+                            snapshot_id, result_status, error_stage, error_code, error_message,
+                            started_at, completed_at
+                        ) VALUES (?, 'TIMED_OUT', 'APPLICATION_TARGET', 'PROVIDER_UNAVAILABLE', ?, ?, ?)
+                        """,
+                        1000L,
+                        "안전한 오류",
+                        Timestamp.from(CREATED_AT),
+                        Timestamp.from(CREATED_AT)
+                )
+        );
+    }
+
+    @Test
+    @DisplayName("모든 Domain execution error code는 DB에 저장할 수 있다")
+    void acceptsEveryDomainTestExecutionErrorCode(@Autowired JdbcTemplate jdbcTemplate) {
+        insertTestRunFixture();
+
+        int index = 0;
+        for (TestExecutionErrorCode errorCode : TestExecutionErrorCode.values()) {
+            long snapshotId = 1100L + index;
+            long sourceTestCaseId = 11L + index++;
+            fixture.insertSnapshot(snapshotId, 100L, sourceTestCaseId, CREATED_AT);
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO test_execution(
+                        snapshot_id, result_status, error_stage, error_code, error_message,
+                        started_at, completed_at
+                    ) VALUES (?, 'FAILED', 'APPLICATION_TARGET', ?, ?, ?, ?)
+                    """,
+                    snapshotId,
+                    errorCode.name(),
+                    "안전한 오류",
+                    Timestamp.from(CREATED_AT),
+                    Timestamp.from(CREATED_AT));
+        }
+
+        assertEquals(TestExecutionErrorCode.values().length,
+                jdbcTemplate.queryForObject("SELECT count(*) FROM test_execution", Integer.class));
     }
 
     private void insertTestRunFixture() {

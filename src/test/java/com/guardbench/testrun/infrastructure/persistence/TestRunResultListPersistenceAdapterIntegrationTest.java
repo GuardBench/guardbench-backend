@@ -61,14 +61,14 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
         insertSuite(70_001L);
         insertTestRun(80_001L, 70_001L);
         insertSnapshot(90_001L, 80_001L, 1L, "case", "input", "ALLOW", "LOW", "PII");
-        insertExecution(90_001L, "FAILED", null, "PROVIDER_ERROR", "안전한 오류");
+        insertExecution(90_001L, "FAILED", null, "PROVIDER_UNAVAILABLE", "안전한 오류");
 
         PageResult<TestRunResultItem> result = port.load(
                 80_001L, TestRunResultListCriteria.firstPage()).page();
 
         TestRunResultItem item = result.items().getFirst();
         assertNull(item.assertionStatusCode());
-        assertEquals("PROVIDER_ERROR", item.execution().errorCode());
+        assertEquals("PROVIDER_UNAVAILABLE", item.execution().errorCode());
     }
 
     @Test
@@ -81,7 +81,7 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
         insertAssertion(90_011L, "FAIL");
 
         insertSnapshot(90_012L, 80_011L, 2L, "not comparable", "input", "BLOCK", "HIGH", "PII");
-        insertExecution(90_012L, "FAILED", null, "PROVIDER_ERROR", "오류");
+        insertExecution(90_012L, "FAILED", null, "PROVIDER_UNAVAILABLE", "오류");
 
         PageResult<TestRunResultItem> result = port.load(80_011L, new TestRunResultListCriteria(
                 null, null, null, null, null, null, "FAIL", null,
@@ -233,7 +233,7 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
         insertSnapshot(90_047L, 80_041L, 7L, "fn", "input", "BLOCK", "LOW", "PII");
         insertModernExecution(90_047L, "ALLOW", "response");
         insertSnapshot(90_048L, 80_041L, 8L, "not evaluated", "input", "BLOCK", "LOW", "PII");
-        insertExecution(90_048L, "FAILED", null, "PROVIDER_ERROR", "안전한 오류");
+        insertExecution(90_048L, "FAILED", null, "PROVIDER_UNAVAILABLE", "안전한 오류");
 
         EvaluatorMetricsView metrics = metricsPort.load(80_041L);
 
@@ -251,7 +251,7 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
         insertSuite(70_051L);
         insertTestRun(80_051L, 70_051L);
         insertSnapshot(90_051L, 80_051L, 1L, "not evaluated", "input", "BLOCK", "LOW", "PII");
-        insertExecution(90_051L, "FAILED", null, "PROVIDER_ERROR", "안전한 오류");
+        insertExecution(90_051L, "FAILED", null, "PROVIDER_UNAVAILABLE", "안전한 오류");
 
         EvaluatorMetricsView metrics = metricsPort.load(80_051L);
 
@@ -312,7 +312,7 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
         insertSuite(70_117L);
         insertTestRun(80_117L, 70_117L);
         insertSnapshot(90_117L, 80_117L, 117L, "case", "input", "BLOCK", "HIGH", "PII");
-        insertExecution(90_117L, "FAILED", null, "PROVIDER_ERROR", "안전한 오류");
+        insertExecution(90_117L, "FAILED", null, "PROVIDER_UNAVAILABLE", "안전한 오류");
 
         TestRunResultDetail detail = detailPort.load(80_117L, 90_117L).orElseThrow();
 
@@ -427,7 +427,7 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
                 INSERT INTO test_execution (
                     snapshot_id, result_status, application_response,
                     error_stage, error_code, error_message, started_at, completed_at)
-                VALUES (?, 'FAILED', ?, 'EVALUATOR', 'PROVIDER_ERROR', '안전한 오류', ?, ?)
+                VALUES (?, 'FAILED', ?, 'EVALUATOR', 'PROVIDER_UNAVAILABLE', '안전한 오류', ?, ?)
                 """, snapshotId, applicationResponse, Timestamp.from(T0), Timestamp.from(T0));
     }
 
@@ -453,7 +453,7 @@ class TestRunResultListPersistenceAdapterIntegrationTest {
         insertSnapshot(90_061L, testRunId, 61L, "fn", "input", "BLOCK", "CRITICAL", "PII");
         insertModernExecution(90_061L, "ALLOW", "response");
         insertSnapshot(90_062L, testRunId, 62L, "failed", "input", "BLOCK", "HIGH", "PII");
-        insertExecution(90_062L, "FAILED", null, "PROVIDER_ERROR", "오류");
+        insertExecution(90_062L, "FAILED", null, "PROVIDER_UNAVAILABLE", "오류");
         insertSnapshot(90_063L, testRunId, 63L, "timeout", "input", "BLOCK", "MEDIUM", "PII");
         insertExecution(90_063L, "TIMED_OUT", null, "PROVIDER_TIMEOUT", "시간 초과");
         insertSnapshot(90_064L, testRunId, 64L, "fp", "input", "ALLOW", "HIGH", "PII");
