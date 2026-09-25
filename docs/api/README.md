@@ -121,7 +121,8 @@ HTTP Application Target 실행, OpenAI-compatible response 정규화, SageMaker 
 - 개별 결과 목록은 `FINISHED`에서만 조회한다. 그 전에는 `409 TEST_RUN_NOT_FINISHED`다.
 - 개별 결과의 `TestRunResultItemRes`는 Snapshot input, `executionStatus`, `evaluatorVerdict`, `expectedAction`, `assertionStatus`와 안전한 `error`를 제공한다. 값은 실행 당시 저장 결과이며 현재 TestCase 수정과 무관하다.
 - 개별 결과 목록 `TestRunResultItemRes`에는 Application의 자연어 응답을 포함하지 않으며, `GET /api/v1/test-runs/{testRunId}/results/{testCaseSnapshotId}`의 `TestRunResultDetailRes`에서만 저장된 `applicationResponse`를 그대로 반환한다. 응답이 생성되지 않은 결과는 `null`이다.
-- `error.stage`는 `APPLICATION_TARGET | EVALUATOR`로 실패 단계를 구분한다. code의 구체 taxonomy는 #117이 소유하며 provider 원문, stack trace, credential과 ARN은 노출하지 않는다.
+- `error` property는 결과 항목에 항상 존재한다. `executionStatus=FAILED|TIMED_OUT`이면 `error`는 반드시 non-null이고 `stage/code/message`를 모두 가지며, `SUCCEEDED|NOT_STARTED`이면 `error=null`이다. `TIMED_OUT`의 `error.code`는 `PROVIDER_TIMEOUT`이다.
+- `error.stage`는 `APPLICATION_TARGET | EVALUATOR`로 실패 단계를 구분한다. 공개 가능한 code와 terminal 상태 매핑은 [애플리케이션 오류](../conventions/application-errors.md)의 TestExecution 실행 오류 Code 계약을 따르며 provider 원문, stack trace, credential과 ARN은 노출하지 않는다.
 - `evaluationOutcome` 필터는 `TRUE_POSITIVE | TRUE_NEGATIVE | FALSE_POSITIVE | FALSE_NEGATIVE` 상세 조회에 사용한다.
 - `attentionType`은 `FALSE_NEGATIVE | FALSE_POSITIVE | EXECUTION_FAILED | TIMED_OUT | NOT_STARTED`이며,
   반복 값은 OR, 다른 필터와는 AND로 결합한다. 결과 항목에는 처리 미완료를 우선한 대표 유형 하나만 반환한다.

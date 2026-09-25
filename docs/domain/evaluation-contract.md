@@ -2,7 +2,7 @@
 
 > Status: APPROVED
 > Owner: Backend
-> Last reviewed: 2026-09-04
+> Last reviewed: 2026-09-25
 > Canonical source: GitHub
 > Related: [ADR 0013](../decisions/0013-response-behavior-classifier.md)
 
@@ -30,7 +30,18 @@ EvaluationResult가 있으면 ExpectedResult와 비교해 AssertionResult를 생
 | BLOCK | BLOCK | PASS |
 | BLOCK | ALLOW | FAIL |
 
-Application 실행 실패, timeout 또는 Evaluator 실패로 EvaluationResult가 없으면 AssertionResult를 생성하지 않는다. 실행과 평가 실패의 구체적인 저장·공개 오류 계약은 #117에서 확정·구현되었다.
+Application 실행 실패, timeout 또는 Evaluator 실패로 EvaluationResult가 없으면 AssertionResult를 생성하지 않는다.
+
+TestExecution의 terminal 오류 shape는 다음 불변식을 따른다.
+
+| TestExecution status | error |
+| --- | --- |
+| `SUCCEEDED` | 없음 |
+| `FAILED` | 필수 `{ stage, code, message }` |
+| `TIMED_OUT` | 필수 `{ stage, code, message }`, `code=PROVIDER_TIMEOUT` |
+| `NOT_STARTED` | 없음 |
+
+`FAILED`와 `TIMED_OUT`은 안전하게 정규화한 오류 정보 없이 저장·공개하지 않는다. `SUCCEEDED`와 `NOT_STARTED`에는 실행 오류를 붙이지 않는다. 공개 가능한 code와 terminal 상태 매핑은 [애플리케이션 오류 코드](../conventions/application-errors.md#testexecution-실행-오류-code)를 따른다.
 
 ## Quality Gate
 
